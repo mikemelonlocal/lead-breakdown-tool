@@ -1980,7 +1980,7 @@ else:
     has_moa_file = up_moa is not None
 
     for agency_name in ["Legacy", "MOA"]:
-        ag_mask = df_in.get("agency", "") == agency_name
+        ag_mask = df_in["agency"] == agency_name
         ag_has_rows = ag_mask.any()
         # Determine default expansion: expand if this agency file was uploaded
         default_expanded = has_legacy_file if agency_name == "Legacy" else has_moa_file
