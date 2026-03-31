@@ -4088,6 +4088,10 @@ else:
                 
                 source_data = results["by_source"].copy()
                 
+                # Rename lead_opportunities to leads if it exists
+                if "lead_opportunities" in source_data.columns:
+                    source_data = source_data.rename(columns={"lead_opportunities": "leads"})
+                
                 if "agency" in source_data.columns and "leads" in source_data.columns:
                     source_comp = source_data[source_data["source"] != "TOTAL"].copy()
                     
@@ -4121,6 +4125,8 @@ else:
                         })
                         
                         st.dataframe(source_pivot, use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No source data available for comparison.")
                 else:
                     st.info("Source comparison requires both agencies to have data.")
 
