@@ -1060,7 +1060,7 @@ def build_excel(sheets: dict):
             sheet_name = safe_sheet_name(sheet_name)
             df = drop_effective_cost_basis(df)
             df = pretty_headers(df)
-            df.to_excel(xw, sheet_name, index=False)
+            df.to_excel(xw, sheet_name=sheet_name, index=False)
             
             ws = xw.sheets[sheet_name]
             
@@ -1082,8 +1082,7 @@ def build_excel(sheets: dict):
                     for r in total_rows:
                         ws.set_row(r + 1, None, fmt_bold_row)
     
-    output.seek(0)
-    return output
+    return output.getvalue()
 
 
 def extract_utm_from_campaign_id(campaign_id, tokens=UTM_TOKENS_FIXED):
