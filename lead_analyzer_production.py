@@ -1251,16 +1251,11 @@ def build_html_report(sheets: dict, charts: dict = None):
         # Convert DataFrame to HTML table
         table_html = df.to_html(index=False, classes='data-table', escape=False, na_rep='—')
         
-        # Add TOTAL row styling
-        for key in ["Platform", "Product", "Agency"]:
-            if key in df.columns:
-                total_indices = df[df[key].astype(str).str.upper() == "TOTAL"].index.tolist()
-                for idx in total_indices:
-                    table_html = table_html.replace(
-                        f'<tr>',
-                        f'<tr class="total-row">',
-                        1  # Only replace first occurrence at that row
-                    )
+        # Add TOTAL row styling - replace <tr> tags that have <td>TOTAL</td>
+        # Pattern to find <tr> followed by any <td> that contains exactly "TOTAL"
+        pattern = r'<tr>(\s*<td[^>]*>TOTAL</td>)'
+        replacement = r'<tr class="total-row">\1'
+        table_html = re.sub(pattern, replacement, table_html, flags=re.IGNORECASE)
         
         html_parts.append(table_html)
         html_parts.append('</div>')
@@ -1468,7 +1463,7 @@ def display_table_with_total(df, total_identifier_col="platform", total_value="T
 
 # ---------- Core Analysis Function ----------
 @st.cache_data(show_spinner=False, hash_funcs={dict: lambda d: str(sorted(d.items()))})
-def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_column=False, exclude_listings_from_totals=False):
+def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_column=False, exclude_listings_from_totals=False, include_qs=True, include_phone=True, include_sms=True):
     """
     Analyze lead data and compute metrics by platform, product, agency, and source.
     
@@ -1479,6 +1474,9 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
         hide_unknown: Whether to filter out "Unknown" platform
         add_device_column: Whether to add device as a grouping column in aggregations
         exclude_listings_from_totals: Whether to exclude Listings from TOTAL row calculations
+        include_qs: Whether to include Quote Starts in lead calculations
+        include_phone: Whether to include Phone Clicks in lead calculations
+        include_sms: Whether to include SMS Clicks in lead calculations
         
     Returns:
         Dict of result dataframes
@@ -1535,7 +1533,15 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
 
     col_source = choose_source_column(df)
     df["source"] = df[col_source].astype(str)
-    df["lead_opportunities"] = df[col_qs] + df[col_phone] + df[col_sms]
+    
+    # Calculate lead_opportunities based on selected lead types
+    df["lead_opportunities"] = 0.0
+    if include_qs:
+        df["lead_opportunities"] += df[col_qs]
+    if include_phone:
+        df["lead_opportunities"] += df[col_phone]
+    if include_sms:
+        df["lead_opportunities"] += df[col_sms]
 
     # Optional spend column
     spend_col = None
@@ -2073,6 +2079,19 @@ with st.sidebar:
     st.markdown("---")
     spend_col = st.text_input("Optional spend column name (in uploads)", placeholder="e.g., Spend, Cost", key="sb_spend_col")
     csv_style = st.radio("CSV number style", options=["Raw numbers", "With $ and % symbols"], index=0, key="sb_csv_style")
+    
+    st.markdown("---")
+    st.subheader("📊 Lead Types to Include")
+    st.markdown("**Select which lead types to include in analysis:**")
+    include_quote_starts = st.checkbox("Include Quote Starts", value=True, key="include_qs", help="Include quote start leads in totals and calculations")
+    include_phone_clicks = st.checkbox("Include Phone Clicks", value=True, key="include_phone", help="Include phone click leads in totals and calculations")
+    include_sms_clicks = st.checkbox("Include SMS Clicks", value=True, key="include_sms", help="Include SMS click leads in totals and calculations")
+    
+    # Show warning if all are unchecked
+    if not (include_quote_starts or include_phone_clicks or include_sms_clicks):
+        st.warning("⚠️ At least one lead type must be selected!")
+    
+    st.markdown("---")
     hide_unknown = st.checkbox("Hide 'Unknown' platform", False, key="gf_hide_unknown")
     exclude_listings_from_totals = st.checkbox(
         "Exclude 'Listings' from TOTAL rows",
@@ -2089,17 +2108,36 @@ with c1:
 with c2:
     up_moa = st.file_uploader("Upload MOA file (CSV or Excel)", type=["csv", "xlsx", "xls"], key="upload_moa")
 
-# Track file changes to force rerun
-current_files = (
-    up_legacy.name if up_legacy else None,
-    up_moa.name if up_moa else None
-)
+# Show file status
+if up_legacy or up_moa:
+    st.markdown("**Files Uploaded:**")
+    file_status = []
+    if up_legacy:
+        file_status.append(f"✅ Legacy: `{up_legacy.name}`")
+    if up_moa:
+        file_status.append(f"✅ MOA: `{up_moa.name}`")
+    st.markdown(" • ".join(file_status))
+    
+    # Add analyze button
+    if st.button("🔄 Refresh Analysis", type="primary", use_container_width=True, help="Click after uploading or changing files to reload the analysis"):
+        st.rerun()
+
+# Track file changes to force rerun on change
+current_files = {
+    'legacy': up_legacy.name if up_legacy else None,
+    'moa': up_moa.name if up_moa else None,
+    'legacy_id': id(up_legacy) if up_legacy else None,
+    'moa_id': id(up_moa) if up_moa else None
+}
 
 if "previous_files" not in st.session_state:
     st.session_state.previous_files = current_files
 elif st.session_state.previous_files != current_files:
+    # Files changed - clear any cached data
     st.session_state.previous_files = current_files
-    st.rerun()
+    # Clear domain filter state to force reset
+    if 'flt_domains_list' in st.session_state:
+        del st.session_state['flt_domains_list']
 
 
 @st.cache_data(show_spinner="📂 Loading file...")
@@ -2256,7 +2294,10 @@ else:
             spend_column=spend_col.strip() or None,
             hide_unknown=hide_unknown,
             add_device_column=add_device_column,
-            exclude_listings_from_totals=exclude_listings_from_totals
+            exclude_listings_from_totals=exclude_listings_from_totals,
+            include_qs=include_quote_starts,
+            include_phone=include_phone_clicks,
+            include_sms=include_sms_clicks
         )
         
         status_text.text("📈 Aggregating results...")
@@ -2290,7 +2331,7 @@ else:
 
             sub_df = df_in[ag_mask].copy()
             sub_spends = {agency_name: spends[agency_name]}
-            single = analyze(sub_df, sub_spends, spend_column=spend_col.strip() or None, hide_unknown=hide_unknown, add_device_column=add_device_column, exclude_listings_from_totals=exclude_listings_from_totals)
+            single = analyze(sub_df, sub_spends, spend_column=spend_col.strip() or None, hide_unknown=hide_unknown, add_device_column=add_device_column, exclude_listings_from_totals=exclude_listings_from_totals, include_qs=include_quote_starts, include_phone=include_phone_clicks, include_sms=include_sms_clicks)
             
             # Platform Overview
             with st.expander(f"{agency_name}: Platform Overview (Platform CPL + TOTAL)", expanded=True):
@@ -3925,23 +3966,317 @@ else:
                         st.markdown(f"- {insight}")
                 else:
                     st.info("Upload data for both agencies to see comparison insights.")
+                
+                # ========== ADDITIONAL COMPARISON TABLES ==========
+                st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
+                st.markdown("---")
+                st.markdown("### 📊 Detailed Comparison Tables")
+                
+                # Get individual agency data
+                legacy_mask = df_in["agency"] == "Legacy"
+                moa_mask = df_in["agency"] == "MOA"
+                
+                # Product Comparison
+                st.markdown("#### Product Performance Comparison")
+                prod_comparison = results["by_product_total"].copy()
+                
+                if "agency" in prod_comparison.columns:
+                    # Pivot to show Legacy vs MOA side by side
+                    prod_comp_clean = prod_comparison[prod_comparison["product"] != "TOTAL"].copy()
+                    
+                    if not prod_comp_clean.empty:
+                        # Group by product and agency
+                        if "device" in prod_comp_clean.columns:
+                            prod_pivot_data = prod_comp_clean.groupby(["product", "agency"], as_index=False).agg({
+                                "leads": "sum",
+                                "quote_starts": "sum",
+                                "phone_clicks": "sum",
+                                "sms_clicks": "sum"
+                            })
+                        else:
+                            prod_pivot_data = prod_comp_clean[["product", "agency", "leads", "quote_starts", "phone_clicks", "sms_clicks"]].copy()
+                        
+                        # Create pivot table
+                        prod_pivot = prod_pivot_data.pivot(index="product", columns="agency", values=["leads", "quote_starts", "phone_clicks", "sms_clicks"])
+                        prod_pivot.columns = [f"{col[1]}_{col[0]}" for col in prod_pivot.columns]
+                        prod_pivot = prod_pivot.reset_index()
+                        
+                        # Add difference columns
+                        if "Legacy_leads" in prod_pivot.columns and "MOA_leads" in prod_pivot.columns:
+                            prod_pivot["Lead_Diff"] = prod_pivot["MOA_leads"] - prod_pivot["Legacy_leads"]
+                            prod_pivot["Lead_Winner"] = prod_pivot.apply(
+                                lambda r: "MOA ✓" if r["MOA_leads"] > r["Legacy_leads"] 
+                                else "Legacy ✓" if r["Legacy_leads"] > r["MOA_leads"]
+                                else "Tie",
+                                axis=1
+                            )
+                        
+                        # Format for display
+                        display_cols = ["product"]
+                        if "Legacy_leads" in prod_pivot.columns:
+                            display_cols.extend(["Legacy_leads", "MOA_leads", "Lead_Diff", "Lead_Winner"])
+                        
+                        if "Legacy_quote_starts" in prod_pivot.columns:
+                            display_cols.extend(["Legacy_quote_starts", "MOA_quote_starts"])
+                        if "Legacy_phone_clicks" in prod_pivot.columns:
+                            display_cols.extend(["Legacy_phone_clicks", "MOA_phone_clicks"])
+                        if "Legacy_sms_clicks" in prod_pivot.columns:
+                            display_cols.extend(["Legacy_sms_clicks", "MOA_sms_clicks"])
+                        
+                        prod_display = prod_pivot[[col for col in display_cols if col in prod_pivot.columns]].copy()
+                        
+                        # Rename columns
+                        prod_display = prod_display.rename(columns={
+                            "product": "Product",
+                            "Legacy_leads": "Legacy Leads",
+                            "MOA_leads": "MOA Leads",
+                            "Lead_Diff": "Difference",
+                            "Lead_Winner": "Winner",
+                            "Legacy_quote_starts": "Legacy QS",
+                            "MOA_quote_starts": "MOA QS",
+                            "Legacy_phone_clicks": "Legacy Phone",
+                            "MOA_phone_clicks": "MOA Phone",
+                            "Legacy_sms_clicks": "Legacy SMS",
+                            "MOA_sms_clicks": "MOA SMS"
+                        })
+                        
+                        st.dataframe(prod_display, use_container_width=True, hide_index=True)
+                
+                # Device Comparison (if device breakdown enabled)
+                if add_device_column and "device" in results["agency_overview"].columns:
+                    st.markdown('<div class="space-md"></div>', unsafe_allow_html=True)
+                    st.markdown("#### Device Performance Comparison")
+                    
+                    device_data = results["agency_overview"][results["agency_overview"]["agency"] != "TOTAL"].copy()
+                    
+                    if not device_data.empty:
+                        # Pivot by device and agency
+                        device_pivot_data = device_data.groupby(["device", "agency"], as_index=False).agg({
+                            "leads": "sum",
+                            "quote_starts": "sum",
+                            "phone_clicks": "sum",
+                            "sms_clicks": "sum"
+                        })
+                        
+                        device_pivot = device_pivot_data.pivot(index="device", columns="agency", values=["leads", "quote_starts", "phone_clicks", "sms_clicks"])
+                        device_pivot.columns = [f"{col[1]}_{col[0]}" for col in device_pivot.columns]
+                        device_pivot = device_pivot.reset_index()
+                        
+                        # Add difference
+                        if "Legacy_leads" in device_pivot.columns and "MOA_leads" in device_pivot.columns:
+                            device_pivot["Lead_Diff"] = device_pivot["MOA_leads"] - device_pivot["Legacy_leads"]
+                            device_pivot["Winner"] = device_pivot.apply(
+                                lambda r: "MOA ✓" if r["MOA_leads"] > r["Legacy_leads"]
+                                else "Legacy ✓" if r["Legacy_leads"] > r["MOA_leads"]
+                                else "Tie",
+                                axis=1
+                            )
+                        
+                        # Rename and display
+                        device_pivot = device_pivot.rename(columns={
+                            "device": "Device",
+                            "Legacy_leads": "Legacy Leads",
+                            "MOA_leads": "MOA Leads",
+                            "Lead_Diff": "Difference"
+                        })
+                        
+                        st.dataframe(device_pivot, use_container_width=True, hide_index=True)
+                
+                # Source Comparison
+                st.markdown('<div class="space-md"></div>', unsafe_allow_html=True)
+                st.markdown("#### Traffic Source Comparison")
+                
+                source_data = results["by_source"].copy()
+                
+                if "agency" in source_data.columns:
+                    source_comp = source_data[source_data["source"] != "TOTAL"].copy()
+                    
+                    if not source_comp.empty:
+                        # Get top sources for each agency
+                        if "device" in source_comp.columns:
+                            source_summary = source_comp.groupby(["source", "agency"], as_index=False)["leads"].sum()
+                        else:
+                            source_summary = source_comp[["source", "agency", "leads"]].copy()
+                        
+                        # Get top 10 sources overall
+                        top_sources = source_summary.groupby("source")["leads"].sum().nlargest(10).index.tolist()
+                        source_top = source_summary[source_summary["source"].isin(top_sources)]
+                        
+                        # Pivot
+                        source_pivot = source_top.pivot(index="source", columns="agency", values="leads").fillna(0)
+                        source_pivot = source_pivot.reset_index()
+                        
+                        if "Legacy" in source_pivot.columns and "MOA" in source_pivot.columns:
+                            source_pivot["Difference"] = source_pivot["MOA"] - source_pivot["Legacy"]
+                            source_pivot = source_pivot.sort_values("Difference", ascending=False)
+                        
+                        # Rename
+                        source_pivot = source_pivot.rename(columns={
+                            "source": "Traffic Source",
+                            "Legacy": "Legacy Leads",
+                            "MOA": "MOA Leads"
+                        })
+                        
+                        st.dataframe(source_pivot, use_container_width=True, hide_index=True)
 
+    # ========== EXPORT SELECTION ==========
+    st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("### 📦 Export Options")
+    
+    with st.expander("⚙️ Customize Your Export", expanded=False):
+        st.markdown("**Select which tables and charts to include in exports:**")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("**📊 Tables:**")
+            export_platform = st.checkbox("Platform Overview", value=True, key="export_platform")
+            export_agency = st.checkbox("Agency Overview", value=True, key="export_agency")
+            export_product_total = st.checkbox("Product (Total)", value=True, key="export_product_total")
+            export_product_platform = st.checkbox("Product × Platform", value=True, key="export_product_platform")
+            export_source = st.checkbox("By Source", value=True, key="export_source")
+        
+        with col2:
+            st.markdown("**📈 Charts (HTML only):**")
+            export_chart_platform = st.checkbox("Platform Performance Chart", value=True, key="export_chart_platform")
+            export_chart_product = st.checkbox("Product Distribution Chart", value=True, key="export_chart_product")
+            export_chart_agency = st.checkbox("Agency Comparison Chart", value=True, key="export_chart_agency")
+            
+            st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
+            if st.button("✅ Select All", use_container_width=True):
+                st.session_state.export_platform = True
+                st.session_state.export_agency = True
+                st.session_state.export_product_total = True
+                st.session_state.export_product_platform = True
+                st.session_state.export_source = True
+                st.session_state.export_chart_platform = True
+                st.session_state.export_chart_product = True
+                st.session_state.export_chart_agency = True
+                st.rerun()
+            
+            if st.button("❌ Deselect All", use_container_width=True):
+                st.session_state.export_platform = False
+                st.session_state.export_agency = False
+                st.session_state.export_product_total = False
+                st.session_state.export_product_platform = False
+                st.session_state.export_source = False
+                st.session_state.export_chart_platform = False
+                st.session_state.export_chart_product = False
+                st.session_state.export_chart_agency = False
+                st.rerun()
+    
+    # Build filtered exports based on selections
+    selected_sheets = {}
+    if export_platform:
+        selected_sheets["Platform Overview"] = results["platform_overview"]
+    if export_agency:
+        selected_sheets["Agency Overview"] = results["agency_overview"]
+    if export_product_total:
+        selected_sheets["By Product (Total)"] = results["by_product_total"]
+    if export_product_platform:
+        selected_sheets["By Product × Platform"] = results["by_product_platform"]
+    if export_source:
+        selected_sheets["By Source"] = results["by_source"]
+    
+    # Build Excel with selected sheets
+    if selected_sheets:
+        excel_bytes_filtered = build_excel(selected_sheets)
+    else:
+        excel_bytes_filtered = excel_bytes  # Fallback to all
+    
     st.download_button(
         "⬇️ Download Combined Excel Report (Generated "+datetime.now().strftime('%I:%M %p')+")", 
-        excel_bytes, 
+        excel_bytes_filtered, 
         "combined_lead_report_demo.xlsx",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
         use_container_width=True
     )
     
-    # Build HTML report with tables
-    html_report = build_html_report({
-        "Platform Overview": results["platform_overview"],
-        "Agency Overview": results["agency_overview"],
-        "By Product (Total)": results["by_product_total"],
-        "By Product × Platform": results["by_product_platform"],
-        "By Source": results["by_source"],
-    })
+    # Build HTML report with tables AND charts
+    html_charts = {}
+    
+    if PLOTLY_AVAILABLE:
+        # 1. Platform Overview Chart
+        if export_chart_platform:
+            plat_data = results["platform_overview"][results["platform_overview"]["platform"] != "TOTAL"].copy()
+            if not plat_data.empty and "leads" in plat_data.columns:
+                plat_data["leads"] = pd.to_numeric(plat_data["leads"], errors="coerce").fillna(0)
+                if plat_data["leads"].sum() > 0:
+                    fig_platform = px.bar(
+                        plat_data,
+                        x="platform",
+                        y="leads",
+                        title="Leads by Platform",
+                        labels={"platform": "Platform", "leads": "Total Leads"},
+                        color="leads",
+                        color_continuous_scale=["#eef7ef", "#49b156"]
+                    )
+                    fig_platform.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
+                    fig_platform.update_layout(
+                        showlegend=False,
+                        height=400,
+                        margin=dict(l=20, r=20, t=60, b=20)
+                    )
+                    html_charts["Platform Performance"] = fig_platform
+        
+        # 2. Product Distribution Pie Chart
+        if export_chart_product:
+            prod_data = results["by_product_total"].copy()
+            if "device" in prod_data.columns:
+                prod_data = prod_data.groupby("product", as_index=False)["leads"].sum()
+            
+            prod_data = prod_data[prod_data["product"] != "TOTAL"].copy()
+            if not prod_data.empty and "leads" in prod_data.columns:
+                prod_data["leads"] = pd.to_numeric(prod_data["leads"], errors="coerce").fillna(0)
+                prod_data = prod_data[prod_data["leads"] > 0]
+                
+                if not prod_data.empty:
+                    fig_product = px.pie(
+                        prod_data,
+                        values="leads",
+                        names="product",
+                        title="Lead Distribution by Product",
+                        color_discrete_sequence=["#49b156", "#0f5340", "#efd568", "#f2f0e6"]
+                    )
+                    fig_product.update_traces(
+                        textposition='inside',
+                        textinfo='percent+label'
+                    )
+                    fig_product.update_layout(
+                        height=500,
+                        margin=dict(l=20, r=20, t=60, b=20)
+                    )
+                    html_charts["Product Distribution"] = fig_product
+        
+        # 3. Agency Comparison (if both exist)
+        if export_chart_agency:
+            agency_data = results["agency_overview"][results["agency_overview"]["agency"] != "TOTAL"].copy()
+            if len(agency_data) >= 2 and "leads" in agency_data.columns:
+                if "device" in agency_data.columns:
+                    agency_data = agency_data.groupby("agency", as_index=False)["leads"].sum()
+                
+                agency_data["leads"] = pd.to_numeric(agency_data["leads"], errors="coerce").fillna(0)
+                
+                if agency_data["leads"].sum() > 0:
+                    fig_agency = px.bar(
+                        agency_data,
+                        x="agency",
+                        y="leads",
+                        title="Leads by Agency",
+                        labels={"agency": "Agency", "leads": "Total Leads"},
+                        color="agency",
+                        color_discrete_map={"Legacy": "#0f5340", "MOA": "#49b156"}
+                    )
+                    fig_agency.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
+                    fig_agency.update_layout(
+                        showlegend=False,
+                        height=400,
+                        margin=dict(l=20, r=20, t=60, b=20)
+                    )
+                    html_charts["Agency Comparison"] = fig_agency
+    
+    html_report = build_html_report(selected_sheets, charts=html_charts)
     
     st.download_button(
         "⬇️ Download Complete HTML Report (Generated "+datetime.now().strftime('%I:%M %p')+")", 
