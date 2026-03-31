@@ -718,8 +718,7 @@ st.markdown("""
         margin-bottom: 9px;
     }
     
-    /* Hide Streamlit branding (optional) */
-    #MainMenu {visibility: hidden;}
+    /* Hide footer only */
     footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
