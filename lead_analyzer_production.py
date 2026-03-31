@@ -439,45 +439,53 @@ st.markdown("""
         max-width: 1400px;
     }
     
-    /* ========== DARK MODE ENHANCEMENTS ========== */
-    @media (prefers-color-scheme: dark) {
-        .streamlit-expanderHeader {
-            background-color: #efd568 !important;
-            color: #0f5340 !important;
-        }
-        
-        .streamlit-expanderHeader:hover {
-            background-color: #e8c94d !important;
-        }
-        
-        .streamlit-expanderContent {
-            background-color: white !important;
-        }
-        
-        .streamlit-expanderContent * {
-            color: #171717 !important;
-        }
-        
-        .stDataFrame {
-            background-color: white !important;
-        }
-        
-        .stDataFrame table {
-            background-color: white !important;
-        }
-        
-        .stDataFrame tbody tr td {
-            background-color: white !important;
-            color: #171717 !important;
-        }
-        
-        [data-testid="stFileUploader"] {
-            background-color: white !important;
-        }
-        
-        [data-testid="stFileUploader"] * {
-            color: #171717 !important;
-        }
+    /* ========== FORCE LIGHT THEME (Override Dark Mode) ========== */
+    /* Main content area - always light */
+    .main {
+        background-color: white !important;
+    }
+    
+    .main * {
+        color: #171717 !important;
+    }
+    
+    /* Headings - keep brand colors */
+    .main h1, .main h2, .main h3 {
+        color: #0f5340 !important;
+    }
+    
+    /* Info boxes - light background */
+    .main .stAlert {
+        background-color: #fefdf8 !important;
+        color: #171717 !important;
+    }
+    
+    /* File uploader - light */
+    [data-testid="stFileUploader"] {
+        background-color: #f6f7f3 !important;
+    }
+    
+    [data-testid="stFileUploader"] * {
+        color: #171717 !important;
+    }
+    
+    /* Tables - light */
+    .stDataFrame {
+        background-color: white !important;
+    }
+    
+    .stDataFrame tbody tr td {
+        background-color: white !important;
+        color: #171717 !important;
+    }
+    
+    /* Expander content - light */
+    .streamlit-expanderContent {
+        background-color: white !important;
+    }
+    
+    .streamlit-expanderContent * {
+        color: #171717 !important;
     }
     
     /* ========== SIDEBAR ========== */
