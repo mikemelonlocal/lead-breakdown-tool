@@ -1868,6 +1868,15 @@ if not dfs:
     st.info("Upload at least one file (Legacy or MOA) to begin.")
 else:
     df_in = pd.concat(dfs, ignore_index=True)
+    
+    # DEBUG INFO - Remove after testing
+    st.info(f"📊 Debug Info: Loaded {len(dfs)} file(s). Total rows: {len(df_in)}")
+    if "agency" in df_in.columns:
+        agency_counts = df_in["agency"].value_counts()
+        st.info(f"Agency distribution: {agency_counts.to_dict()}")
+    else:
+        st.error("❌ 'agency' column is missing!")
+
 
     # Sidebar Filters
     with st.sidebar:
@@ -1878,7 +1887,21 @@ else:
         domain_col = get_col(df_in, ["domain", "site", "hostname"])
         if domain_col:
             all_domains = sorted([str(x) for x in df_in[domain_col].dropna().unique()])
-            sel_domains = st.multiselect("Filter by domain:", options=all_domains, default=all_domains, key="flt_domains")
+            
+            # Initialize or update selected domains
+            # If this is the first time or domains changed, select all
+            if "flt_domains_list" not in st.session_state or set(st.session_state.get("flt_domains_list", [])) != set(all_domains):
+                st.session_state.flt_domains_list = all_domains
+            
+            sel_domains = st.multiselect(
+                "Filter by domain:", 
+                options=all_domains, 
+                default=st.session_state.flt_domains_list,
+                key="flt_domains"
+            )
+            
+            # Update session state
+            st.session_state.flt_domains_list = sel_domains
         else:
             sel_domains = []
             st.info("No 'Domain' column found in uploads.")
