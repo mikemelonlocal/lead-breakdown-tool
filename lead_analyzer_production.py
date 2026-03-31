@@ -45,8 +45,11 @@ except ImportError:
 
 try:
     import dataframe_image as dfi
-    DFI_AVAILABLE = True
+    # Disable on Streamlit Cloud - browser automation doesn't work
+    DFI_AVAILABLE = False  # Set to True for local development only
 except ImportError:
+    DFI_AVAILABLE = False
+except Exception:
     DFI_AVAILABLE = False
 
 try:
