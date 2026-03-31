@@ -364,11 +364,22 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
     
-    /* ========== TYPOGRAPHY ========== */
+    /* ========== CORE STYLES ========== */
     html, body, [class*="css"] {
         font-family: "Poppins", sans-serif;
         font-size: 16px;
     }
+    
+    /* Force white background like working ROI Calculator */
+    .stApp {
+        background: #FFFFFF;
+    }
+    
+    .main {
+        background-color: #FFFFFF;
+    }
+    
+    /* ========== TYPOGRAPHY ========== */
     
     h1 { 
         font-size: 2.5rem; 
