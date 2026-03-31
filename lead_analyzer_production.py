@@ -2668,7 +2668,18 @@ else:
                                 textinfo='percent+label',
                                 hovertemplate=f'<b>%{{label}}</b><br>{prod_metric}: %{{value:,.0f}}<br>Share: %{{percent}}<extra></extra>'
                             )
-                            fig_pie.update_layout(height=400)
+                            fig_pie.update_layout(
+                                height=500,
+                                margin=dict(l=20, r=20, t=60, b=20),
+                                showlegend=True,
+                                legend=dict(
+                                    orientation="v",
+                                    yanchor="middle",
+                                    y=0.5,
+                                    xanchor="left",
+                                    x=1.05
+                                )
+                            )
                             st.plotly_chart(fig_pie, use_container_width=True)
                         else:  # Bar
                             fig_bar = px.bar(
@@ -3375,7 +3386,18 @@ else:
                         textinfo='percent+label',
                         hovertemplate='<b>%{label}</b><br>Leads: %{value:,.0f}<br>Share: %{percent}<extra></extra>'
                     )
-                    fig_pie.update_layout(height=400)
+                    fig_pie.update_layout(
+                        height=500,
+                        margin=dict(l=20, r=20, t=60, b=20),
+                        showlegend=True,
+                        legend=dict(
+                            orientation="v",
+                            yanchor="middle",
+                            y=0.5,
+                            xanchor="left",
+                            x=1.05
+                        )
+                    )
                     st.plotly_chart(fig_pie, use_container_width=True)
                     
                     st.markdown("---")
