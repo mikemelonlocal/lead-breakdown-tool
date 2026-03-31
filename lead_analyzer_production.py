@@ -4096,35 +4096,32 @@ else:
                     source_comp = source_data[source_data["source"] != "TOTAL"].copy()
                     
                     if not source_comp.empty:
-                        # Get top sources for each agency
-                        if "device" in source_comp.columns:
-                            source_summary = source_comp.groupby(["source", "agency"], as_index=False)["leads"].sum()
+                        # ALWAYS aggregate by source and agency to avoid duplicates
+                        source_summary = source_comp.groupby(["source", "agency"], as_index=False)["leads"].sum()
+                        
+                        if not source_summary.empty:
+                            # Get top 10 sources overall
+                            top_sources = source_summary.groupby("source")["leads"].sum().nlargest(10).index.tolist()
+                            source_top = source_summary[source_summary["source"].isin(top_sources)]
+                            
+                            # Pivot
+                            source_pivot = source_top.pivot(index="source", columns="agency", values="leads").fillna(0)
+                            source_pivot = source_pivot.reset_index()
+                            
+                            if "Legacy" in source_pivot.columns and "MOA" in source_pivot.columns:
+                                source_pivot["Difference"] = source_pivot["MOA"] - source_pivot["Legacy"]
+                                source_pivot = source_pivot.sort_values("Difference", ascending=False)
+                            
+                            # Rename
+                            source_pivot = source_pivot.rename(columns={
+                                "source": "Traffic Source",
+                                "Legacy": "Legacy Leads",
+                                "MOA": "MOA Leads"
+                            })
+                            
+                            st.dataframe(source_pivot, use_container_width=True, hide_index=True)
                         else:
-                            # Select only columns that exist
-                            available_cols = ["source", "agency", "leads"]
-                            existing_cols = [col for col in available_cols if col in source_comp.columns]
-                            source_summary = source_comp[existing_cols].copy()
-                        
-                        # Get top 10 sources overall
-                        top_sources = source_summary.groupby("source")["leads"].sum().nlargest(10).index.tolist()
-                        source_top = source_summary[source_summary["source"].isin(top_sources)]
-                        
-                        # Pivot
-                        source_pivot = source_top.pivot(index="source", columns="agency", values="leads").fillna(0)
-                        source_pivot = source_pivot.reset_index()
-                        
-                        if "Legacy" in source_pivot.columns and "MOA" in source_pivot.columns:
-                            source_pivot["Difference"] = source_pivot["MOA"] - source_pivot["Legacy"]
-                            source_pivot = source_pivot.sort_values("Difference", ascending=False)
-                        
-                        # Rename
-                        source_pivot = source_pivot.rename(columns={
-                            "source": "Traffic Source",
-                            "Legacy": "Legacy Leads",
-                            "MOA": "MOA Leads"
-                        })
-                        
-                        st.dataframe(source_pivot, use_container_width=True, hide_index=True)
+                            st.info("No source data available for comparison.")
                     else:
                         st.info("No source data available for comparison.")
                 else:
