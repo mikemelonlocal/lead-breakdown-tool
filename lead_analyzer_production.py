@@ -4462,7 +4462,15 @@ else:
                                     title="Legacy Product Distribution",
                                     color_discrete_sequence=MELON_COLORS['primary']  # Use same colors as MOA
                                 )
-                                fig_legacy_prod.update_layout(height=400)
+                                fig_legacy_prod.update_traces(
+                                    textposition='inside',
+                                    textinfo='label+percent',
+                                    insidetextorientation='radial'
+                                )
+                                fig_legacy_prod.update_layout(
+                                    height=400,
+                                    showlegend=False  # Hide legend since labels are inside
+                                )
                                 st.plotly_chart(fig_legacy_prod, use_container_width=True)
                     
                     with chart_col2:
@@ -4513,7 +4521,15 @@ else:
                                     title="MOA Product Distribution",
                                     color_discrete_sequence=MELON_COLORS['primary']  # Use same colors as Legacy
                                 )
-                                fig_moa_prod.update_layout(height=400)
+                                fig_moa_prod.update_traces(
+                                    textposition='inside',
+                                    textinfo='label+percent',
+                                    insidetextorientation='radial'
+                                )
+                                fig_moa_prod.update_layout(
+                                    height=400,
+                                    showlegend=False  # Hide legend since labels are inside
+                                )
                                 st.plotly_chart(fig_moa_prod, use_container_width=True)
                 
                 # ========== ADDITIONAL COMPARISON TABLES ==========
