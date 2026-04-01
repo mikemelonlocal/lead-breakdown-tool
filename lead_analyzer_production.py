@@ -1504,6 +1504,18 @@ def display_table_with_total(df, total_identifier_col="platform", total_value="T
     
     df_pretty = pretty_headers(df_display)
     
+    # Format currency and percentage columns
+    for col in df_pretty.columns:
+        col_l = str(col).lower()
+        if is_currency_col(col_l):
+            df_pretty[col] = fmt_currency_series(df_pretty[col])
+        elif is_percent_col(col_l):
+            ser = pd.to_numeric(df_pretty[col], errors="coerce")
+            if ser.fillna(0).gt(1).any():
+                df_pretty[col] = ser.apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "")
+            else:
+                df_pretty[col] = ser.apply(lambda x: f"{x*100:.1f}%" if pd.notna(x) else "")
+    
     # Find the column name after pretty_headers transformation
     total_col_pretty = None
     for col in df_pretty.columns:
@@ -3812,12 +3824,17 @@ else:
             if not agency_data.empty and len(agency_data) >= 2:
                 # Aggregate by agency (in case device column exists)
                 if "device" in agency_data.columns:
-                    agency_summary = agency_data.groupby("agency", as_index=False).agg({
+                    agg_dict = {
                         "quote_starts": "sum",
                         "phone_clicks": "sum", 
                         "sms_clicks": "sum",
                         "leads": "sum"
-                    })
+                    }
+                    # Add spend if it exists
+                    if "spend" in agency_data.columns:
+                        agg_dict["spend"] = "sum"
+                    
+                    agency_summary = agency_data.groupby("agency", as_index=False).agg(agg_dict)
                 else:
                     agency_summary = agency_data.copy()
                 
@@ -4050,10 +4067,10 @@ else:
                     legacy_total = int(legacy_row["leads"].iloc[0])
                     moa_total = int(moa_row["leads"].iloc[0])
                     
-                    # Get spend data
-                    if "spend" in agency_data.columns and "leads" in agency_data.columns:
-                        legacy_spend = agency_data[agency_data["agency"] == "Legacy"]["spend"].sum() if "Legacy" in agency_data["agency"].values else 0
-                        moa_spend = agency_data[agency_data["agency"] == "MOA"]["spend"].sum() if "MOA" in agency_data["agency"].values else 0
+                    # Get spend data from agency_summary (which has aggregated spend if device column existed)
+                    if "spend" in agency_summary.columns and "leads" in agency_summary.columns:
+                        legacy_spend = agency_summary[agency_summary["agency"] == "Legacy"]["spend"].sum() if "Legacy" in agency_summary["agency"].values else 0
+                        moa_spend = agency_summary[agency_summary["agency"] == "MOA"]["spend"].sum() if "MOA" in agency_summary["agency"].values else 0
                         
                         legacy_cpl = legacy_spend / legacy_total if legacy_total > 0 else 0
                         moa_cpl = moa_spend / moa_total if moa_total > 0 else 0
@@ -4423,7 +4440,8 @@ else:
                         
                         st.markdown("**Legacy - Product Distribution**")
                         if not legacy_data.empty:
-                            legacy_prod_chart = results["by_product_total"].copy()
+                            # Use product_agency which has agency column, NOT by_product_total
+                            legacy_prod_chart = results["product_agency"].copy()
                             
                             # Filter by Legacy agency FIRST
                             if "agency" in legacy_prod_chart.columns:
@@ -4433,7 +4451,7 @@ else:
                             if "device" in legacy_prod_chart.columns:
                                 legacy_prod_chart = legacy_prod_chart.groupby("product", as_index=False)["leads"].sum()
                             
-                            # Remove TOTAL row
+                            # Remove TOTAL row if present
                             legacy_prod_chart = legacy_prod_chart[legacy_prod_chart["product"] != "TOTAL"]
                             
                             if not legacy_prod_chart.empty:
@@ -4473,7 +4491,8 @@ else:
                         
                         st.markdown("**MOA - Product Distribution**")
                         if not moa_data.empty:
-                            moa_prod_chart = results["by_product_total"].copy()
+                            # Use product_agency which has agency column, NOT by_product_total
+                            moa_prod_chart = results["product_agency"].copy()
                             
                             # Filter by MOA agency FIRST
                             if "agency" in moa_prod_chart.columns:
@@ -4483,7 +4502,7 @@ else:
                             if "device" in moa_prod_chart.columns:
                                 moa_prod_chart = moa_prod_chart.groupby("product", as_index=False)["leads"].sum()
                             
-                            # Remove TOTAL row
+                            # Remove TOTAL row if present
                             moa_prod_chart = moa_prod_chart[moa_prod_chart["product"] != "TOTAL"]
                             
                             if not moa_prod_chart.empty:
