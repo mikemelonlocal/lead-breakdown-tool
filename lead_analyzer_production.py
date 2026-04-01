@@ -3967,6 +3967,410 @@ else:
                 else:
                     st.info("Upload data for both agencies to see comparison insights.")
                 
+                # ========== PERFORMANCE ANALYSIS & RECOMMENDATIONS ==========
+                st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
+                st.markdown("---")
+                st.markdown("### 🔍 Performance Analysis & Recommendations")
+                
+                # Calculate key metrics for analysis
+                if not legacy_row.empty and not moa_row.empty:
+                    legacy_total = int(legacy_row["leads"].iloc[0])
+                    moa_total = int(moa_row["leads"].iloc[0])
+                    total_combined = legacy_total + moa_total
+                    
+                    # Calculate percentage difference
+                    if legacy_total > 0:
+                        pct_diff = ((moa_total - legacy_total) / legacy_total) * 100
+                    else:
+                        pct_diff = 0
+                    
+                    # Determine which is underperforming
+                    underperforming_agency = "Legacy" if moa_total > legacy_total else "MOA"
+                    performing_agency = "MOA" if moa_total > legacy_total else "Legacy"
+                    underperforming_total = legacy_total if underperforming_agency == "Legacy" else moa_total
+                    performing_total = moa_total if performing_agency == "MOA" else legacy_total
+                    lead_gap = abs(moa_total - legacy_total)
+                    
+                    # Show summary
+                    st.markdown(f"""
+                    **Current Situation:**
+                    - **{underperforming_agency}** is generating **{underperforming_total:,} leads** ({abs(pct_diff):.1f}% {'behind' if pct_diff > 0 else 'ahead of'} {performing_agency})
+                    - **{performing_agency}** is generating **{performing_total:,} leads**
+                    - **Gap:** {lead_gap:,} leads
+                    """)
+                    
+                    # Detailed breakdown analysis
+                    st.markdown(f"#### 🎯 Where is {underperforming_agency} falling behind?")
+                    
+                    recommendations = []
+                    
+                    # Platform analysis
+                    if not platform_agency_data.empty:
+                        plat_comparison = platform_agency_data.copy()
+                        if "device" in plat_comparison.columns:
+                            plat_comparison = plat_comparison.groupby(["platform", "agency"], as_index=False)["leads"].sum()
+                        
+                        plat_pivot = plat_comparison.pivot(index="platform", columns="agency", values="leads").fillna(0)
+                        
+                        if underperforming_agency in plat_pivot.columns and performing_agency in plat_pivot.columns:
+                            plat_pivot["Difference"] = plat_pivot[performing_agency] - plat_pivot[underperforming_agency]
+                            plat_pivot = plat_pivot.sort_values("Difference", ascending=False)
+                            
+                            biggest_gaps = plat_pivot[plat_pivot["Difference"] > 0].head(3)
+                            
+                            if not biggest_gaps.empty:
+                                st.markdown(f"**Platform Gaps:**")
+                                for platform, row in biggest_gaps.iterrows():
+                                    gap = int(row["Difference"])
+                                    under_val = int(row[underperforming_agency])
+                                    perf_val = int(row[performing_agency])
+                                    if under_val > 0:
+                                        pct_behind = ((perf_val - under_val) / under_val) * 100
+                                        recommendations.append({
+                                            "platform": platform,
+                                            "gap": gap,
+                                            "pct": pct_behind,
+                                            "current": under_val,
+                                            "target": perf_val
+                                        })
+                                        st.markdown(f"- **{platform}**: {gap:,} lead gap ({pct_behind:.0f}% behind) - Currently {under_val:,} vs {perf_val:,}")
+                    
+                    # Product analysis
+                    prod_comparison = results["by_product_total"].copy()
+                    if "agency" in prod_comparison.columns:
+                        prod_comp = prod_comparison[prod_comparison["product"] != "TOTAL"].copy()
+                        if "device" in prod_comp.columns:
+                            prod_comp = prod_comp.groupby(["product", "agency"], as_index=False)["leads"].sum()
+                        
+                        prod_pivot = prod_comp.pivot(index="product", columns="agency", values="leads").fillna(0)
+                        
+                        if underperforming_agency in prod_pivot.columns and performing_agency in prod_pivot.columns:
+                            prod_pivot["Difference"] = prod_pivot[performing_agency] - prod_pivot[underperforming_agency]
+                            prod_pivot = prod_pivot.sort_values("Difference", ascending=False)
+                            
+                            biggest_prod_gaps = prod_pivot[prod_pivot["Difference"] > 0].head(3)
+                            
+                            if not biggest_prod_gaps.empty:
+                                st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
+                                st.markdown(f"**Product Gaps:**")
+                                for product, row in biggest_prod_gaps.iterrows():
+                                    gap = int(row["Difference"])
+                                    under_val = int(row[underperforming_agency])
+                                    perf_val = int(row[performing_agency])
+                                    if under_val > 0:
+                                        pct_behind = ((perf_val - under_val) / under_val) * 100
+                                        st.markdown(f"- **{product}**: {gap:,} lead gap ({pct_behind:.0f}% behind) - Currently {under_val:,} vs {perf_val:,}")
+                    
+                    # Generate actionable recommendations
+                    st.markdown('<div class="space-md"></div>', unsafe_allow_html=True)
+                    st.markdown(f"#### 💡 Recommended Actions for {underperforming_agency}")
+                    
+                    if recommendations:
+                        top_gap = recommendations[0]
+                        
+                        st.markdown(f"""
+                        **Priority 1: Boost {top_gap['platform']} Performance**
+                        - Current: {top_gap['current']:,} leads
+                        - Target: {top_gap['target']:,} leads (match {performing_agency})
+                        - Gap to close: {top_gap['gap']:,} leads
+                        
+                        **Suggested tweaks:**
+                        1. **Budget reallocation**: Consider shifting budget from lower-performing platforms to {top_gap['platform']}
+                        2. **Campaign analysis**: Review what {performing_agency} is doing differently on {top_gap['platform']}
+                           - Ad copy differences?
+                           - Targeting settings?
+                           - Bid strategies?
+                        3. **Quality Score audit**: Check if {underperforming_agency}'s {top_gap['platform']} campaigns have lower Quality Scores
+                        4. **Landing page review**: Ensure {underperforming_agency} is using optimized landing pages for {top_gap['platform']} traffic
+                        """)
+                        
+                        if len(recommendations) > 1:
+                            second_gap = recommendations[1]
+                            st.markdown(f"""
+                            **Priority 2: Improve {second_gap['platform']}**
+                            - Gap: {second_gap['gap']:,} leads ({second_gap['pct']:.0f}% behind)
+                            - Review campaign settings and compare with {performing_agency}'s approach
+                            """)
+                    
+                    # Device analysis (if available)
+                    if add_device_column and "device" in results["agency_overview"].columns:
+                        device_data = results["agency_overview"][results["agency_overview"]["agency"] != "TOTAL"].copy()
+                        device_pivot = device_data.groupby(["device", "agency"], as_index=False)["leads"].sum()
+                        device_pivot = device_pivot.pivot(index="device", columns="agency", values="leads").fillna(0)
+                        
+                        if underperforming_agency in device_pivot.columns and performing_agency in device_pivot.columns:
+                            device_pivot["Difference"] = device_pivot[performing_agency] - device_pivot[underperforming_agency]
+                            device_pivot = device_pivot.sort_values("Difference", ascending=False)
+                            
+                            biggest_device_gap = device_pivot[device_pivot["Difference"] > 0].head(1)
+                            
+                            if not biggest_device_gap.empty:
+                                device_name = biggest_device_gap.index[0]
+                                device_gap = int(biggest_device_gap["Difference"].iloc[0])
+                                st.markdown(f"""
+                                **Device Optimization:**
+                                - **{device_name}** shows {device_gap:,} lead gap
+                                - Consider device-specific bid adjustments for {underperforming_agency}
+                                - Review mobile experience if Mobile is the gap
+                                """)
+                    
+                    # CPL analysis
+                    if "spend" in agency_data.columns and "leads" in agency_data.columns:
+                        legacy_spend = agency_data[agency_data["agency"] == "Legacy"]["spend"].sum() if "Legacy" in agency_data["agency"].values else 0
+                        moa_spend = agency_data[agency_data["agency"] == "MOA"]["spend"].sum() if "MOA" in agency_data["agency"].values else 0
+                        
+                        legacy_cpl = legacy_spend / legacy_total if legacy_total > 0 else 0
+                        moa_cpl = moa_spend / moa_total if moa_total > 0 else 0
+                        
+                        if legacy_cpl > 0 and moa_cpl > 0:
+                            st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
+                            st.markdown(f"""
+                            **Cost Efficiency:**
+                            - Legacy CPL: ${legacy_cpl:.2f}
+                            - MOA CPL: ${moa_cpl:.2f}
+                            - {'Legacy is more cost-efficient' if legacy_cpl < moa_cpl else 'MOA is more cost-efficient' if moa_cpl < legacy_cpl else 'Both have similar efficiency'}
+                            """)
+                    
+                    # Summary recommendation
+                    st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
+                    st.info(f"""
+                    **Bottom Line:** To close the {lead_gap:,} lead gap, focus on the platform and product areas where {performing_agency} is outperforming. 
+                    Small improvements in these high-gap areas will have the biggest impact on overall performance.
+                    """)
+                
+                # ========== INDIVIDUAL AGENCY BREAKDOWNS ==========
+                st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
+                st.markdown("---")
+                st.markdown("### 📋 Individual Agency Analysis")
+                
+                # Split data by agency
+                legacy_data = df_in[df_in["agency"] == "Legacy"].copy() if "Legacy" in df_in["agency"].values else pd.DataFrame()
+                moa_data = df_in[df_in["agency"] == "MOA"].copy() if "MOA" in df_in["agency"].values else pd.DataFrame()
+                
+                # Create two columns for side-by-side comparison
+                col_left, col_right = st.columns(2)
+                
+                # ========== LEGACY ANALYSIS ==========
+                with col_left:
+                    st.markdown("#### 🏢 Legacy Agency")
+                    
+                    if not legacy_data.empty:
+                        # Platform breakdown
+                        st.markdown("**Platform Overview**")
+                        legacy_platform = results["platform_agency"][
+                            (results["platform_agency"]["agency"] == "Legacy") | 
+                            (results["platform_agency"]["platform"] == "TOTAL")
+                        ].copy()
+                        
+                        if "device" in legacy_platform.columns:
+                            legacy_platform = legacy_platform.groupby("platform", as_index=False).agg({
+                                "leads": "sum",
+                                "spend": "sum",
+                                "quote_starts": "sum",
+                                "phone_clicks": "sum",
+                                "sms_clicks": "sum"
+                            })
+                            legacy_platform["cpl_platform"] = np.where(
+                                legacy_platform["leads"] > 0,
+                                legacy_platform["spend"] / legacy_platform["leads"],
+                                np.nan
+                            )
+                        
+                        st.dataframe(legacy_platform, use_container_width=True, hide_index=True)
+                        
+                        # Product breakdown
+                        st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
+                        st.markdown("**Product Breakdown**")
+                        legacy_product = results["by_product_total"][
+                            results["by_product_total"]["agency"] == "Legacy"
+                        ].copy() if "agency" in results["by_product_total"].columns else pd.DataFrame()
+                        
+                        if not legacy_product.empty:
+                            if "device" in legacy_product.columns:
+                                legacy_product = legacy_product.groupby("product", as_index=False).agg({
+                                    "leads": "sum",
+                                    "quote_starts": "sum",
+                                    "phone_clicks": "sum",
+                                    "sms_clicks": "sum"
+                                })
+                            st.dataframe(legacy_product, use_container_width=True, hide_index=True)
+                        
+                        # Source breakdown (Top 5)
+                        st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
+                        st.markdown("**Top 5 Traffic Sources**")
+                        legacy_source = results["by_source"].copy()
+                        
+                        if "lead_opportunities" in legacy_source.columns:
+                            legacy_source = legacy_source.rename(columns={"lead_opportunities": "leads"})
+                        
+                        if "agency" in legacy_source.columns:
+                            legacy_source = legacy_source[legacy_source["agency"] == "Legacy"].copy()
+                            legacy_source = legacy_source.groupby("source", as_index=False)["leads"].sum()
+                            legacy_source = legacy_source.nlargest(5, "leads")
+                            st.dataframe(legacy_source, use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No Legacy data uploaded")
+                
+                # ========== MOA ANALYSIS ==========
+                with col_right:
+                    st.markdown("#### 🏢 MOA Agency")
+                    
+                    if not moa_data.empty:
+                        # Platform breakdown
+                        st.markdown("**Platform Overview**")
+                        moa_platform = results["platform_agency"][
+                            (results["platform_agency"]["agency"] == "MOA") | 
+                            (results["platform_agency"]["platform"] == "TOTAL")
+                        ].copy()
+                        
+                        if "device" in moa_platform.columns:
+                            moa_platform = moa_platform.groupby("platform", as_index=False).agg({
+                                "leads": "sum",
+                                "spend": "sum",
+                                "quote_starts": "sum",
+                                "phone_clicks": "sum",
+                                "sms_clicks": "sum"
+                            })
+                            moa_platform["cpl_platform"] = np.where(
+                                moa_platform["leads"] > 0,
+                                moa_platform["spend"] / moa_platform["leads"],
+                                np.nan
+                            )
+                        
+                        st.dataframe(moa_platform, use_container_width=True, hide_index=True)
+                        
+                        # Product breakdown
+                        st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
+                        st.markdown("**Product Breakdown**")
+                        moa_product = results["by_product_total"][
+                            results["by_product_total"]["agency"] == "MOA"
+                        ].copy() if "agency" in results["by_product_total"].columns else pd.DataFrame()
+                        
+                        if not moa_product.empty:
+                            if "device" in moa_product.columns:
+                                moa_product = moa_product.groupby("product", as_index=False).agg({
+                                    "leads": "sum",
+                                    "quote_starts": "sum",
+                                    "phone_clicks": "sum",
+                                    "sms_clicks": "sum"
+                                })
+                            st.dataframe(moa_product, use_container_width=True, hide_index=True)
+                        
+                        # Source breakdown (Top 5)
+                        st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
+                        st.markdown("**Top 5 Traffic Sources**")
+                        moa_source = results["by_source"].copy()
+                        
+                        if "lead_opportunities" in moa_source.columns:
+                            moa_source = moa_source.rename(columns={"lead_opportunities": "leads"})
+                        
+                        if "agency" in moa_source.columns:
+                            moa_source = moa_source[moa_source["agency"] == "MOA"].copy()
+                            moa_source = moa_source.groupby("source", as_index=False)["leads"].sum()
+                            moa_source = moa_source.nlargest(5, "leads")
+                            st.dataframe(moa_source, use_container_width=True, hide_index=True)
+                    else:
+                        st.info("No MOA data uploaded")
+                
+                # ========== INDIVIDUAL AGENCY CHARTS ==========
+                if PLOTLY_AVAILABLE:
+                    st.markdown('<div class="space-md"></div>', unsafe_allow_html=True)
+                    st.markdown("### 📈 Individual Agency Charts")
+                    
+                    chart_col1, chart_col2 = st.columns(2)
+                    
+                    with chart_col1:
+                        st.markdown("#### Legacy - Platform Performance")
+                        if not legacy_data.empty:
+                            legacy_plat_chart = results["platform_agency"][
+                                results["platform_agency"]["agency"] == "Legacy"
+                            ].copy()
+                            
+                            if "device" in legacy_plat_chart.columns:
+                                legacy_plat_chart = legacy_plat_chart.groupby("platform", as_index=False)["leads"].sum()
+                            
+                            legacy_plat_chart = legacy_plat_chart[legacy_plat_chart["platform"] != "TOTAL"]
+                            
+                            if not legacy_plat_chart.empty:
+                                fig_legacy = px.bar(
+                                    legacy_plat_chart,
+                                    x="platform",
+                                    y="leads",
+                                    title="Legacy Leads by Platform",
+                                    color_discrete_sequence=["#0f5340"]
+                                )
+                                fig_legacy.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
+                                fig_legacy.update_layout(height=350, showlegend=False)
+                                st.plotly_chart(fig_legacy, use_container_width=True)
+                        
+                        st.markdown("#### Legacy - Product Distribution")
+                        if not legacy_data.empty:
+                            legacy_prod_chart = results["by_product_total"].copy()
+                            if "agency" in legacy_prod_chart.columns:
+                                legacy_prod_chart = legacy_prod_chart[legacy_prod_chart["agency"] == "Legacy"]
+                            
+                            if "device" in legacy_prod_chart.columns:
+                                legacy_prod_chart = legacy_prod_chart.groupby("product", as_index=False)["leads"].sum()
+                            
+                            legacy_prod_chart = legacy_prod_chart[legacy_prod_chart["product"] != "TOTAL"]
+                            
+                            if not legacy_prod_chart.empty:
+                                fig_legacy_prod = px.pie(
+                                    legacy_prod_chart,
+                                    values="leads",
+                                    names="product",
+                                    title="Legacy Product Distribution",
+                                    color_discrete_sequence=["#0f5340", "#1a7a5a", "#26a17b", "#33c89c"]
+                                )
+                                fig_legacy_prod.update_layout(height=400)
+                                st.plotly_chart(fig_legacy_prod, use_container_width=True)
+                    
+                    with chart_col2:
+                        st.markdown("#### MOA - Platform Performance")
+                        if not moa_data.empty:
+                            moa_plat_chart = results["platform_agency"][
+                                results["platform_agency"]["agency"] == "MOA"
+                            ].copy()
+                            
+                            if "device" in moa_plat_chart.columns:
+                                moa_plat_chart = moa_plat_chart.groupby("platform", as_index=False)["leads"].sum()
+                            
+                            moa_plat_chart = moa_plat_chart[moa_plat_chart["platform"] != "TOTAL"]
+                            
+                            if not moa_plat_chart.empty:
+                                fig_moa = px.bar(
+                                    moa_plat_chart,
+                                    x="platform",
+                                    y="leads",
+                                    title="MOA Leads by Platform",
+                                    color_discrete_sequence=["#49b156"]
+                                )
+                                fig_moa.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
+                                fig_moa.update_layout(height=350, showlegend=False)
+                                st.plotly_chart(fig_moa, use_container_width=True)
+                        
+                        st.markdown("#### MOA - Product Distribution")
+                        if not moa_data.empty:
+                            moa_prod_chart = results["by_product_total"].copy()
+                            if "agency" in moa_prod_chart.columns:
+                                moa_prod_chart = moa_prod_chart[moa_prod_chart["agency"] == "MOA"]
+                            
+                            if "device" in moa_prod_chart.columns:
+                                moa_prod_chart = moa_prod_chart.groupby("product", as_index=False)["leads"].sum()
+                            
+                            moa_prod_chart = moa_prod_chart[moa_prod_chart["product"] != "TOTAL"]
+                            
+                            if not moa_prod_chart.empty:
+                                fig_moa_prod = px.pie(
+                                    moa_prod_chart,
+                                    values="leads",
+                                    names="product",
+                                    title="MOA Product Distribution",
+                                    color_discrete_sequence=["#49b156", "#5dc76a", "#71dd7e", "#85f392"]
+                                )
+                                fig_moa_prod.update_layout(height=400)
+                                st.plotly_chart(fig_moa_prod, use_container_width=True)
+                
                 # ========== ADDITIONAL COMPARISON TABLES ==========
                 st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
                 st.markdown("---")
