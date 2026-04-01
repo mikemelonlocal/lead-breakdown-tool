@@ -2603,8 +2603,8 @@ else:
                             st.plotly_chart(fig, use_container_width=True)
                             st.markdown("---")
                 
-                for c in [x for x in ["spend", "cpl_platform"] if x in plat.columns]:
-                    plat[c] = fmt_currency_series(plat[c])
+                # Currency formatting is now handled by display_table_with_total
+                # (removed redundant formatting here to avoid double-formatting)
                 
                 # Build filters - add device if column exists
                 filters = {"platform": f"{agency_name}_plat_platform"}
@@ -3306,9 +3306,7 @@ else:
                 
                 st.markdown("---")
         
-        # Table
-        for c in [x for x in ["spend", "cpl_platform"] if x in plat.columns]:
-            plat[c] = fmt_currency_series(plat[c])
+        # Table (currency formatting handled by display_table_with_total)
         display_table_with_total(
             plat, 
             "platform", 
