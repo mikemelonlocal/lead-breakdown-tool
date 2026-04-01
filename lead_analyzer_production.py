@@ -4463,13 +4463,20 @@ else:
                                     color_discrete_sequence=MELON_COLORS['primary']  # Use same colors as MOA
                                 )
                                 fig_legacy_prod.update_traces(
-                                    textposition='inside',
+                                    textposition='auto',  # Auto: inside for large slices, outside for small
                                     textinfo='label+percent',
                                     insidetextorientation='radial'
                                 )
                                 fig_legacy_prod.update_layout(
                                     height=400,
-                                    showlegend=False  # Hide legend since labels are inside
+                                    showlegend=True,  # Keep legend for small slices that may be outside
+                                    legend=dict(
+                                        orientation="h",
+                                        yanchor="bottom",
+                                        y=-0.2,
+                                        xanchor="center",
+                                        x=0.5
+                                    )
                                 )
                                 st.plotly_chart(fig_legacy_prod, use_container_width=True)
                     
@@ -4522,13 +4529,20 @@ else:
                                     color_discrete_sequence=MELON_COLORS['primary']  # Use same colors as Legacy
                                 )
                                 fig_moa_prod.update_traces(
-                                    textposition='inside',
+                                    textposition='auto',  # Auto: inside for large slices, outside for small
                                     textinfo='label+percent',
                                     insidetextorientation='radial'
                                 )
                                 fig_moa_prod.update_layout(
                                     height=400,
-                                    showlegend=False  # Hide legend since labels are inside
+                                    showlegend=True,  # Keep legend for small slices that may be outside
+                                    legend=dict(
+                                        orientation="h",
+                                        yanchor="bottom",
+                                        y=-0.2,
+                                        xanchor="center",
+                                        x=0.5
+                                    )
                                 )
                                 st.plotly_chart(fig_moa_prod, use_container_width=True)
                 
