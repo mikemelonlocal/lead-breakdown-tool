@@ -496,7 +496,7 @@ st.markdown("""
     /* ========== BRAND COLORS ========== */
     .melon-green {
         color: white;
-        background-color: #49b156;
+        background-color: #47B74F;
     }
     
     .melon-dk-green {
@@ -577,7 +577,7 @@ st.markdown("""
     
     /* ========== SIDEBAR ========== */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f5340 0%, #49b156 100%);
+        background: linear-gradient(180deg, #0f5340 0%, #47B74F 100%);
         padding: 2rem 1rem;
     }
     
@@ -645,7 +645,7 @@ st.markdown("""
     
     /* ========== EXPANDERS ========== */
     .streamlit-expanderHeader {
-        background-color: #49b156 !important;
+        background-color: #47B74F !important;
         color: white !important;
         border-radius: 5px !important;
         font-weight: 600 !important;
@@ -688,7 +688,7 @@ st.markdown("""
     }
     
     .stDownloadButton>button {
-        background-color: #49b156 !important;
+        background-color: #47B74F !important;
         color: white !important;
         font-weight: 600 !important;
         border-radius: 5px !important;
@@ -714,7 +714,7 @@ st.markdown("""
     }
     
     .stDataFrame thead tr th {
-        background-color: #49b156 !important;
+        background-color: #47B74F !important;
         color: white !important;
         font-weight: 700 !important;
         font-size: 0.9rem !important;
@@ -746,7 +746,7 @@ st.markdown("""
     /* ========== FILE UPLOADER ========== */
     [data-testid="stFileUploader"] {
         background-color: #f6f7f3;
-        border: 2px dashed #49b156;
+        border: 2px dashed #47B74F;
         border-radius: 5px;
         padding: 20px;
         transition: all 0.3s ease;
@@ -760,7 +760,7 @@ st.markdown("""
     
     /* ========== PILLS/TAGS ========== */
     .stMultiSelect [data-baseweb="tag"] {
-        background-color: #49b156 !important;
+        background-color: #47B74F !important;
         color: white !important;
         border-radius: 15px !important;
         padding: 4px 8px !important;
@@ -1895,12 +1895,27 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
     # ---------- Aggregate by Agency ----------
     group_cols = ["device", "agency"] if add_device_column else ["agency"]
     
-    agency_overview = df.groupby(group_cols, as_index=False).agg(
-        quote_starts=(col_qs, "sum"),
-        phone_clicks=(col_phone, "sum"),
-        sms_clicks=(col_sms, "sum"),
-        leads=("lead_opportunities", "sum")
-    ).sort_values("leads", ascending=False).reset_index(drop=True)
+    # Build aggregation dict
+    agg_dict = {
+        "quote_starts": (col_qs, "sum"),
+        "phone_clicks": (col_phone, "sum"),
+        "sms_clicks": (col_sms, "sum"),
+        "leads": ("lead_opportunities", "sum")
+    }
+    
+    # Add spend if available (will calculate from spends_input)
+    # We'll add it after groupby using the same logic as platform_agency
+    
+    agency_overview = df.groupby(group_cols, as_index=False).agg(**agg_dict).sort_values("leads", ascending=False).reset_index(drop=True)
+    
+    # Add spend column by summing across all platforms for each agency
+    def calc_agency_spend(row):
+        agency_name = row["agency"]
+        if agency_name in spends_input:
+            return sum(spends_input[agency_name].values())
+        return 0.0
+    
+    agency_overview["spend"] = agency_overview.apply(calc_agency_spend, axis=1)
     
     # Filter out rows where all metrics are zero
     agency_overview = agency_overview[
@@ -1913,12 +1928,9 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
     # For TOTAL row, use dataframe filtered to exclude Listings if option is enabled
     if exclude_listings_from_totals:
         df_for_agency_totals = df[df["platform"] != "Listings"].copy()
-        agency_for_totals = df_for_agency_totals.groupby(group_cols, as_index=False).agg(
-            quote_starts=(col_qs, "sum"),
-            phone_clicks=(col_phone, "sum"),
-            sms_clicks=(col_sms, "sum"),
-            leads=("lead_opportunities", "sum")
-        )
+        agency_for_totals = df_for_agency_totals.groupby(group_cols, as_index=False).agg(**agg_dict)
+        # Add spend for totals
+        agency_for_totals["spend"] = agency_for_totals.apply(calc_agency_spend, axis=1)
     else:
         agency_for_totals = agency_overview.copy()
     
@@ -1927,7 +1939,8 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
         "quote_starts": agency_for_totals["quote_starts"].sum(),
         "phone_clicks": agency_for_totals["phone_clicks"].sum(),
         "sms_clicks": agency_for_totals["sms_clicks"].sum(),
-        "leads": agency_for_totals["leads"].sum()
+        "leads": agency_for_totals["leads"].sum(),
+        "spend": agency_for_totals["spend"].sum()
     }
     if add_device_column:
         totals_ag["device"] = ""
@@ -2483,7 +2496,7 @@ else:
                                     title=f"{agency_name}: {metric_to_show} by Platform & Device",
                                     labels={"platform": "Platform", metric_col: metric_to_show, "device": "Device"},
                                     color_discrete_map={
-                                        "Mobile": "#49b156",
+                                        "Mobile": "#47B74F",
                                         "Desktop": "#0f5340",
                                         "Tablet": "#efd568",
                                         "Unknown": "#cccccc"
@@ -2500,7 +2513,7 @@ else:
                                     title=f"{agency_name}: {metric_to_show} by Platform & Device",
                                     labels={"platform": "Platform", metric_col: metric_to_show, "device": "Device"},
                                     color_discrete_map={
-                                        "Mobile": "#49b156",
+                                        "Mobile": "#47B74F",
                                         "Desktop": "#0f5340",
                                         "Tablet": "#efd568",
                                         "Unknown": "#cccccc"
@@ -2516,7 +2529,7 @@ else:
                                     title=f"{agency_name}: {metric_to_show} by Platform & Device",
                                     labels={"platform": "Platform", metric_col: metric_to_show, "device": "Device"},
                                     color_discrete_map={
-                                        "Mobile": "#49b156",
+                                        "Mobile": "#47B74F",
                                         "Desktop": "#0f5340",
                                         "Tablet": "#efd568",
                                         "Unknown": "#cccccc"
@@ -2553,7 +2566,7 @@ else:
                                     title=f"{agency_name}: {metric_to_show} by Platform",
                                     labels={"platform": "Platform", metric_col: metric_to_show},
                                     color=metric_col,
-                                    color_continuous_scale=["#eef7ef", "#49b156"] if metric_col != "cpl_platform" else ["#49b156", "#efd568", "#f28c82"],
+                                    color_continuous_scale=["#eef7ef", "#47B74F"] if metric_col != "cpl_platform" else ["#47B74F", "#efd568", "#f28c82"],
                                     text=metric_col if show_values else None
                                 )
                             elif chart_type == "Line":
@@ -2564,7 +2577,7 @@ else:
                                     title=f"{agency_name}: {metric_to_show} by Platform",
                                     labels={"platform": "Platform", metric_col: metric_to_show},
                                     markers=True,
-                                    color_discrete_sequence=["#49b156"]
+                                    color_discrete_sequence=["#47B74F"]
                                 )
                             else:  # Area
                                 fig = px.area(
@@ -2573,7 +2586,7 @@ else:
                                     y=metric_col,
                                     title=f"{agency_name}: {metric_to_show} by Platform",
                                     labels={"platform": "Platform", metric_col: metric_to_show},
-                                    color_discrete_sequence=["#49b156"]
+                                    color_discrete_sequence=["#47B74F"]
                                 )
                             
                             if show_values and chart_type == "Bar":
@@ -2815,7 +2828,7 @@ else:
                                 title=f"{agency_name}: {prod_metric} by Product",
                                 labels={"product": "Product", prod_metric_col: prod_metric},
                                 color=prod_metric_col,
-                                color_continuous_scale=["#eef7ef", "#49b156"],
+                                color_continuous_scale=["#eef7ef", "#47B74F"],
                                 text=prod_metric_col
                             )
                             fig_bar.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
@@ -2957,7 +2970,7 @@ else:
                                 heatmap_data,
                                 title=f"{agency_name}: {bpp_metric} Heatmap",
                                 labels=dict(x="Platform", y="Product", color=bpp_metric),
-                                color_continuous_scale=["#eef7ef", "#efd568", "#49b156", "#0f5340"],
+                                color_continuous_scale=["#eef7ef", "#efd568", "#47B74F", "#0f5340"],
                                 text_auto=True if bpp_show_values else False
                             )
                         else:  # Scatter
@@ -3236,7 +3249,7 @@ else:
                         title=f"Combined: {combined_metric} by Platform",
                         labels={"platform": "Platform", combined_metric_col: combined_metric},
                         color=combined_metric_col,
-                        color_continuous_scale=["#eef7ef", "#49b156"] if combined_metric_col != "cpl_platform" else ["#49b156", "#efd568", "#f28c82"],
+                        color_continuous_scale=["#eef7ef", "#47B74F"] if combined_metric_col != "cpl_platform" else ["#47B74F", "#efd568", "#f28c82"],
                         text=combined_metric_col if combined_show_values else None
                     )
                 elif combined_chart_type == "Line":
@@ -3247,7 +3260,7 @@ else:
                         title=f"Combined: {combined_metric} by Platform",
                         labels={"platform": "Platform", combined_metric_col: combined_metric},
                         markers=True,
-                        color_discrete_sequence=["#49b156"]
+                        color_discrete_sequence=["#47B74F"]
                     )
                 elif combined_chart_type == "Area":
                     fig = px.area(
@@ -3256,7 +3269,7 @@ else:
                         y=combined_metric_col,
                         title=f"Combined: {combined_metric} by Platform",
                         labels={"platform": "Platform", combined_metric_col: combined_metric},
-                        color_discrete_sequence=["#49b156"]
+                        color_discrete_sequence=["#47B74F"]
                     )
                 elif combined_chart_type == "Pie":
                     fig = px.pie(
@@ -3275,7 +3288,7 @@ else:
                         size=combined_metric_col,
                         title=f"Combined: {combined_metric} by Platform",
                         labels={"platform": "Platform", combined_metric_col: combined_metric},
-                        color_discrete_sequence=["#49b156"]
+                        color_discrete_sequence=["#47B74F"]
                     )
                 
                 if combined_show_values and combined_chart_type == "Bar":
@@ -3358,7 +3371,7 @@ else:
                     title="Lead Breakdown by Agency",
                     labels={"agency": "Agency", "Count": "Total"},
                     color_discrete_map={
-                        "Quote Starts": "#49b156",
+                        "Quote Starts": "#47B74F",
                         "Phone Clicks": "#0f5340",
                         "SMS Clicks": "#efd568"
                     },
@@ -3981,7 +3994,7 @@ else:
                                 barmode="group",
                                 title="Lead Volume by Platform: Legacy vs. MOA",
                                 labels={"platform": "Platform", "leads": "Leads", "agency": "Agency"},
-                                color_discrete_map={"Legacy": "#0f5340", "MOA": "#49b156"}
+                                color_discrete_map={"Legacy": "#114e38", "MOA": "#47B74F"}
                             )
                             fig.update_traces(texttemplate='%{y:,}', textposition='outside')
                             
@@ -3995,7 +4008,7 @@ else:
                                 barmode="group",
                                 title="Cost Per Lead by Platform: Legacy vs. MOA",
                                 labels={"platform": "Platform", "cpl": "CPL", "agency": "Agency"},
-                                color_discrete_map={"Legacy": "#0f5340", "MOA": "#49b156"}
+                                color_discrete_map={"Legacy": "#114e38", "MOA": "#47B74F"}
                             )
                             fig.update_traces(texttemplate='$%{y:.2f}', textposition='outside')
                             fig.update_yaxes(tickprefix="$")
@@ -4010,7 +4023,7 @@ else:
                                 barmode="group",
                                 title="Ad Spend by Platform: Legacy vs. MOA",
                                 labels={"platform": "Platform", "spend": "Spend", "agency": "Agency"},
-                                color_discrete_map={"Legacy": "#0f5340", "MOA": "#49b156"}
+                                color_discrete_map={"Legacy": "#114e38", "MOA": "#47B74F"}
                             )
                             fig.update_traces(texttemplate='$%{y:,.0f}', textposition='outside')
                             fig.update_yaxes(tickprefix="$")
@@ -4159,7 +4172,7 @@ else:
                                         st.markdown(f"  - {more_efficient_agency}: ${more_eff_cpl:.2f} CPL ({more_eff_leads:,} leads @ ${more_eff_spend:,.2f})")
                         
                         # Product CPL analysis
-                        prod_comparison = results["by_product_total"].copy()
+                        prod_comparison = results["product_agency"].copy()  # Use product_agency which has agency column
                         if "agency" in prod_comparison.columns:
                             prod_comp = prod_comparison[prod_comparison["product"] != "TOTAL"].copy()
                             
@@ -4287,9 +4300,9 @@ else:
                         # Product breakdown
                         st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
                         st.markdown("**Product Breakdown**")
-                        legacy_product = results["by_product_total"][
-                            results["by_product_total"]["agency"] == "Legacy"
-                        ].copy() if "agency" in results["by_product_total"].columns else pd.DataFrame()
+                        legacy_product = results["product_agency"][
+                            results["product_agency"]["agency"] == "Legacy"
+                        ].copy() if "agency" in results["product_agency"].columns else pd.DataFrame()
                         
                         if not legacy_product.empty:
                             if "device" in legacy_product.columns:
@@ -4365,9 +4378,9 @@ else:
                         # Product breakdown
                         st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
                         st.markdown("**Product Breakdown**")
-                        moa_product = results["by_product_total"][
-                            results["by_product_total"]["agency"] == "MOA"
-                        ].copy() if "agency" in results["by_product_total"].columns else pd.DataFrame()
+                        moa_product = results["product_agency"][
+                            results["product_agency"]["agency"] == "MOA"
+                        ].copy() if "agency" in results["product_agency"].columns else pd.DataFrame()
                         
                         if not moa_product.empty:
                             if "device" in moa_product.columns:
@@ -4432,7 +4445,7 @@ else:
                                     x="platform",
                                     y="leads",
                                     title="Legacy Leads by Platform",
-                                    color_discrete_sequence=["#0f5340"]
+                                    color_discrete_sequence=["#114e38"]  # Official Pine color
                                 )
                                 fig_legacy.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
                                 fig_legacy.update_layout(height=350, showlegend=False)
@@ -4498,7 +4511,7 @@ else:
                                     x="platform",
                                     y="leads",
                                     title="MOA Leads by Platform",
-                                    color_discrete_sequence=["#49b156"]
+                                    color_discrete_sequence=["#47B74F"]
                                 )
                                 fig_moa.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
                                 fig_moa.update_layout(height=350, showlegend=False)
@@ -4557,7 +4570,7 @@ else:
                 
                 # Product Comparison
                 st.markdown("**Product Performance Comparison**")
-                prod_comparison = results["by_product_total"].copy()
+                prod_comparison = results["product_agency"].copy()  # Use product_agency which has agency column
                 
                 if "agency" in prod_comparison.columns:
                     # Pivot to show Legacy vs MOA side by side
@@ -4797,7 +4810,7 @@ else:
                         title="Leads by Platform",
                         labels={"platform": "Platform", "leads": "Total Leads"},
                         color="leads",
-                        color_continuous_scale=["#eef7ef", "#49b156"]
+                        color_continuous_scale=["#eef7ef", "#47B74F"]
                     )
                     fig_platform.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
                     fig_platform.update_layout(
@@ -4853,7 +4866,7 @@ else:
                         title="Leads by Agency",
                         labels={"agency": "Agency", "leads": "Total Leads"},
                         color="agency",
-                        color_discrete_map={"Legacy": "#0f5340", "MOA": "#49b156"}
+                        color_discrete_map={"Legacy": "#114e38", "MOA": "#47B74F"}
                     )
                     fig_agency.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
                     fig_agency.update_layout(
