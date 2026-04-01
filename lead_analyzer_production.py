@@ -92,56 +92,57 @@ PINE = '#114e38'             # C95 M40 Y85 K45 (TERTIARY)
 COCONUT = '#644414'          # C42 M65 Y100 K40
 CRANBERRY = '#6C2126'        # C32 M96 Y80 K40
 
-# Extended Melon Local color palette for charts
+# Extended Melon Local color palette for charts - OPTIMIZED FOR CONTRAST
 MELON_COLORS = {
-    # Main palette - full spectrum of brand colors
+    # Main palette - maximum contrast between adjacent colors
+    # Pattern: Green → Yellow → Red/Pink → Brown → Green (alternating color families)
     'primary': [
-        '#47B74F',  # Cactus (PRIMARY)
-        '#114e38',  # Pine (TERTIARY) 
-        '#F1CB20',  # Lemon Sun (PRIMARY)
-        '#40A74C',  # Clover (SECONDARY)
-        '#CC8F15',  # Mustard Seed (SECONDARY)
-        '#E9736E',  # Watermelon Sugar (SECONDARY)
-        '#CFBA97',  # Mojave (TERTIARY)
-        '#FF9B94',  # Whitney Pink (SECONDARY)
-        '#644414',  # Coconut (TERTIARY)
-        '#6C2126'   # Cranberry (TERTIARY)
+        '#47B74F',  # 1. Cactus (bright green)
+        '#F1CB20',  # 2. Lemon Sun (yellow) - contrast with green
+        '#E9736E',  # 3. Watermelon Sugar (coral) - contrast with yellow
+        '#114e38',  # 4. Pine (dark green) - contrast with coral
+        '#CC8F15',  # 5. Mustard Seed (gold) - contrast with dark green
+        '#FF9B94',  # 6. Whitney Pink (pink) - contrast with gold
+        '#40A74C',  # 7. Clover (mid green) - contrast with pink
+        '#6C2126',  # 8. Cranberry (burgundy) - contrast with green
+        '#CFBA97',  # 9. Mojave (tan) - contrast with burgundy
+        '#644414'   # 10. Coconut (brown) - contrast with tan
     ],
-    # Legacy palette - darker tones
+    # Legacy palette - darker tones with high contrast
     'legacy': [
-        '#114e38',  # Pine (TERTIARY)
-        '#47B74F',  # Cactus (PRIMARY)
-        '#F1CB20',  # Lemon Sun (PRIMARY)
-        '#40A74C',  # Clover (SECONDARY)
-        '#644414',  # Coconut (TERTIARY)
-        '#CC8F15',  # Mustard Seed (SECONDARY)
-        '#CFBA97',  # Mojave (TERTIARY)
-        '#6C2126',  # Cranberry (TERTIARY)
-        '#EDDFDB'   # Sand (SECONDARY)
+        '#114e38',  # 1. Pine (dark green)
+        '#F1CB20',  # 2. Lemon Sun (yellow) - contrast
+        '#6C2126',  # 3. Cranberry (burgundy) - contrast
+        '#47B74F',  # 4. Cactus (bright green) - contrast
+        '#CC8F15',  # 5. Mustard Seed (gold) - contrast
+        '#E9736E',  # 6. Watermelon Sugar (coral) - contrast
+        '#40A74C',  # 7. Clover (mid green) - contrast
+        '#CFBA97',  # 8. Mojave (tan) - contrast
+        '#644414'   # 9. Coconut (brown) - contrast
     ],
-    # MOA palette - bright tones
+    # MOA palette - bright tones with high contrast
     'moa': [
-        '#47B74F',  # Cactus (PRIMARY)
-        '#40A74C',  # Clover (SECONDARY)
-        '#F1CB20',  # Lemon Sun (PRIMARY)
-        '#FF9B94',  # Whitney Pink (SECONDARY)
-        '#CC8F15',  # Mustard Seed (SECONDARY)
-        '#FEF8E9',  # Alpine (PRIMARY)
-        '#E9736E',  # Watermelon Sugar (SECONDARY)
-        '#CFBA97',  # Mojave (TERTIARY)
-        '#EDDFDB'   # Sand (SECONDARY)
+        '#47B74F',  # 1. Cactus (bright green)
+        '#F1CB20',  # 2. Lemon Sun (yellow) - contrast
+        '#FF9B94',  # 3. Whitney Pink (pink) - contrast
+        '#40A74C',  # 4. Clover (mid green) - contrast
+        '#CC8F15',  # 5. Mustard Seed (gold) - contrast
+        '#E9736E',  # 6. Watermelon Sugar (coral) - contrast
+        '#114e38',  # 7. Pine (dark green) - contrast
+        '#CFBA97',  # 8. Mojave (tan) - contrast
+        '#6C2126'   # 9. Cranberry (burgundy) - contrast
     ],
-    # Contrast palette - varied spectrum
+    # Contrast palette - alternating warm/cool colors
     'contrast': [
-        '#114e38',  # Pine (TERTIARY)
-        '#47B74F',  # Cactus (PRIMARY)
-        '#F1CB20',  # Lemon Sun (PRIMARY)
-        '#E9736E',  # Watermelon Sugar (SECONDARY)
-        '#40A74C',  # Clover (SECONDARY)
-        '#CC8F15',  # Mustard Seed (SECONDARY)
-        '#FF9B94',  # Whitney Pink (SECONDARY)
-        '#CFBA97',  # Mojave (TERTIARY)
-        '#6C2126'   # Cranberry (TERTIARY)
+        '#47B74F',  # 1. Cactus (cool green)
+        '#CC8F15',  # 2. Mustard Seed (warm gold) - contrast
+        '#114e38',  # 3. Pine (cool dark green) - contrast
+        '#E9736E',  # 4. Watermelon Sugar (warm coral) - contrast
+        '#40A74C',  # 5. Clover (cool mid green) - contrast
+        '#F1CB20',  # 6. Lemon Sun (warm yellow) - contrast
+        '#6C2126',  # 7. Cranberry (cool burgundy) - contrast
+        '#FF9B94',  # 8. Whitney Pink (warm pink) - contrast
+        '#CFBA97'   # 9. Mojave (neutral tan) - contrast
     ]
 }
 ALPINE_CREAM = '#f2f0e6'      # Background light
@@ -4437,7 +4438,7 @@ else:
                                     values="leads",
                                     names="product",
                                     title="Legacy Product Distribution",
-                                    color_discrete_sequence=MELON_COLORS['legacy']
+                                    color_discrete_sequence=MELON_COLORS['primary']  # Use same colors as MOA
                                 )
                                 fig_legacy_prod.update_layout(height=400)
                                 st.plotly_chart(fig_legacy_prod, use_container_width=True)
@@ -4483,7 +4484,7 @@ else:
                                     values="leads",
                                     names="product",
                                     title="MOA Product Distribution",
-                                    color_discrete_sequence=MELON_COLORS['moa']
+                                    color_discrete_sequence=MELON_COLORS['primary']  # Use same colors as Legacy
                                 )
                                 fig_moa_prod.update_layout(height=400)
                                 st.plotly_chart(fig_moa_prod, use_container_width=True)
