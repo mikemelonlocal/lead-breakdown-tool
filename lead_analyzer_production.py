@@ -69,9 +69,81 @@ st.set_page_config(
 # ========== 3. CONSTANTS ==========
 
 # Brand Colors (Melon Local Design System)
-PINE_GREEN = '#0f5340'        # Primary dark
-CACTUS_GREEN = '#49b156'      # Primary bright
-LEMON_SUN = '#efd568'         # Accent yellow
+PINE_GREEN = '#114e38'        # Primary dark (Pine - TERTIARY)
+CACTUS_GREEN = '#47B74F'      # Primary bright (Cactus - PRIMARY)
+LEMON_SUN = '#F1CB20'         # Accent yellow (Lemon Sun - PRIMARY)
+
+# Complete Official Melon Local Color Palette from Brand Book (March 2023, Page 13)
+# PRIMARY COLORS
+ALPINE = '#FEF8E9'           # C0 M2 Y9 K0
+CACTUS = '#47B74F'           # C72 M0 Y95 K0 (PRIMARY)
+LEMON_SUN_OFFICIAL = '#F1CB20'  # C5 M20 Y100 K0 (PRIMARY)
+
+# SECONDARY COLORS
+SAND = '#EDDFDB'             # C7 M9 Y28 K0
+CLOVER = '#40A74C'           # C85 M5 Y100 K0
+MUSTARD_SEED = '#CC8F15'     # C15 M45 Y100 K0
+WATERMELON_SUGAR = '#E9736E' # C0 M75 Y50 K0
+WHITNEY_PINK = '#FF9B94'     # C0 M54 Y30 K0
+
+# TERTIARY COLORS
+MOJAVE = '#CFBA97'           # C20 M25 Y42 K0
+PINE = '#114e38'             # C95 M40 Y85 K45 (TERTIARY)
+COCONUT = '#644414'          # C42 M65 Y100 K40
+CRANBERRY = '#6C2126'        # C32 M96 Y80 K40
+
+# Extended Melon Local color palette for charts
+MELON_COLORS = {
+    # Main palette - full spectrum of brand colors
+    'primary': [
+        '#47B74F',  # Cactus (PRIMARY)
+        '#114e38',  # Pine (TERTIARY) 
+        '#F1CB20',  # Lemon Sun (PRIMARY)
+        '#40A74C',  # Clover (SECONDARY)
+        '#CC8F15',  # Mustard Seed (SECONDARY)
+        '#E9736E',  # Watermelon Sugar (SECONDARY)
+        '#CFBA97',  # Mojave (TERTIARY)
+        '#FF9B94',  # Whitney Pink (SECONDARY)
+        '#644414',  # Coconut (TERTIARY)
+        '#6C2126'   # Cranberry (TERTIARY)
+    ],
+    # Legacy palette - darker tones
+    'legacy': [
+        '#114e38',  # Pine (TERTIARY)
+        '#47B74F',  # Cactus (PRIMARY)
+        '#F1CB20',  # Lemon Sun (PRIMARY)
+        '#40A74C',  # Clover (SECONDARY)
+        '#644414',  # Coconut (TERTIARY)
+        '#CC8F15',  # Mustard Seed (SECONDARY)
+        '#CFBA97',  # Mojave (TERTIARY)
+        '#6C2126',  # Cranberry (TERTIARY)
+        '#EDDFDB'   # Sand (SECONDARY)
+    ],
+    # MOA palette - bright tones
+    'moa': [
+        '#47B74F',  # Cactus (PRIMARY)
+        '#40A74C',  # Clover (SECONDARY)
+        '#F1CB20',  # Lemon Sun (PRIMARY)
+        '#FF9B94',  # Whitney Pink (SECONDARY)
+        '#CC8F15',  # Mustard Seed (SECONDARY)
+        '#FEF8E9',  # Alpine (PRIMARY)
+        '#E9736E',  # Watermelon Sugar (SECONDARY)
+        '#CFBA97',  # Mojave (TERTIARY)
+        '#EDDFDB'   # Sand (SECONDARY)
+    ],
+    # Contrast palette - varied spectrum
+    'contrast': [
+        '#114e38',  # Pine (TERTIARY)
+        '#47B74F',  # Cactus (PRIMARY)
+        '#F1CB20',  # Lemon Sun (PRIMARY)
+        '#E9736E',  # Watermelon Sugar (SECONDARY)
+        '#40A74C',  # Clover (SECONDARY)
+        '#CC8F15',  # Mustard Seed (SECONDARY)
+        '#FF9B94',  # Whitney Pink (SECONDARY)
+        '#CFBA97',  # Mojave (TERTIARY)
+        '#6C2126'   # Cranberry (TERTIARY)
+    ]
+}
 ALPINE_CREAM = '#f2f0e6'      # Background light
 WHITE = '#ffffff'
 TEXT_DARK = '#171717'
@@ -2701,7 +2773,7 @@ else:
                                 values=prod_metric_col,
                                 names="product",
                                 title=f"{agency_name}: {prod_metric} Distribution by Product",
-                                color_discrete_sequence=["#49b156", "#0f5340", "#efd568", "#f2f0e6"],
+                                color_discrete_sequence=MELON_COLORS["primary"],
                                 hole=0.4 if prod_chart_type == "Donut" else 0
                             )
                             fig_pie.update_traces(
@@ -2828,7 +2900,7 @@ else:
                                 color="product",
                                 title=f"{agency_name}: {bpp_metric} by Platform & Product",
                                 labels={"platform": "Platform", bpp_metric_col: bpp_metric, "product": "Product"},
-                                color_discrete_sequence=["#49b156", "#0f5340", "#efd568", "#f2f0e6"],
+                                color_discrete_sequence=MELON_COLORS["primary"],
                                 text=bpp_metric_col if bpp_show_values else None,
                                 barmode="stack"
                             )
@@ -2840,7 +2912,7 @@ else:
                                 color="product",
                                 title=f"{agency_name}: {bpp_metric} by Platform & Product",
                                 labels={"platform": "Platform", bpp_metric_col: bpp_metric, "product": "Product"},
-                                color_discrete_sequence=["#49b156", "#0f5340", "#efd568", "#f2f0e6"],
+                                color_discrete_sequence=MELON_COLORS["primary"],
                                 text=bpp_metric_col if bpp_show_values else None,
                                 barmode="group"
                             )
@@ -2852,7 +2924,7 @@ else:
                                 color="product",
                                 title=f"{agency_name}: {bpp_metric} by Platform & Product",
                                 labels={"platform": "Platform", bpp_metric_col: bpp_metric, "product": "Product"},
-                                color_discrete_sequence=["#49b156", "#0f5340", "#efd568", "#f2f0e6"],
+                                color_discrete_sequence=MELON_COLORS["primary"],
                                 markers=True
                             )
                         elif bpp_chart_type == "Area":
@@ -2863,7 +2935,7 @@ else:
                                 color="product",
                                 title=f"{agency_name}: {bpp_metric} by Platform & Product",
                                 labels={"platform": "Platform", bpp_metric_col: bpp_metric, "product": "Product"},
-                                color_discrete_sequence=["#49b156", "#0f5340", "#efd568", "#f2f0e6"]
+                                color_discrete_sequence=MELON_COLORS["primary"]
                             )
                         elif bpp_chart_type == "Heatmap":
                             # Pivot for heatmap
@@ -2872,7 +2944,7 @@ else:
                                 heatmap_data,
                                 title=f"{agency_name}: {bpp_metric} Heatmap",
                                 labels=dict(x="Platform", y="Product", color=bpp_metric),
-                                color_continuous_scale=["#f2f0e6", "#efd568", "#49b156", "#0f5340"],
+                                color_continuous_scale=["#eef7ef", "#efd568", "#49b156", "#0f5340"],
                                 text_auto=True if bpp_show_values else False
                             )
                         else:  # Scatter
@@ -2884,7 +2956,7 @@ else:
                                 size=bpp_metric_col,
                                 title=f"{agency_name}: {bpp_metric} by Platform & Product",
                                 labels={"platform": "Platform", bpp_metric_col: bpp_metric, "product": "Product"},
-                                color_discrete_sequence=["#49b156", "#0f5340", "#efd568", "#f2f0e6"]
+                                color_discrete_sequence=MELON_COLORS["primary"]
                             )
                         
                         if bpp_show_values and bpp_chart_type in ["Stacked Bar", "Grouped Bar"]:
@@ -3179,7 +3251,7 @@ else:
                         values=combined_metric_col,
                         names="platform",
                         title=f"Combined: {combined_metric} Distribution",
-                        color_discrete_sequence=["#49b156", "#0f5340", "#efd568", "#f2f0e6", "#cccccc"]
+                        color_discrete_sequence=MELON_COLORS['primary']
                     )
                     fig.update_traces(textposition='inside', textinfo='percent+label')
                 else:  # Scatter
@@ -3420,7 +3492,7 @@ else:
                         values="leads",
                         names="product",
                         title="Lead Distribution by Product",
-                        color_discrete_sequence=["#0f5340", "#49b156", "#efd568", "#d9534f", "#5bc0de"]
+                        color_discrete_sequence=MELON_COLORS['primary']
                     )
                     fig_pie.update_traces(
                         textposition='inside',
@@ -4188,7 +4260,11 @@ else:
                                 np.nan
                             )
                         
-                        st.dataframe(legacy_platform, use_container_width=True, hide_index=True)
+                        # Remove agency column for cleaner display
+                        if "agency" in legacy_platform.columns:
+                            legacy_platform = legacy_platform.drop(columns=["agency"])
+                        
+                        display_table_with_total(legacy_platform, "platform", "TOTAL")
                         
                         # Product breakdown
                         st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
@@ -4205,7 +4281,12 @@ else:
                                     "phone_clicks": "sum",
                                     "sms_clicks": "sum"
                                 })
-                            st.dataframe(legacy_product, use_container_width=True, hide_index=True)
+                            
+                            # Remove agency column
+                            if "agency" in legacy_product.columns:
+                                legacy_product = legacy_product.drop(columns=["agency"])
+                            
+                            display_table_with_total(legacy_product, "product", "TOTAL")
                         
                         # Source breakdown (Top 5)
                         st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
@@ -4219,7 +4300,14 @@ else:
                             legacy_source = legacy_source[legacy_source["agency"] == "Legacy"].copy()
                             legacy_source = legacy_source.groupby("source", as_index=False)["leads"].sum()
                             legacy_source = legacy_source.nlargest(5, "leads")
-                            st.dataframe(legacy_source, use_container_width=True, hide_index=True)
+                            
+                            # Remove agency column if present
+                            if "agency" in legacy_source.columns:
+                                legacy_source = legacy_source.drop(columns=["agency"])
+                            
+                            # Use pretty headers
+                            legacy_source_pretty = pretty_headers(legacy_source)
+                            st.dataframe(legacy_source_pretty, use_container_width=True, hide_index=True)
                     else:
                         st.info("No Legacy data uploaded")
                 
@@ -4250,7 +4338,11 @@ else:
                                 np.nan
                             )
                         
-                        st.dataframe(moa_platform, use_container_width=True, hide_index=True)
+                        # Remove agency column for cleaner display
+                        if "agency" in moa_platform.columns:
+                            moa_platform = moa_platform.drop(columns=["agency"])
+                        
+                        display_table_with_total(moa_platform, "platform", "TOTAL")
                         
                         # Product breakdown
                         st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
@@ -4267,7 +4359,12 @@ else:
                                     "phone_clicks": "sum",
                                     "sms_clicks": "sum"
                                 })
-                            st.dataframe(moa_product, use_container_width=True, hide_index=True)
+                            
+                            # Remove agency column
+                            if "agency" in moa_product.columns:
+                                moa_product = moa_product.drop(columns=["agency"])
+                            
+                            display_table_with_total(moa_product, "product", "TOTAL")
                         
                         # Source breakdown (Top 5)
                         st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
@@ -4281,7 +4378,14 @@ else:
                             moa_source = moa_source[moa_source["agency"] == "MOA"].copy()
                             moa_source = moa_source.groupby("source", as_index=False)["leads"].sum()
                             moa_source = moa_source.nlargest(5, "leads")
-                            st.dataframe(moa_source, use_container_width=True, hide_index=True)
+                            
+                            # Remove agency column if present
+                            if "agency" in moa_source.columns:
+                                moa_source = moa_source.drop(columns=["agency"])
+                            
+                            # Use pretty headers
+                            moa_source_pretty = pretty_headers(moa_source)
+                            st.dataframe(moa_source_pretty, use_container_width=True, hide_index=True)
                     else:
                         st.info("No MOA data uploaded")
                 
@@ -4333,7 +4437,7 @@ else:
                                     values="leads",
                                     names="product",
                                     title="Legacy Product Distribution",
-                                    color_discrete_sequence=["#0f5340", "#1a4d3a", "#d9534f", "#f0ad4e", "#5cb85c"]
+                                    color_discrete_sequence=MELON_COLORS['legacy']
                                 )
                                 fig_legacy_prod.update_layout(height=400)
                                 st.plotly_chart(fig_legacy_prod, use_container_width=True)
@@ -4379,7 +4483,7 @@ else:
                                     values="leads",
                                     names="product",
                                     title="MOA Product Distribution",
-                                    color_discrete_sequence=["#49b156", "#5cb85c", "#5bc0de", "#f0ad4e", "#d9534f"]
+                                    color_discrete_sequence=MELON_COLORS['moa']
                                 )
                                 fig_moa_prod.update_layout(height=400)
                                 st.plotly_chart(fig_moa_prod, use_container_width=True)
@@ -4662,7 +4766,7 @@ else:
                         values="leads",
                         names="product",
                         title="Lead Distribution by Product",
-                        color_discrete_sequence=["#0f5340", "#49b156", "#efd568", "#d9534f", "#5bc0de"]
+                        color_discrete_sequence=MELON_COLORS['primary']
                     )
                     fig_product.update_traces(
                         textposition='inside',
