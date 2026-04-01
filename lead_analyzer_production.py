@@ -4424,12 +4424,16 @@ else:
                         st.markdown("**Legacy - Product Distribution**")
                         if not legacy_data.empty:
                             legacy_prod_chart = results["by_product_total"].copy()
-                            if "agency" in legacy_prod_chart.columns:
-                                legacy_prod_chart = legacy_prod_chart[legacy_prod_chart["agency"] == "Legacy"]
                             
+                            # Filter by Legacy agency FIRST
+                            if "agency" in legacy_prod_chart.columns:
+                                legacy_prod_chart = legacy_prod_chart[legacy_prod_chart["agency"] == "Legacy"].copy()
+                            
+                            # Then aggregate by product (if device column exists)
                             if "device" in legacy_prod_chart.columns:
                                 legacy_prod_chart = legacy_prod_chart.groupby("product", as_index=False)["leads"].sum()
                             
+                            # Remove TOTAL row
                             legacy_prod_chart = legacy_prod_chart[legacy_prod_chart["product"] != "TOTAL"]
                             
                             if not legacy_prod_chart.empty:
@@ -4470,12 +4474,16 @@ else:
                         st.markdown("**MOA - Product Distribution**")
                         if not moa_data.empty:
                             moa_prod_chart = results["by_product_total"].copy()
-                            if "agency" in moa_prod_chart.columns:
-                                moa_prod_chart = moa_prod_chart[moa_prod_chart["agency"] == "MOA"]
                             
+                            # Filter by MOA agency FIRST
+                            if "agency" in moa_prod_chart.columns:
+                                moa_prod_chart = moa_prod_chart[moa_prod_chart["agency"] == "MOA"].copy()
+                            
+                            # Then aggregate by product (if device column exists)
                             if "device" in moa_prod_chart.columns:
                                 moa_prod_chart = moa_prod_chart.groupby("product", as_index=False)["leads"].sum()
                             
+                            # Remove TOTAL row
                             moa_prod_chart = moa_prod_chart[moa_prod_chart["product"] != "TOTAL"]
                             
                             if not moa_prod_chart.empty:
