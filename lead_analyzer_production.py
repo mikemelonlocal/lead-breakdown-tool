@@ -5305,18 +5305,68 @@ with main_tab2:
 
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    st.metric("Total Ad Groups", f"{len(ads_df_filtered):,}")
+                    st.metric("Total Ad Groups", f"{len(ads_df_filtered):,}", help="Total number of ad groups in the selected account(s)")
                     st.caption(f"Active: {active_count:,}")
+                    st.caption("ℹ️ Active = has impressions", help="Ad groups with at least 1 impression in the date range")
                 with col2:
-                    st.metric("Total Spend", f"${total_spend:,.2f}")
+                    st.metric("Total Spend", f"${total_spend:,.2f}", help="Total cost across all ad groups in the selected account(s)")
                 with col3:
-                    st.metric("Total Clicks", f"{total_clicks:,.0f}")
+                    st.metric("Total Clicks", f"{total_clicks:,.0f}", help="Total clicks received across all ad groups")
                 with col4:
-                    st.metric("Avg. CPC", f"${avg_cpc:.2f}")
+                    st.metric("Avg. CPC", f"${avg_cpc:.2f}", help="Average cost per click (Total Spend ÷ Total Clicks)")
 
                 # Recommendations by category
                 st.markdown("---")
                 st.markdown("### 🎯 Bid Recommendations")
+                
+                # Add help expander with explanations
+                with st.expander("ℹ️ Understanding the Recommendations", expanded=False):
+                    st.markdown("""
+                    **How to use these recommendations:**
+                    
+                    Each tab shows ad groups that need a specific action. Click through the tabs to see your priorities.
+                    
+                    **🚀 Major Opportunities**
+                    - Ad groups with high CTR (>{:.0f}%) but low impression share (<{:.0f}%)
+                    - These are WINNING ads that aren't showing enough
+                    - Action: Increase bids 40-50% to capture more quality traffic
+                    
+                    **🔺 Increase Bids**
+                    - Losing >{:.0f}% of auctions to rank (low bids)
+                    - Not reaching top 3 positions (Top IS <{:.0f}%)
+                    - Action: Increase bids 30-40% to win more auctions
+                    
+                    **✅ Maintain**
+                    - Already in the sweet spot (position 2-3)
+                    - Top IS {:.0f}-{:.0f}%, Abs Top IS {:.0f}-{:.0f}%
+                    - Action: Keep current bids, don't change anything
+                    
+                    **🔻 Decrease Bids**
+                    - Appearing in position 1 too often (>{:.0f}% of the time)
+                    - Overpaying for clicks you'd get at position 2-3
+                    - Action: Decrease bids 15-20% to drop to position 2-3
+                    
+                    **⚠️ Review**
+                    - Very low CTR (<{:.1f}%) suggests poor ad/keyword relevance
+                    - Need to fix ad copy or keywords before adjusting bids
+                    - Action: Review and improve ads, OR decrease bids 30%
+                    
+                    **🛑 Cleanup**
+                    - Enabled but zero impressions (dead weight)
+                    - Cluttering your account management
+                    - Action: Consider pausing to simplify your account
+                    """.format(
+                        custom_thresholds['good_ctr_threshold']*100,
+                        custom_thresholds['low_impr_share_threshold']*100,
+                        custom_thresholds['increase_lost_is_rank_min']*100,
+                        custom_thresholds['target_top_is_min']*100,
+                        custom_thresholds['target_top_is_min']*100,
+                        custom_thresholds['target_top_is_max']*100,
+                        custom_thresholds['target_abs_top_is_min']*100,
+                        custom_thresholds['target_abs_top_is_max']*100,
+                        custom_thresholds['decrease_abs_top_is_min']*100,
+                        custom_thresholds['poor_ctr_threshold']*100
+                    ))
 
                 # Create tabs for each category
                 rec_tabs = st.tabs([
@@ -5350,8 +5400,19 @@ with main_tab2:
                         display_df['Search lost IS (rank)'] = display_df['Search lost IS (rank)'].apply(lambda x: format_ads_metric(x, 'percentage'))
                         display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
                         display_df['Clicks'] = display_df['Clicks'].apply(lambda x: format_ads_metric(x, 'number'))
+                        
+                        # Rename columns with helpful descriptions
+                        display_df = display_df.rename(columns={
+                            'CTR': 'CTR (Click Rate)',
+                            'Search impr. share': 'Impr. Share (% of market)',
+                            'Search lost IS (rank)': 'Lost to Low Bids (%)',
+                            'recommendation': 'Action'
+                        })
 
                         st.dataframe(display_df, use_container_width=True, hide_index=True)
+                        
+                        # Add metric explanations below table
+                        st.caption("💡 **CTR** = Click-through rate (engagement quality) | **Impr. Share** = % of available impressions you're getting | **Lost to Low Bids** = % of auctions you're losing because your bid is too low")
 
                         # Download button
                         csv = df_opp.to_csv(index=False)
@@ -5385,8 +5446,19 @@ with main_tab2:
                         display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
                         display_df['Avg. CPC'] = display_df['Avg. CPC'].apply(lambda x: format_ads_metric(x, 'currency'))
                         display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        
+                        # Rename columns with helpful descriptions
+                        display_df = display_df.rename(columns={
+                            'Search lost IS (rank)': 'Lost to Low Bids (%)',
+                            'Search top IS': 'Top 3 Position (%)',
+                            'CTR': 'CTR (Click Rate)',
+                            'Avg. CPC': 'Avg. CPC',
+                            'recommendation': 'Action'
+                        })
 
                         st.dataframe(display_df, use_container_width=True, hide_index=True)
+                        
+                        st.caption("💡 **Lost to Low Bids** = % of auctions you're losing | **Top 3 Position** = % of time you appear in positions 1-3 | **Target: 60-80%**")
 
                         csv = df_inc.to_csv(index=False)
                         st.download_button(
@@ -5419,8 +5491,18 @@ with main_tab2:
                         display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
                         display_df['Avg. CPC'] = display_df['Avg. CPC'].apply(lambda x: format_ads_metric(x, 'currency'))
                         display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        
+                        # Rename columns
+                        display_df = display_df.rename(columns={
+                            'Search top IS': 'Top 3 Position (%)',
+                            'Search abs. top IS': 'Position 1 (%)',
+                            'CTR': 'CTR (Click Rate)',
+                            'Avg. CPC': 'Avg. CPC'
+                        })
 
                         st.dataframe(display_df, use_container_width=True, hide_index=True)
+                        
+                        st.caption("💡 **Perfect Balance:** Top 3 Position 60-80% + Position 1 only 20-40% = You're in the cost-efficient sweet spot!")
                     else:
                         st.warning("No ad groups currently in the perfect position 2-3 sweet spot.")
 
@@ -5442,8 +5524,18 @@ with main_tab2:
                         display_df['Search top IS'] = display_df['Search top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
                         display_df['Avg. CPC'] = display_df['Avg. CPC'].apply(lambda x: format_ads_metric(x, 'currency'))
                         display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        
+                        # Rename columns
+                        display_df = display_df.rename(columns={
+                            'Search abs. top IS': 'Position 1 (%)',
+                            'Search top IS': 'Top 3 Position (%)',
+                            'Avg. CPC': 'Avg. CPC',
+                            'recommendation': 'Action'
+                        })
 
                         st.dataframe(display_df, use_container_width=True, hide_index=True)
+                        
+                        st.caption("💡 **Overpaying:** Position 1 is expensive! Target: Show position 1 only 20-40% of the time, not 50%+")
 
                         csv = df_dec.to_csv(index=False)
                         st.download_button(
@@ -5475,8 +5567,18 @@ with main_tab2:
                         display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
                         display_df['Clicks'] = display_df['Clicks'].apply(lambda x: format_ads_metric(x, 'number'))
                         display_df['Avg. CPC'] = display_df['Avg. CPC'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        
+                        # Rename columns
+                        display_df = display_df.rename(columns={
+                            'CTR': 'CTR (Click Rate)',
+                            'Search impr. share': 'Impr. Share (%)',
+                            'Avg. CPC': 'Avg. CPC',
+                            'recommendation': 'Action'
+                        })
 
                         st.dataframe(display_df, use_container_width=True, hide_index=True)
+                        
+                        st.caption("💡 **Low CTR Warning:** CTR <1.5% usually means your ad or keywords don't match what people are searching for. Fix the ad first!")
 
                         csv = df_review.to_csv(index=False)
                         st.download_button(
