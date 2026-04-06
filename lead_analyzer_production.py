@@ -5265,7 +5265,10 @@ with main_tab2:
                 
                 # Account Filter
                 if 'Account' in ads_df.columns:
-                    accounts = sorted(ads_df['Account'].unique().tolist())
+                    # Get unique accounts, remove NaN, convert to strings, and sort
+                    accounts = ads_df['Account'].dropna().unique().tolist()
+                    accounts = [str(acc).strip() for acc in accounts if str(acc).strip() != '']
+                    accounts = sorted(set(accounts))  # Remove duplicates and sort
                     
                     # Add "All Accounts" option
                     account_options = ['All Accounts'] + accounts
