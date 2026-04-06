@@ -5261,24 +5261,48 @@ with main_tab2:
                 ads_df = load_ads_export(ads_file)
 
             if ads_df is not None:
-                st.success(f"✅ Loaded {len(ads_df):,} ad groups")
+                st.success(f"✅ Loaded {len(ads_df):,} ad groups from {len(ads_df['Account'].unique())} account(s)")
+                
+                # Account Filter
+                if 'Account' in ads_df.columns:
+                    accounts = sorted(ads_df['Account'].unique().tolist())
+                    
+                    # Add "All Accounts" option
+                    account_options = ['All Accounts'] + accounts
+                    
+                    selected_account = st.selectbox(
+                        "Filter by Account",
+                        options=account_options,
+                        key='account_filter',
+                        help="View recommendations for a specific agent or all accounts combined"
+                    )
+                    
+                    # Filter dataframe if specific account selected
+                    if selected_account != 'All Accounts':
+                        ads_df_filtered = ads_df[ads_df['Account'] == selected_account].copy()
+                        st.info(f"📊 Showing data for: **{selected_account}** ({len(ads_df_filtered):,} ad groups)")
+                    else:
+                        ads_df_filtered = ads_df.copy()
+                        st.info(f"📊 Showing data for: **All {len(accounts)} accounts** ({len(ads_df_filtered):,} ad groups)")
+                else:
+                    ads_df_filtered = ads_df.copy()
 
-                # Run analysis
+                # Run analysis on filtered data
                 with st.spinner('Analyzing account health...'):
-                    analysis_results = analyze_ads_account(ads_df, custom_thresholds)
+                    analysis_results = analyze_ads_account(ads_df_filtered, custom_thresholds)
 
                 # Account Overview
                 st.markdown("---")
                 st.markdown("### 📊 Account Overview")
 
-                active_count = len(ads_df[ads_df['Impr.'] > 0])
-                total_spend = ads_df['Cost'].sum()
-                total_clicks = ads_df['Clicks'].sum()
+                active_count = len(ads_df_filtered[ads_df_filtered['Impr.'] > 0])
+                total_spend = ads_df_filtered['Cost'].sum()
+                total_clicks = ads_df_filtered['Clicks'].sum()
                 avg_cpc = total_spend / total_clicks if total_clicks > 0 else 0
 
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    st.metric("Total Ad Groups", f"{len(ads_df):,}")
+                    st.metric("Total Ad Groups", f"{len(ads_df_filtered):,}")
                     st.caption(f"Active: {active_count:,}")
                 with col2:
                     st.metric("Total Spend", f"${total_spend:,.2f}")
