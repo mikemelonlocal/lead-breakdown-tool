@@ -560,6 +560,12 @@ def load_ads_export(file):
             df = df.rename(columns=microsoft_column_map)
             st.caption(f"✅ Mapped Microsoft columns to Google format")
             
+            # Remove duplicate columns if any exist
+            if df.columns.duplicated().any():
+                duplicate_cols = df.columns[df.columns.duplicated()].tolist()
+                st.warning(f"⚠️ Removing duplicate columns: {', '.join(set(duplicate_cols))}")
+                df = df.loc[:, ~df.columns.duplicated()]
+            
             # Clean Campaign ID and Ad Group ID - remove brackets from Microsoft format
             if 'Campaign ID' in df.columns:
                 df['Campaign ID'] = df['Campaign ID'].astype(str).str.replace('[', '').str.replace(']', '').str.strip()
@@ -576,7 +582,14 @@ def load_ads_export(file):
         numeric_cols = ['Impr.', 'Clicks', 'Cost', 'Avg. CPC', 'Conversions', 'Cost / conv.']
         for col in numeric_cols:
             if col in df.columns:
-                df[col] = clean_numeric_ads(df[col])
+                try:
+                    # Check if this is actually a Series (not a DataFrame from duplicate columns)
+                    if isinstance(df[col], pd.DataFrame):
+                        st.warning(f"⚠️ Duplicate column '{col}' detected - using first occurrence")
+                        df[col] = df[col].iloc[:, 0]
+                    df[col] = clean_numeric_ads(df[col])
+                except Exception as e:
+                    st.warning(f"⚠️ Could not clean column '{col}': {str(e)}")
         
         # Clean percentage columns (convert to decimal)
         pct_cols = ['CTR', 'Search impr. share', 'Search top IS', 'Search abs. top IS',
@@ -584,16 +597,24 @@ def load_ads_export(file):
                     'Search exact match IS']
         for col in pct_cols:
             if col in df.columns:
-                # First clean the numeric values
-                df[col] = clean_numeric_ads(df[col])
-                
-                # Check if values are already decimals (< 1) or percentages (> 1)
-                non_null_values = df[col].dropna()
-                if len(non_null_values) > 0:
-                    sample_val = non_null_values.iloc[0]
-                    if sample_val > 1:
-                        # It's a percentage, convert to decimal
-                        df[col] = df[col] / 100
+                try:
+                    # Check if this is actually a Series (not a DataFrame from duplicate columns)
+                    if isinstance(df[col], pd.DataFrame):
+                        st.warning(f"⚠️ Duplicate column '{col}' detected - using first occurrence")
+                        df[col] = df[col].iloc[:, 0]
+                    
+                    # First clean the numeric values
+                    df[col] = clean_numeric_ads(df[col])
+                    
+                    # Check if values are already decimals (< 1) or percentages (> 1)
+                    non_null_values = df[col].dropna()
+                    if len(non_null_values) > 0:
+                        sample_val = non_null_values.iloc[0]
+                        if sample_val > 1:
+                            # It's a percentage, convert to decimal
+                            df[col] = df[col] / 100
+                except Exception as e:
+                    st.warning(f"⚠️ Could not clean percentage column '{col}': {str(e)}")
         
         # Parse bid column
         if 'Default max. CPC' in df.columns:
