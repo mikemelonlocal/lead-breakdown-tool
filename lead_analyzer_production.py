@@ -5722,7 +5722,7 @@ with main_tab1:
                 )
     
 
-def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_account='All Accounts', filter_to_stats_account=False):
+def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_account='All Accounts', filter_to_stats_account=False, shared_budget_df=None):
     """
     Process and analyze a single ads platform (Google or Microsoft).
     Shows budget reports, URL reports, campaign matching, and bid recommendations.
@@ -5733,141 +5733,147 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
         custom_thresholds: Dictionary of bid recommendation thresholds
         selected_account: Pre-selected account from shared filter (default: 'All Accounts')
         filter_to_stats_account: Whether to filter to stats account only (default: False)
+        shared_budget_df: Pre-loaded budget DataFrame (optional, if already loaded before combining platforms)
     """
     
     st.markdown(f"**Platform:** {platform_name} • **Ad Groups:** {len(ads_df):,}")
     
-    # Budget Report Upload (Optional) - in an expander for visibility
-    st.markdown("---")
-    with st.expander("💰 **Budget Report (Optional)** - Click to upload", expanded=True):
-        st.markdown("""
-        Upload your budget report to automatically filter recommendations by spending status.
-        
-        **Benefits:**
-        - ✅ Only shows "Increase Bids" for accounts that are **Underspending**
-        - ⚠️ Prioritizes "Decrease Bids" for accounts that are **Overspending**
-        - 📊 Adds Budget Status column to all recommendations
-        
-        **Required columns:** Agent (or Name), Status (Underspending/Overspending/etc)
-        """)
-        
-        budget_file = st.file_uploader(
-            "Upload Budget Report (CSV or Excel)",
-            type=['csv', 'xlsx', 'xls'],
-            key=f'budget_upload_{platform_name}',
-            help="Budget report with Agent names and Budget Status"
-        )
-    
+    # Budget Report - use shared budget if provided, otherwise allow upload
     budget_df = None
-    if budget_file is not None:
-        try:
-            # Check file extension
-            filename = budget_file.name.lower()
+    
+    if shared_budget_df is not None:
+        # Budget was already loaded before combining platforms
+        budget_df = shared_budget_df
+        st.markdown("---")
+        st.success(f"✅ Using budget data loaded above ({len(budget_df)} accounts)")
+    else:
+        # Budget Report Upload (Optional) - in an expander for visibility
+        st.markdown("---")
+        with st.expander("💰 **Budget Report (Optional)** - Click to upload", expanded=True):
+            st.markdown("""
+            Upload your budget report to automatically filter recommendations by spending status.
             
-            if filename.endswith('.xlsx') or filename.endswith('.xls'):
-                # Excel format
-                budget_df_raw = pd.read_excel(budget_file)
-                has_headers = True
-            else:
-                # CSV format - check for headers
-                # Read first line to check if it's a header or data
-                budget_file.seek(0)
-                first_line = budget_file.readline().decode('utf-8').strip()
-                first_values = first_line.split(',')
+            **Benefits:**
+            - ✅ Only shows "Increase Bids" for accounts that are **Underspending**
+            - ⚠️ Prioritizes "Decrease Bids" for accounts that are **Overspending**
+            - 📊 Adds Budget Status column to all recommendations
+            
+            **Required columns:** Agent (or Name), Status (Underspending/Overspending/etc)
+            """)
+            
+            budget_file = st.file_uploader(
+                "Upload Budget Report (CSV or Excel)",
+                type=['csv', 'xlsx', 'xls'],
+                key=f'budget_upload_{platform_name}',
+                help="Budget report with Agent names and Budget Status"
+            )
+    
+        if budget_file is not None:
+            try:
+                # Check file extension
+                filename = budget_file.name.lower()
                 
-                # Check if first line looks like headers (contains text like "Agent", "Status")
-                # vs data (contains values like "Underspending", "Overspending", agent names)
-                first_line_lower = first_line.lower()
-                has_header_keywords = any(word in first_line_lower for word in ['agent', 'status', 'budget id', 'description', 'platform'])
-                has_data_keywords = any(word in first_line_lower for word in ['underspending', 'overspending', 'optimization', 'no conversions'])
-                
-                # Reset to beginning
-                budget_file.seek(0)
-                
-                if has_header_keywords and not has_data_keywords:
-                    # Has headers - read normally
-                    budget_df_raw = pd.read_csv(budget_file)
+                if filename.endswith('.xlsx') or filename.endswith('.xls'):
+                    # Excel format
+                    budget_df_raw = pd.read_excel(budget_file)
                     has_headers = True
                 else:
-                    # No headers or first row is data - specify column names
-                    budget_df_raw = pd.read_csv(
-                        budget_file,
-                        header=None,
-                        names=['Budget Id', 'Agent', 'Status', 'Description', 'Platform', 
-                               'Monthly Cap', 'Daily Cap', 'Spend']
-                    )
-                    has_headers = False
-                    st.warning("⚠️ No headers detected. Assuming columns: [Budget Id, Agent, Status, Description, Platform, Monthly Cap, Daily Cap, Spend]")
-            
-            # Auto-detect Agent and Status columns (case-insensitive)
-            agent_col = None
-            status_col = None
-            
-            if has_headers:
-                # Try to find columns by name
-                for col in budget_df_raw.columns:
-                    col_lower = str(col).lower().strip()
-                    if agent_col is None and ('agent' in col_lower and 'status' not in col_lower or col_lower == 'name'):
-                        agent_col = col
-                    # Prioritize "Spend Status" over other status columns
-                    if status_col is None and 'spend' in col_lower and 'status' in col_lower:
-                        status_col = col
-                    elif status_col is None and ('status' in col_lower or col_lower == 'state'):
-                        status_col = col
-            else:
-                # Use default column names
-                agent_col = 'Agent'
-                status_col = 'Status'
-            
-            if agent_col and status_col and agent_col in budget_df_raw.columns and status_col in budget_df_raw.columns:
-                # Clean the data
-                budget_df = budget_df_raw[[agent_col, status_col]].copy()
-                budget_df.columns = ['Agent', 'Status']
-                
-                # Remove any rows with NaN in Agent or Status
-                budget_df = budget_df.dropna(subset=['Agent', 'Status'])
-                
-                # Clean agent names and status values
-                budget_df['Agent'] = budget_df['Agent'].astype(str).str.strip()
-                budget_df['Status'] = budget_df['Status'].astype(str).str.strip()
-                
-                # Remove rows where Agent or Status are empty strings
-                budget_df = budget_df[
-                    (budget_df['Agent'] != '') & 
-                    (budget_df['Agent'] != 'nan') &
-                    (budget_df['Status'] != '') & 
-                    (budget_df['Status'] != 'nan')
-                ]
-                
-                if len(budget_df) > 0:
-                    st.success(f"✅ Loaded budget data for {len(budget_df)} account(s)")
+                    # CSV format - check for headers
+                    # Read first line to check if it's a header or data
+                    budget_file.seek(0)
+                    first_line = budget_file.readline().decode('utf-8').strip()
+                    first_values = first_line.split(',')
                     
-                    if has_headers and (agent_col != 'Agent' or status_col != 'Status'):
-                        st.info(f"📋 Detected columns: '{agent_col}' → Agent, '{status_col}' → Status")
+                    # Check if first line looks like headers (contains text like "Agent", "Status")
+                    # vs data (contains values like "Underspending", "Overspending", agent names)
+                    first_line_lower = first_line.lower()
+                    has_header_keywords = any(word in first_line_lower for word in ['agent', 'status', 'budget id', 'description', 'platform'])
+                    has_data_keywords = any(word in first_line_lower for word in ['underspending', 'overspending', 'optimization', 'no conversions'])
                     
-                    # Show budget status summary
-                    status_counts = budget_df['Status'].value_counts()
-                    cols = st.columns(min(len(status_counts), 5))
-                    for idx, (status, count) in enumerate(status_counts.items()):
-                        if idx < 5:
-                            with cols[idx]:
-                                st.metric(status, count)
+                    # Reset to beginning
+                    budget_file.seek(0)
+                    
+                    if has_header_keywords and not has_data_keywords:
+                        # Has headers - read normally
+                        budget_df_raw = pd.read_csv(budget_file)
+                        has_headers = True
+                    else:
+                        # No headers or first row is data - specify column names
+                        budget_df_raw = pd.read_csv(
+                            budget_file,
+                            header=None,
+                            names=['Budget Id', 'Agent', 'Status', 'Description', 'Platform', 
+                                   'Monthly Cap', 'Daily Cap', 'Spend']
+                        )
+                        has_headers = False
+                        st.warning("⚠️ No headers detected. Assuming columns: [Budget Id, Agent, Status, Description, Platform, Monthly Cap, Daily Cap, Spend]")
+                
+                    # Auto-detect Agent and Status columns (case-insensitive)
+                agent_col = None
+                status_col = None
+                
+                if has_headers:
+                    # Try to find columns by name
+                    for col in budget_df_raw.columns:
+                        col_lower = str(col).lower().strip()
+                        if agent_col is None and ('agent' in col_lower and 'status' not in col_lower or col_lower == 'name'):
+                            agent_col = col
+                        # Prioritize "Spend Status" over other status columns
+                        if status_col is None and 'spend' in col_lower and 'status' in col_lower:
+                            status_col = col
+                        elif status_col is None and ('status' in col_lower or col_lower == 'state'):
+                            status_col = col
                 else:
-                    st.error("❌ No valid budget data found after cleaning")
-                    budget_df = None
-            else:
-                st.error("❌ Could not find 'Agent' and 'Status' columns")
-                st.info("Available columns: " + ", ".join([str(c) for c in budget_df_raw.columns[:10]]))
-                budget_df = None
+                    # Use default column names
+                    agent_col = 'Agent'
+                    status_col = 'Status'
+                
+                if agent_col and status_col and agent_col in budget_df_raw.columns and status_col in budget_df_raw.columns:
+                    # Clean the data
+                    budget_df = budget_df_raw[[agent_col, status_col]].copy()
+                    budget_df.columns = ['Agent', 'Status']
+                    
+                    # Remove any rows with NaN in Agent or Status
+                    budget_df = budget_df.dropna(subset=['Agent', 'Status'])
+                    
+                    # Clean agent names and status values
+                    budget_df['Agent'] = budget_df['Agent'].astype(str).str.strip()
+                    budget_df['Status'] = budget_df['Status'].astype(str).str.strip()
+                    
+                    # Remove rows where Agent or Status are empty strings
+                    budget_df = budget_df[
+                        (budget_df['Agent'] != '') & 
+                        (budget_df['Agent'] != 'nan') &
+                        (budget_df['Status'] != '') & 
+                        (budget_df['Status'] != 'nan')
+                    ]
+                    
+                    if len(budget_df) > 0:
+                        st.success(f"✅ Loaded budget data for {len(budget_df)} account(s)")
                         
-        except Exception as e:
-            st.error(f"Error loading budget report: {str(e)}")
-            import traceback
-            st.code(traceback.format_exc())
-            budget_df = None
-        except Exception as e:
-            st.error(f"Error loading budget report: {str(e)}")
-            budget_df = None
+                        if has_headers and (agent_col != 'Agent' or status_col != 'Status'):
+                            st.info(f"📋 Detected columns: '{agent_col}' → Agent, '{status_col}' → Status")
+                        
+                        # Show budget status summary
+                        status_counts = budget_df['Status'].value_counts()
+                        cols = st.columns(min(len(status_counts), 5))
+                        for idx, (status, count) in enumerate(status_counts.items()):
+                            if idx < 5:
+                                with cols[idx]:
+                                    st.metric(status, count)
+                    else:
+                        st.error("❌ No valid budget data found after cleaning")
+                        budget_df = None
+                else:
+                    st.error("❌ Could not find 'Agent' and 'Status' columns")
+                    st.info("Available columns: " + ", ".join([str(c) for c in budget_df_raw.columns[:10]]))
+                    budget_df = None
+                        
+            except Exception as e:
+                st.error(f"Error loading budget report: {str(e)}")
+                import traceback
+                st.code(traceback.format_exc())
+                budget_df = None
     
     st.markdown("---")
     
@@ -6736,7 +6742,9 @@ with main_tab2:
                         filename_lower = ads_file.name.lower()
                         
                         # Check filename for platform indicators
-                        if 'microsoft' in filename_lower or 'bing' in filename_lower or 'ad_group_report' in filename_lower.replace('_', '').replace(' ', ''):
+                        # Microsoft: "Ad_Group_Report" (capital G with underscores)
+                        # Google: "Ad group report" (lowercase g with spaces)
+                        if 'microsoft' in filename_lower or 'bing' in filename_lower or 'Ad_Group_Report' in ads_file.name:
                             platform = "Microsoft Ads"
                         elif 'google' in filename_lower:
                             platform = "Google Ads"
@@ -6771,6 +6779,48 @@ with main_tab2:
             if ads_data_by_platform:
                 st.success(f"✅ Loaded {len(ads_data_by_platform)} platform(s) for independent analysis")
                 
+                # Budget Report Upload (BEFORE combining, so we can filter by CSM)
+                st.markdown("---")
+                with st.expander("💰 **Budget Report (Optional)** - Upload to filter by CSM", expanded=False):
+                    st.markdown("""
+                    Upload your budget report to:
+                    - ✅ Filter accounts by CSM (Client Success Manager)
+                    - ✅ See Budget Status for each account
+                    - ✅ Prioritize recommendations based on spending status
+                    
+                    **Required columns:** Agent, CSM (optional), Status/Spend Status
+                    """)
+                    
+                    shared_budget_file = st.file_uploader(
+                        "Upload Budget Report (CSV or Excel)",
+                        type=['csv', 'xlsx', 'xls'],
+                        key='shared_budget_upload',
+                        help="Budget report with Agent names, CSM assignments, and Budget Status"
+                    )
+                
+                # Load and process budget data if provided
+                shared_budget_df = None
+                available_csms = []
+                
+                if shared_budget_file is not None:
+                    try:
+                        filename = shared_budget_file.name.lower()
+                        if filename.endswith('.xlsx') or filename.endswith('.xls'):
+                            shared_budget_df = pd.read_excel(shared_budget_file)
+                        else:
+                            shared_budget_df = pd.read_csv(shared_budget_file)
+                        
+                        st.success(f"✅ Loaded budget data for {len(shared_budget_df)} account(s)")
+                        
+                        # Extract CSM list if column exists
+                        if 'CSM' in shared_budget_df.columns:
+                            available_csms = sorted(shared_budget_df['CSM'].dropna().unique().tolist())
+                            st.caption(f"📊 Found {len(available_csms)} CSM(s): {', '.join(available_csms)}")
+                        
+                    except Exception as e:
+                        st.error(f"❌ Error loading budget report: {str(e)}")
+                        shared_budget_df = None
+                
                 # Combine all accounts from all platforms for the shared filter
                 all_accounts = set()
                 for platform_name, ads_df in ads_data_by_platform:
@@ -6783,9 +6833,9 @@ with main_tab2:
                 
                 # Shared Account Filter (applies to all platforms)
                 st.markdown("---")
-                st.markdown("### 🎯 Account Filter")
+                st.markdown("### 🎯 Filters")
                 
-                filter_col1, filter_col2 = st.columns([3, 2])
+                filter_col1, filter_col2, filter_col3 = st.columns([3, 2, 2])
                 
                 with filter_col1:
                     account_options = ['All Accounts'] + all_accounts
@@ -6797,6 +6847,19 @@ with main_tab2:
                     )
                 
                 with filter_col2:
+                    # CSM filter (only if budget data with CSM column is available)
+                    if available_csms:
+                        csm_options = ['All CSMs'] + available_csms
+                        selected_csm = st.selectbox(
+                            "Filter by CSM",
+                            options=csm_options,
+                            key='shared_csm_filter',
+                            help="View data only for accounts managed by a specific CSM"
+                        )
+                    else:
+                        selected_csm = 'All CSMs'
+                
+                with filter_col3:
                     # Check if we have campaign stats from Tab 1
                     has_campaign_data = 'campaign_stats' in st.session_state and st.session_state.campaign_stats is not None
                     if has_campaign_data:
@@ -6841,6 +6904,18 @@ with main_tab2:
                 
                 st.caption(f"✅ Combined dataframe: {len(all_ads_df):,} total ad groups")
                 
+                # Apply CSM filter if selected
+                if selected_csm != 'All CSMs' and shared_budget_df is not None and 'CSM' in shared_budget_df.columns:
+                    # Get list of accounts for this CSM
+                    csm_accounts = shared_budget_df[shared_budget_df['CSM'] == selected_csm]['Agent'].dropna().unique().tolist()
+                    
+                    # Filter dataframe to only those accounts
+                    before_csm_filter = len(all_ads_df)
+                    all_ads_df = all_ads_df[all_ads_df['Account'].isin(csm_accounts)].copy()
+                    after_csm_filter = len(all_ads_df)
+                    
+                    st.info(f"🎯 **CSM Filter**: {selected_csm} → {len(csm_accounts)} accounts, {after_csm_filter:,} ad groups")
+                
                 # Show platform breakdown
                 if 'Platform' in all_ads_df.columns:
                     platform_counts = all_ads_df['Platform'].value_counts()
@@ -6881,7 +6956,8 @@ with main_tab2:
                     all_ads_df, 
                     custom_thresholds, 
                     selected_account, 
-                    filter_to_stats_account
+                    filter_to_stats_account,
+                    shared_budget_df  # Pass the budget data
                 )
                 
 
