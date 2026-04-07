@@ -5579,15 +5579,17 @@ with main_tab1:
                 )
     
 
-def process_ads_platform(platform_name, ads_df, custom_thresholds):
+def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_account='All Accounts', filter_to_stats_account=False):
     """
     Process and analyze a single ads platform (Google or Microsoft).
-    Shows budget reports, URL reports, campaign matching, account filtering, and bid recommendations.
+    Shows budget reports, URL reports, campaign matching, and bid recommendations.
     
     Args:
         platform_name: Name of the platform (e.g., "Google Ads", "Microsoft Ads")
         ads_df: DataFrame with ad group data for this platform
         custom_thresholds: Dictionary of bid recommendation thresholds
+        selected_account: Pre-selected account from shared filter (default: 'All Accounts')
+        filter_to_stats_account: Whether to filter to stats account only (default: False)
     """
     
     st.markdown(f"**Platform:** {platform_name} • **Ad Groups:** {len(ads_df):,}")
@@ -5849,76 +5851,44 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds):
     if 'campaign_stats' in st.session_state:
         ads_df = enrich_ads_with_campaign_stats(ads_df, st.session_state.campaign_stats, url_report_df)
         
-        # Show matching summary
-        matched_campaigns = ads_df['Campaign Conversions'].notna().sum()
-        total_ad_groups = len(ads_df)
-        
-        if url_report_df is not None:
-            # Check if URL report has Campaign ID column
-            has_campaign_id = any('campaign' in str(col).lower() and 'id' in str(col).lower() for col in url_report_df.columns)
-            if has_campaign_id:
-                st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using Campaign IDs")
+        # Show matching summary only if the column was added
+        if 'Campaign Conversions' in ads_df.columns:
+            matched_campaigns = ads_df['Campaign Conversions'].notna().sum()
+            total_ad_groups = len(ads_df)
+            
+            if url_report_df is not None:
+                # Check if URL report has Campaign ID column
+                has_campaign_id = any('campaign' in str(col).lower() and 'id' in str(col).lower() for col in url_report_df.columns)
+                if has_campaign_id:
+                    st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using Campaign IDs")
+                else:
+                    st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups from URL report")
             else:
-                st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups from URL report")
-        else:
-            # Check if ads report has Campaign ID column
-            has_campaign_id_in_ads = any('campaign' in str(col).lower() and 'id' in str(col).lower() for col in ads_df.columns)
-            if has_campaign_id_in_ads:
-                st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using Campaign IDs (direct match)")
-            else:
-                st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using campaign names")
-                st.info("💡 Upload URL reports above for more precise matching by Campaign ID")
+                # Check if ads report has Campaign ID column
+                has_campaign_id_in_ads = any('campaign' in str(col).lower() and 'id' in str(col).lower() for col in ads_df.columns)
+                if has_campaign_id_in_ads:
+                    st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using Campaign IDs (direct match)")
+                else:
+                    st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using campaign names")
+                    st.info("💡 Upload URL reports above for more precise matching by Campaign ID")
     
     
-    # Account Filter
-    if 'Account' in ads_df.columns:
-        # Get unique accounts, remove NaN, convert to strings, and sort
-        accounts = ads_df['Account'].dropna().unique().tolist()
-        accounts = [str(acc).strip() for acc in accounts if str(acc).strip() != '']
-        accounts = sorted(set(accounts))  # Remove duplicates and sort
-        
-        # Check if we have campaign stats from Tab 1
+    # Apply account filter (passed from parent)
+    if selected_account != 'All Accounts' and 'Account' in ads_df.columns:
+        ads_df_filtered = ads_df[ads_df['Account'] == selected_account].copy()
+    else:
+        ads_df_filtered = ads_df.copy()
+    
+    # Apply stats account filter if checkbox is enabled
+    if filter_to_stats_account:
         has_campaign_data = 'campaign_stats' in st.session_state and st.session_state.campaign_stats is not None
         has_domain = 'stats_agent_domain' in st.session_state and st.session_state.stats_agent_domain is not None
         
-        # Create two columns for filter controls
-        filter_col1, filter_col2 = st.columns([3, 2])
-        
-        with filter_col1:
-            # Add "All Accounts" option
-            account_options = ['All Accounts'] + accounts
-            
-            selected_account = st.selectbox(
-                "Filter by Account",
-                options=account_options,
-                key=f'account_filter_{platform_name}',
-                help="View recommendations for a specific agent or all accounts combined"
-            )
-        
-        with filter_col2:
-            # Only show checkbox if we have campaign conversion data
-            if has_campaign_data:
-                filter_to_stats_account = st.checkbox(
-                    "📊 Only account from stats",
-                    value=False,
-                    key=f'filter_stats_account_{platform_name}',
-                    help="Filter to only show the account from the Tab 1 stats report"
-                )
-            else:
-                filter_to_stats_account = False
-        
-        # Apply account filter
-        if selected_account != 'All Accounts':
-            ads_df_filtered = ads_df[ads_df['Account'] == selected_account].copy()
-        else:
-            ads_df_filtered = ads_df.copy()
-        
-        # Apply stats account filter if checkbox is enabled
-        if filter_to_stats_account and has_campaign_data:
+        if has_campaign_data:
             matched_account = None
             
-            # Try to match using domain from URL report
-            if url_report_df is not None and not url_report_df.empty and 'Ad final URL' in url_report_df.columns and has_domain:
+            # Try to match using domain from URL report (if url_report_df exists)
+            if 'url_report_df' in locals() and url_report_df is not None and not url_report_df.empty and 'Ad final URL' in url_report_df.columns and has_domain:
                 import re
                 stats_domain = st.session_state.stats_agent_domain
                 
@@ -5936,29 +5906,6 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds):
                 ads_df_filtered = ads_df_filtered[ads_df_filtered['Account'] == matched_account].copy()
                 file_name = st.session_state.get('stats_file_uploaded', 'stats report')
                 st.info(f"📊 Showing data for: **{matched_account}** (from {file_name}) — {len(ads_df_filtered):,} ad groups")
-            elif matched_account:
-                st.warning(f"⚠️ Account '{matched_account}' from stats report not found in Ad Group Report")
-                st.info(f"📊 Showing data for: **All {len(accounts)} accounts** ({len(ads_df_filtered):,} ad groups)")
-            else:
-                # Fallback: filter to accounts with conversion data
-                if 'Campaign Conversions' in ads_df_filtered.columns:
-                    accounts_with_conversions = ads_df_filtered[ads_df_filtered['Campaign Conversions'].notna()]['Account'].unique()
-                    if len(accounts_with_conversions) > 0:
-                        ads_df_filtered = ads_df_filtered[ads_df_filtered['Account'].isin(accounts_with_conversions)].copy()
-                        st.info(f"📊 Showing accounts with conversion data: **{len(accounts_with_conversions)} accounts** ({len(ads_df_filtered):,} ad groups)")
-                        st.caption("💡 Upload URL report for precise account matching by domain")
-                    else:
-                        st.warning("⚠️ No accounts found with conversion data")
-                else:
-                    st.info(f"📊 Showing data for: **All {len(accounts)} accounts** ({len(ads_df_filtered):,} ad groups)")
-        else:
-            # Show normal info message
-            if selected_account != 'All Accounts':
-                st.info(f"📊 Showing data for: **{selected_account}** ({len(ads_df_filtered):,} ad groups)")
-            else:
-                st.info(f"📊 Showing data for: **All {len(accounts)} accounts** ({len(ads_df_filtered):,} ad groups)")
-    else:
-        ads_df_filtered = ads_df.copy()
 
     # Run analysis on filtered data
     with st.spinner('Analyzing account health...'):
@@ -5968,21 +5915,11 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds):
     st.markdown("---")
     st.markdown("### 📊 Account Overview")
     
-    # Show which platforms are included (if we can detect from data)
-    # Look for platform indicators in campaign names or other columns
-    platform_indicators = []
-    if 'Campaign' in ads_df_filtered.columns:
-        campaigns_sample = ads_df_filtered['Campaign'].dropna().astype(str).str.lower()
-        has_google = campaigns_sample.str.contains('google|gda|mlgd', case=False).any()
-        has_microsoft = campaigns_sample.str.contains('microsoft|bing|mlbd|mlbm', case=False).any()
-        
-        if has_google:
-            platform_indicators.append("📊 Google Ads")
-        if has_microsoft:
-            platform_indicators.append("🔷 Microsoft Ads")
-    
-    if platform_indicators:
-        st.info(f"**Platforms detected:** {' + '.join(platform_indicators)}")
+    # Show which platforms are included using the Platform column
+    if 'Platform' in ads_df_filtered.columns:
+        platform_counts = ads_df_filtered['Platform'].value_counts()
+        platform_info = " + ".join([f"{platform}: {count} ad groups" for platform, count in platform_counts.items()])
+        st.info(f"**Platforms:** {platform_info}")
 
     active_count = len(ads_df_filtered[ads_df_filtered['Impr.'] > 0])
     total_spend = ads_df_filtered['Cost'].sum()
@@ -6080,7 +6017,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds):
             """)
 
             # Display table
-            display_cols = ['Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
+            display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
                           'Current Bid', 'Recommended New Bid',
                           'CTR', 'Search impr. share', 'Search lost IS (rank)', 
                           'Cost', 'Clicks']
@@ -6179,7 +6116,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds):
                 """)
 
 
-            display_cols = ['Account', 'Ad group', 'Campaign', 'Campaign Conversions', 'Budget Status', 
+            display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 'Budget Status', 
                           'Current Bid', 'Recommended New Bid', 'Search impr. share', 
                           'Search lost IS (rank)', 'Search top IS', 'CTR', 'Cost']
             
@@ -6254,7 +6191,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds):
             Perfect position 2-3 sweet spot! Keep these bids as-is.
             """)
 
-            display_cols = ['Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
+            display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
                           'Search top IS', 'Search abs. top IS', 'CTR', 'Avg. CPC', 'Cost']
 
             # Only include columns that exist
@@ -6306,7 +6243,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds):
             These ad groups are appearing in position 1 too often. Decrease bids to drop to position 2-3.
             """)
 
-            display_cols = ['Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
+            display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
                           'Budget Status', 'Current Bid', 'Recommended New Bid',
                           'Search abs. top IS', 'Search top IS', 'Cost']
             
@@ -6374,7 +6311,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds):
             Low engagement suggests poor ad/keyword relevance. Fix ads before adjusting bids.
             """)
 
-            display_cols = ['Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
+            display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
                           'Current Bid', 'Recommended New Bid', 'CTR', 'Search impr. share', 
                           'Cost', 'Clicks']
             
@@ -6450,7 +6387,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds):
             - Poor keyword intent match
             """)
 
-            display_cols = ['Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
+            display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
                           'Current Bid', 'Cost', 'Clicks', 'CTR', 'Search impr. share']
             
             # Only include columns that exist
@@ -6521,7 +6458,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds):
             Consider pausing to simplify account management.
             """)
 
-            display_cols = ['Account', 'Ad group', 'Campaign']
+            display_cols = ['Platform', 'Account', 'Ad group', 'Campaign']
             if 'Default max. CPC' in df_cleanup.columns:
                 display_cols.append('Default max. CPC')
             
@@ -6661,23 +6598,80 @@ with main_tab2:
             if ads_data_by_platform:
                 st.success(f"✅ Loaded {len(ads_data_by_platform)} platform(s) for independent analysis")
                 
-                # Create tabs for each platform
-                if len(ads_data_by_platform) == 1:
-                    # Single platform - no need for tabs
-                    platform_name, ads_df = ads_data_by_platform[0]
-                    st.markdown(f"### 🎯 {platform_name}")
+                # Combine all accounts from all platforms for the shared filter
+                all_accounts = set()
+                for platform_name, ads_df in ads_data_by_platform:
+                    if 'Account' in ads_df.columns:
+                        accounts = ads_df['Account'].dropna().unique().tolist()
+                        accounts = [str(acc).strip() for acc in accounts if str(acc).strip() != '']
+                        all_accounts.update(accounts)
+                
+                all_accounts = sorted(all_accounts)
+                
+                # Shared Account Filter (applies to all platforms)
+                st.markdown("---")
+                st.markdown("### 🎯 Account Filter")
+                
+                filter_col1, filter_col2 = st.columns([3, 2])
+                
+                with filter_col1:
+                    account_options = ['All Accounts'] + all_accounts
+                    selected_account = st.selectbox(
+                        "Filter by Account",
+                        options=account_options,
+                        key='shared_account_filter',
+                        help="View data for a specific agent across all platforms, or all accounts combined"
+                    )
+                
+                with filter_col2:
+                    # Check if we have campaign stats from Tab 1
+                    has_campaign_data = 'campaign_stats' in st.session_state and st.session_state.campaign_stats is not None
+                    if has_campaign_data:
+                        filter_to_stats_account = st.checkbox(
+                            "📊 Only account from stats",
+                            value=False,
+                            key='filter_stats_account_shared',
+                            help="Filter to only show the account from the Tab 1 stats report"
+                        )
+                    else:
+                        filter_to_stats_account = False
+                
+                # Show info about selection
+                if selected_account != 'All Accounts':
+                    # Count how many ad groups this account has across platforms
+                    total_ag_for_account = 0
+                    platforms_with_account = []
+                    for platform_name, ads_df in ads_data_by_platform:
+                        if 'Account' in ads_df.columns:
+                            ag_count = len(ads_df[ads_df['Account'] == selected_account])
+                            if ag_count > 0:
+                                total_ag_for_account += ag_count
+                                platforms_with_account.append(f"{platform_name}: {ag_count}")
                     
-                    # Continue with analysis for this platform
-                    process_ads_platform(platform_name, ads_df, custom_thresholds)
+                    st.info(f"📊 **{selected_account}**: {total_ag_for_account} total ad groups ({', '.join(platforms_with_account)})")
                 else:
-                    # Multiple platforms - create tabs
-                    platform_names = [p[0] for p in ads_data_by_platform]
-                    platform_tabs = st.tabs(platform_names)
-                    
-                    for idx, (platform_name, ads_df) in enumerate(ads_data_by_platform):
-                        with platform_tabs[idx]:
-                            # Process each platform independently
-                            process_ads_platform(platform_name, ads_df, custom_thresholds)
+                    total_ag_all = sum(len(df) for _, df in ads_data_by_platform)
+                    st.info(f"📊 Showing all {len(all_accounts)} accounts ({total_ag_all:,} total ad groups)")
+                
+                # Combine ALL platforms into a single dataframe with Platform column (NO TABS)
+                combined_dfs = []
+                for platform_name, ads_df in ads_data_by_platform:
+                    df_copy = ads_df.copy()
+                    # Add Platform column to distinguish Google vs Microsoft
+                    df_copy['Platform'] = platform_name
+                    combined_dfs.append(df_copy)
+                
+                # Merge everything together
+                all_ads_df = pd.concat(combined_dfs, ignore_index=True)
+                
+                # Process as single combined analysis (NO TABS - all data in one view)
+                process_ads_platform(
+                    "All Platforms Combined", 
+                    all_ads_df, 
+                    custom_thresholds, 
+                    selected_account, 
+                    filter_to_stats_account
+                )
                 
 
 # ---- Footer ----
