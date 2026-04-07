@@ -661,6 +661,13 @@ def analyze_ads_account(df, thresholds):
         (df['Ad group status'] == 'Enabled')
     ].copy()
     
+    # Debug: Show filtering results
+    st.caption(f"🔍 Filtered from {len(df):,} total ad groups to {len(active_df):,} active (Enabled + Impressions > 0)")
+    if len(active_df) == 0:
+        st.warning("⚠️ No active ad groups found!")
+        st.info(f"Ad group status values in data: {df['Ad group status'].unique().tolist()}")
+        st.info(f"Ad groups with impressions: {(df['Impr.'] > 0).sum()}")
+    
     # Check if Budget Status column exists
     has_budget_data = 'Budget Status' in active_df.columns
     
