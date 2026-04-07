@@ -225,6 +225,73 @@ def clean_numeric_ads(series):
         errors='coerce'
     )
 
+def parse_bid_value(bid_str):
+    """Extract numeric bid value from strings like '40.00 (enhanced)' or '90.00 (portfolio)'"""
+    if pd.isna(bid_str):
+        return None
+    bid_str = str(bid_str).strip()
+    if bid_str == '' or bid_str == '--' or bid_str == 'nan':
+        return None
+    # Extract just the number before any parentheses or text
+    import re
+    match = re.search(r'(\d+\.?\d*)', bid_str)
+    if match:
+        return float(match.group(1))
+    return None
+
+def match_budget_to_accounts(ads_df, budget_df):
+    """
+    Match budget report Agent names to Ads Account names.
+    Returns ads_df with added 'Budget Status' column.
+    """
+    if budget_df is None or 'Agent' not in budget_df.columns or 'Status' not in budget_df.columns:
+        return ads_df
+    
+    # Create a mapping dictionary
+    from difflib import SequenceMatcher
+    
+    def similarity(a, b):
+        """Calculate similarity between two strings"""
+        return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+    
+    # Create Agent -> Status mapping
+    agent_status = {}
+    for _, row in budget_df.iterrows():
+        agent = str(row['Agent']).strip()
+        status = str(row['Status']).strip()
+        agent_status[agent] = status
+    
+    # Match each Account to best Agent
+    def find_budget_status(account_name):
+        if pd.isna(account_name):
+            return None
+        
+        account_name = str(account_name).strip()
+        
+        # Try exact match first
+        if account_name in agent_status:
+            return agent_status[account_name]
+        
+        # Try fuzzy match (>0.8 similarity)
+        best_match = None
+        best_score = 0.8  # Threshold
+        
+        for agent in agent_status.keys():
+            score = similarity(account_name, agent)
+            if score > best_score:
+                best_score = score
+                best_match = agent
+        
+        if best_match:
+            return agent_status[best_match]
+        
+        return None
+    
+    # Add Budget Status column
+    ads_df['Budget Status'] = ads_df['Account'].apply(find_budget_status)
+    
+    return ads_df
+
 def load_ads_export(file):
     """
     Load and clean Google Ads ad group export.
@@ -260,6 +327,10 @@ def load_ads_export(file):
             if col in df.columns:
                 df[col] = clean_numeric_ads(df[col]) / 100
         
+        # Parse bid column
+        if 'Default max. CPC' in df.columns:
+            df['Current Bid'] = df['Default max. CPC'].apply(parse_bid_value)
+        
         return df
         
     except Exception as e:
@@ -285,25 +356,62 @@ def analyze_ads_account(df, thresholds):
     
     results = {}
     
-    # 1. OVERPAYING FOR POSITION 1
-    results['overpaying_position_1'] = active_df[
+    # 1. OVERPAYING FOR POSITION 1 (prioritize if Overspending)
+    overpay_filter = (
         (active_df['Search abs. top IS'] > thresholds['decrease_abs_top_is_min']) &
         (active_df['Cost'] > thresholds['min_spend_threshold'])
-    ].copy()
+    )
+    
+    if has_budget_data:
+        # Mark as high priority if Overspending
+        results['overpaying_position_1'] = active_df[overpay_filter].copy()
+        results['overpaying_position_1']['priority'] = results['overpaying_position_1']['Budget Status'].apply(
+            lambda x: 'High' if x == 'Overspending' else 'Medium'
+        )
+    else:
+        results['overpaying_position_1'] = active_df[overpay_filter].copy()
+        results['overpaying_position_1']['priority'] = 'Medium'
+    
     results['overpaying_position_1']['recommendation'] = 'Decrease bid 15-20%'
     results['overpaying_position_1']['reason'] = 'Overpaying for position 1'
-    results['overpaying_position_1']['priority'] = 'Medium'
     
-    # 2. LOSING AUCTIONS TO RANK
-    results['losing_auctions'] = active_df[
-        (active_df['Search lost IS (rank)'] > thresholds['increase_lost_is_rank_min']) &
-        (active_df['Search top IS'] < thresholds['target_top_is_min']) &
-        (active_df['CTR'] > thresholds['poor_ctr_threshold']) &
-        (active_df['Cost'] > 10)
-    ].copy()
-    results['losing_auctions']['recommendation'] = 'Increase bid 30-40%'
-    results['losing_auctions']['reason'] = 'Losing auctions, not reaching top 3'
-    results['losing_auctions']['priority'] = 'High'
+    # Calculate recommended new bid (17.5% decrease - midpoint of 15-20%)
+    if 'Current Bid' in results['overpaying_position_1'].columns:
+        results['overpaying_position_1']['Recommended New Bid'] = results['overpaying_position_1']['Current Bid'] * 0.825
+    
+    # 2. LOSING AUCTIONS TO RANK (ONLY if budget has room - Underspending status)
+    # Check if Budget Status column exists
+    has_budget_data = 'Budget Status' in active_df.columns
+    
+    if has_budget_data:
+        # WITH budget data: Only show if Underspending
+        results['losing_auctions'] = active_df[
+            (active_df['Budget Status'] == 'Underspending') &  # KEY: Must be underspending
+            (active_df['Search lost IS (rank)'] > thresholds['increase_lost_is_rank_min']) &
+            (active_df['Search top IS'] < thresholds['target_top_is_min']) &
+            (active_df['Search impr. share'] < 0.40) &  # Missing >60% of market
+            (active_df['CTR'] > thresholds['poor_ctr_threshold']) &
+            (active_df['Cost'] > 10)
+        ].copy()
+        results['losing_auctions']['recommendation'] = 'Increase bid 30-40%'
+        results['losing_auctions']['reason'] = 'Underspending + low impression share + losing auctions'
+        results['losing_auctions']['priority'] = 'High'
+    else:
+        # WITHOUT budget data: Use impression share as proxy
+        results['losing_auctions'] = active_df[
+            (active_df['Search lost IS (rank)'] > thresholds['increase_lost_is_rank_min']) &
+            (active_df['Search top IS'] < thresholds['target_top_is_min']) &
+            (active_df['Search impr. share'] < 0.40) &  # Missing >60% of market - room to grow
+            (active_df['CTR'] > thresholds['poor_ctr_threshold']) &
+            (active_df['Cost'] > 10)
+        ].copy()
+        results['losing_auctions']['recommendation'] = 'Increase bid 30-40% (verify budget has room)'
+        results['losing_auctions']['reason'] = 'Low impression share + losing auctions to rank'
+        results['losing_auctions']['priority'] = 'High'
+    
+    # Calculate recommended new bid (35% increase - midpoint of 30-40%)
+    if 'Current Bid' in results['losing_auctions'].columns:
+        results['losing_auctions']['Recommended New Bid'] = results['losing_auctions']['Current Bid'] * 1.35
     
     # 3. PERFECT POSITION 2-3
     results['perfect_position'] = active_df[
@@ -325,6 +433,9 @@ def analyze_ads_account(df, thresholds):
     results['poor_quality']['recommendation'] = 'Review ad copy/keywords OR decrease bid 30%'
     results['poor_quality']['reason'] = 'Low CTR suggests poor relevance'
     results['poor_quality']['priority'] = 'Medium'
+    # Calculate recommended new bid (30% decrease)
+    if 'Current Bid' in results['poor_quality'].columns:
+        results['poor_quality']['Recommended New Bid'] = results['poor_quality']['Current Bid'] * 0.70
     
     # 5. MAJOR OPPORTUNITY
     results['major_opportunity'] = active_df[
@@ -335,6 +446,9 @@ def analyze_ads_account(df, thresholds):
     results['major_opportunity']['recommendation'] = 'Increase bid 40-50%'
     results['major_opportunity']['reason'] = 'High quality traffic, low market share'
     results['major_opportunity']['priority'] = 'Very High'
+    # Calculate recommended new bid (45% increase - midpoint of 40-50%)
+    if 'Current Bid' in results['major_opportunity'].columns:
+        results['major_opportunity']['Recommended New Bid'] = results['major_opportunity']['Current Bid'] * 1.45
     
     # 6. ZERO IMPRESSIONS
     results['zero_impressions'] = df[
@@ -5263,6 +5377,124 @@ with main_tab2:
             if ads_df is not None:
                 st.success(f"✅ Loaded {len(ads_df):,} ad groups from {len(ads_df['Account'].unique())} account(s)")
                 
+                # Budget Report Upload (Optional)
+                st.markdown("---")
+                st.markdown("#### 💰 Budget Report (Optional)")
+                st.markdown("Upload your budget report to filter recommendations by spending status")
+                
+                budget_file = st.file_uploader(
+                    "Upload Budget Report CSV",
+                    type=['csv'],
+                    key='budget_upload',
+                    help="CSV with columns: Agent, Status (Underspending/Overspending/etc)"
+                )
+                
+                budget_df = None
+                if budget_file is not None:
+                    try:
+                        # Read first line to check if it's a header or data
+                        budget_file.seek(0)
+                        first_line = budget_file.readline().decode('utf-8').strip()
+                        first_values = first_line.split(',')
+                        
+                        # Check if first line looks like headers (contains text like "Agent", "Status")
+                        # vs data (contains values like "Underspending", "Overspending", agent names)
+                        first_line_lower = first_line.lower()
+                        has_header_keywords = any(word in first_line_lower for word in ['agent', 'status', 'budget id', 'description', 'platform'])
+                        has_data_keywords = any(word in first_line_lower for word in ['underspending', 'overspending', 'optimization', 'no conversions'])
+                        
+                        # Reset to beginning
+                        budget_file.seek(0)
+                        
+                        if has_header_keywords and not has_data_keywords:
+                            # Has headers - read normally
+                            budget_df_raw = pd.read_csv(budget_file)
+                            has_headers = True
+                        else:
+                            # No headers or first row is data - specify column names
+                            budget_df_raw = pd.read_csv(
+                                budget_file,
+                                header=None,
+                                names=['Budget Id', 'Agent', 'Status', 'Description', 'Platform', 
+                                       'Monthly Cap', 'Daily Cap', 'Spend']
+                            )
+                            has_headers = False
+                            st.warning("⚠️ No headers detected. Assuming columns: [Budget Id, Agent, Status, Description, Platform, Monthly Cap, Daily Cap, Spend]")
+                        
+                        # Auto-detect Agent and Status columns (case-insensitive)
+                        agent_col = None
+                        status_col = None
+                        
+                        if has_headers:
+                            # Try to find columns by name
+                            for col in budget_df_raw.columns:
+                                col_lower = str(col).lower().strip()
+                                if agent_col is None and ('agent' in col_lower or col_lower == 'name'):
+                                    agent_col = col
+                                if status_col is None and ('status' in col_lower or col_lower == 'state'):
+                                    status_col = col
+                        else:
+                            # Use known column names from headerless read
+                            agent_col = 'Agent'
+                            status_col = 'Status'
+                        
+                        # Verify we found the columns
+                        if agent_col and status_col:
+                            budget_df = budget_df_raw[[agent_col, status_col]].copy()
+                            budget_df.columns = ['Agent', 'Status']
+                            
+                            # Clean data
+                            budget_df['Agent'] = budget_df['Agent'].astype(str).str.strip()
+                            budget_df['Status'] = budget_df['Status'].astype(str).str.strip()
+                            
+                            # Remove any rows where Agent or Status is empty/NaN
+                            budget_df = budget_df[
+                                (budget_df['Agent'] != '') & 
+                                (budget_df['Agent'] != 'nan') &
+                                (budget_df['Status'] != '') & 
+                                (budget_df['Status'] != 'nan')
+                            ]
+                            
+                            if len(budget_df) > 0:
+                                st.success(f"✅ Loaded budget data for {len(budget_df)} accounts")
+                                if has_headers and (agent_col != 'Agent' or status_col != 'Status'):
+                                    st.info(f"📋 Detected columns: '{agent_col}' → Agent, '{status_col}' → Status")
+                                
+                                # Show budget status summary
+                                status_counts = budget_df['Status'].value_counts()
+                                cols = st.columns(min(len(status_counts), 5))
+                                for idx, (status, count) in enumerate(status_counts.items()):
+                                    if idx < 5:
+                                        with cols[idx]:
+                                            st.metric(status, count)
+                            else:
+                                st.error("❌ No valid budget data found after cleaning")
+                                budget_df = None
+                        else:
+                            st.error("❌ Could not find 'Agent' and 'Status' columns")
+                            st.info("Available columns: " + ", ".join([str(c) for c in budget_df_raw.columns[:10]]))
+                            budget_df = None
+                            
+                    except Exception as e:
+                        st.error(f"Error loading budget report: {str(e)}")
+                        import traceback
+                        st.code(traceback.format_exc())
+                        budget_df = None
+                    except Exception as e:
+                        st.error(f"Error loading budget report: {str(e)}")
+                        budget_df = None
+                
+                st.markdown("---")
+                
+                # Match budget status to accounts if budget data provided
+                if budget_df is not None:
+                    ads_df = match_budget_to_accounts(ads_df, budget_df)
+                    
+                    # Show matching summary
+                    matched = ads_df['Budget Status'].notna().sum()
+                    total = len(ads_df['Account'].unique())
+                    st.info(f"✅ Matched budget status for {matched} of {total} accounts")
+                
                 # Account Filter
                 if 'Account' in ads_df.columns:
                     # Get unique accounts, remove NaN, convert to strings, and sort
@@ -5334,7 +5566,9 @@ with main_tab2:
                     **🔺 Increase Bids**
                     - Losing >{:.0f}% of auctions to rank (low bids)
                     - Not reaching top 3 positions (Top IS <{:.0f}%)
-                    - Action: Increase bids 30-40% to win more auctions
+                    - **AND impression share <40%** (missing most of the market)
+                    - Action: Increase bids 30-40% to capture more traffic
+                    - Note: If you're already at 60%+ impression share, ignore the "lost auctions" - you're getting enough traffic
                     
                     **✅ Maintain**
                     - Already in the sweet spot (position 2-3)
@@ -5391,23 +5625,52 @@ with main_tab2:
                         """)
 
                         # Display table
-                        display_cols = ['Ad group', 'Campaign', 'CTR', 'Search impr. share', 
-                                      'Search lost IS (rank)', 'Cost', 'Clicks', 'recommendation']
+                        display_cols = ['Ad group', 'Campaign', 'Current Bid', 'Recommended New Bid',
+                                      'CTR', 'Search impr. share', 'Search lost IS (rank)', 
+                                      'Cost', 'Clicks']
+                        
+                        # Only include bid columns if they exist
+                        available_cols = [col for col in display_cols if col in df_opp.columns]
 
-                        display_df = df_opp[display_cols].copy()
-                        display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
-                        display_df['Search impr. share'] = display_df['Search impr. share'].apply(lambda x: format_ads_metric(x, 'percentage'))
-                        display_df['Search lost IS (rank)'] = display_df['Search lost IS (rank)'].apply(lambda x: format_ads_metric(x, 'percentage'))
-                        display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
-                        display_df['Clicks'] = display_df['Clicks'].apply(lambda x: format_ads_metric(x, 'number'))
+                        display_df = df_opp[available_cols].copy()
+                        
+                        # Format metrics
+                        if 'Current Bid' in display_df.columns:
+                            display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        if 'Recommended New Bid' in display_df.columns:
+                            display_df['Recommended New Bid'] = display_df['Recommended New Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        if 'CTR' in display_df.columns:
+                            display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                        if 'Search impr. share' in display_df.columns:
+                            display_df['Search impr. share'] = display_df['Search impr. share'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                        if 'Search lost IS (rank)' in display_df.columns:
+                            display_df['Search lost IS (rank)'] = display_df['Search lost IS (rank)'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                        if 'Cost' in display_df.columns:
+                            display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        if 'Clicks' in display_df.columns:
+                            display_df['Clicks'] = display_df['Clicks'].apply(lambda x: format_ads_metric(x, 'number'))
                         
                         # Rename columns with helpful descriptions
-                        display_df = display_df.rename(columns={
-                            'CTR': 'CTR (Click Rate)',
-                            'Search impr. share': 'Impr. Share (% of market)',
-                            'Search lost IS (rank)': 'Lost to Low Bids (%)',
-                            'recommendation': 'Action'
-                        })
+                        rename_map = {
+                            'Current Bid': 'Current Bid',
+                            'Recommended New Bid': 'New Bid (+45%)',
+                            'CTR': 'CTR',
+                            'Search impr. share': 'Impr. Share',
+                            'Search lost IS (rank)': 'Lost to Bids'
+                        }
+                        display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
+                        
+                        # Metric legend above table
+                        st.markdown("""
+                        <div style='background: #f0f2f6; padding: 12px; border-radius: 8px; margin-bottom: 12px;'>
+                            <strong>📊 Column Definitions:</strong><br/>
+                            <span style='color: #666; font-size: 14px;'>
+                            <b>CTR (Click Rate)</b> = Clicks ÷ Impressions • Measures ad relevance and quality<br/>
+                            <b>Impr. Share (% of market)</b> = Your impressions ÷ Total available impressions • Shows how much traffic you're capturing<br/>
+                            <b>Lost to Low Bids (%)</b> = Auctions lost because your bid was too low • Higher = more room to grow
+                            </span>
+                        </div>
+                        """, unsafe_allow_html=True)
 
                         st.dataframe(display_df, use_container_width=True, hide_index=True)
                         
@@ -5430,31 +5693,79 @@ with main_tab2:
                 with rec_tabs[1]:
                     df_inc = analysis_results['losing_auctions']
                     if len(df_inc) > 0:
-                        st.markdown(f"""
-                        **Logic:** Lost IS (rank) >{custom_thresholds['increase_lost_is_rank_min']*100:.0f}% 
-                        AND Top IS <{custom_thresholds['target_top_is_min']*100:.0f}%
-
-                        These ad groups are losing auctions due to low bids and aren't reaching position 2-3.
-                        """)
-
-                        display_cols = ['Ad group', 'Campaign', 'Search lost IS (rank)', 'Search top IS',
-                                      'CTR', 'Avg. CPC', 'Cost', 'recommendation']
-
-                        display_df = df_inc[display_cols].copy()
-                        display_df['Search lost IS (rank)'] = display_df['Search lost IS (rank)'].apply(lambda x: format_ads_metric(x, 'percentage'))
-                        display_df['Search top IS'] = display_df['Search top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
-                        display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
-                        display_df['Avg. CPC'] = display_df['Avg. CPC'].apply(lambda x: format_ads_metric(x, 'currency'))
-                        display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        # Show different message if budget data is present
+                        has_budget = 'Budget Status' in df_inc.columns and df_inc['Budget Status'].notna().any()
                         
-                        # Rename columns with helpful descriptions
-                        display_df = display_df.rename(columns={
-                            'Search lost IS (rank)': 'Lost to Low Bids (%)',
-                            'Search top IS': 'Top 3 Position (%)',
-                            'CTR': 'CTR (Click Rate)',
-                            'Avg. CPC': 'Avg. CPC',
-                            'recommendation': 'Action'
-                        })
+                        if has_budget:
+                            st.markdown(f"""
+                            **Logic (WITH Budget Data):** Budget Status = Underspending
+                            AND Lost IS (rank) >{custom_thresholds['increase_lost_is_rank_min']*100:.0f}% 
+                            AND Top IS <{custom_thresholds['target_top_is_min']*100:.0f}%
+                            AND Impression Share <40%
+
+                            ✅ **These accounts have confirmed budget room to scale!**
+                            
+                            Only showing ad groups where the account is actively underspending. 
+                            You can safely increase these bids to capture more traffic.
+                            """)
+                        else:
+                            st.markdown(f"""
+                            **Logic (WITHOUT Budget Data):** Lost IS (rank) >{custom_thresholds['increase_lost_is_rank_min']*100:.0f}% 
+                            AND Top IS <{custom_thresholds['target_top_is_min']*100:.0f}%
+                            AND Impression Share <40%
+
+                            ⚠️ **Verify budget has room before increasing!**
+                            
+                            Upload budget report to automatically filter by underspending accounts.
+                            """)
+
+
+                        display_cols = ['Ad group', 'Campaign', 'Budget Status', 'Current Bid', 'Recommended New Bid',
+                                      'Search impr. share', 'Search lost IS (rank)', 'Search top IS', 
+                                      'CTR', 'Cost']
+                        
+                        # Only include columns that exist
+                        available_cols = [col for col in display_cols if col in df_inc.columns]
+                        display_df = df_inc[available_cols].copy()
+                        
+                        # Format metrics
+                        if 'Current Bid' in display_df.columns:
+                            display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        if 'Recommended New Bid' in display_df.columns:
+                            display_df['Recommended New Bid'] = display_df['Recommended New Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        if 'Search impr. share' in display_df.columns:
+                            display_df['Search impr. share'] = display_df['Search impr. share'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                        if 'Search lost IS (rank)' in display_df.columns:
+                            display_df['Search lost IS (rank)'] = display_df['Search lost IS (rank)'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                        if 'Search top IS' in display_df.columns:
+                            display_df['Search top IS'] = display_df['Search top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                        if 'CTR' in display_df.columns:
+                            display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                        if 'Cost' in display_df.columns:
+                            display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        
+                        # Rename columns
+                        rename_map = {
+                            'Current Bid': 'Current Bid',
+                            'Recommended New Bid': 'New Bid (+35%)',
+                            'Search impr. share': 'Impr. Share',
+                            'Search lost IS (rank)': 'Lost to Bids',
+                            'Search top IS': 'Top 3 %'
+                        }
+                        display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
+                        
+                        # Metric legend
+                        st.markdown("""
+                        <div style='background: #f0f2f6; padding: 12px; border-radius: 8px; margin-bottom: 12px;'>
+                            <strong>📊 Column Definitions:</strong><br/>
+                            <span style='color: #666; font-size: 14px;'>
+                            <b>Impr. Share</b> = % of available traffic you're capturing • <40% = room to grow<br/>
+                            <b>Lost to Bids</b> = % of auctions you lost because bid was too low<br/>
+                            <b>Top 3 %</b> = % of time you appear in positions 1-3 • Target: 60-80%<br/>
+                            <b>Key insight:</b> Only increase if impression share is LOW. If you're already at 60%+ impression share, you're getting enough traffic.
+                            </span>
+                        </div>
+                        """, unsafe_allow_html=True)
 
                         st.dataframe(display_df, use_container_width=True, hide_index=True)
                         
@@ -5499,6 +5810,18 @@ with main_tab2:
                             'CTR': 'CTR (Click Rate)',
                             'Avg. CPC': 'Avg. CPC'
                         })
+                        
+                        # Metric legend
+                        st.markdown("""
+                        <div style='background: #d1ecf1; padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #47B74F;'>
+                            <strong>✅ Column Definitions (Perfect Balance):</strong><br/>
+                            <span style='color: #666; font-size: 14px;'>
+                            <b>Top 3 Position (%)</b> = How often you show in positions 1-3 • Sweet spot: 60-80%<br/>
+                            <b>Position 1 (%)</b> = How often you're in the #1 spot • Sweet spot: 20-40% (not too much!)<br/>
+                            <b>Why this is perfect:</b> You're visible in top positions most of the time, but not overpaying for #1
+                            </span>
+                        </div>
+                        """, unsafe_allow_html=True)
 
                         st.dataframe(display_df, use_container_width=True, hide_index=True)
                         
@@ -5516,22 +5839,45 @@ with main_tab2:
                         These ad groups are appearing in position 1 too often. Decrease bids to drop to position 2-3.
                         """)
 
-                        display_cols = ['Ad group', 'Campaign', 'Search abs. top IS', 'Search top IS',
-                                      'Avg. CPC', 'Cost', 'recommendation']
-
-                        display_df = df_dec[display_cols].copy()
-                        display_df['Search abs. top IS'] = display_df['Search abs. top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
-                        display_df['Search top IS'] = display_df['Search top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
-                        display_df['Avg. CPC'] = display_df['Avg. CPC'].apply(lambda x: format_ads_metric(x, 'currency'))
-                        display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        display_cols = ['Ad group', 'Campaign', 'Budget Status', 'Current Bid', 'Recommended New Bid',
+                                      'Search abs. top IS', 'Search top IS', 'Cost']
+                        
+                        # Only include columns that exist
+                        available_cols = [col for col in display_cols if col in df_dec.columns]
+                        display_df = df_dec[available_cols].copy()
+                        
+                        # Format metrics
+                        if 'Current Bid' in display_df.columns:
+                            display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        if 'Recommended New Bid' in display_df.columns:
+                            display_df['Recommended New Bid'] = display_df['Recommended New Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        if 'Search abs. top IS' in display_df.columns:
+                            display_df['Search abs. top IS'] = display_df['Search abs. top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                        if 'Search top IS' in display_df.columns:
+                            display_df['Search top IS'] = display_df['Search top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                        if 'Cost' in display_df.columns:
+                            display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
                         
                         # Rename columns
-                        display_df = display_df.rename(columns={
-                            'Search abs. top IS': 'Position 1 (%)',
-                            'Search top IS': 'Top 3 Position (%)',
-                            'Avg. CPC': 'Avg. CPC',
-                            'recommendation': 'Action'
-                        })
+                        rename_map = {
+                            'Current Bid': 'Current Bid',
+                            'Recommended New Bid': 'New Bid (-17.5%)',
+                            'Search abs. top IS': 'Position 1 %',
+                            'Search top IS': 'Top 3 %'
+                        }
+                        display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
+                        
+                        # Metric legend
+                        st.markdown("""
+                        <div style='background: #fff3cd; padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #CC8F15;'>
+                            <strong>⚠️ Column Definitions (Overpaying):</strong><br/>
+                            <span style='color: #666; font-size: 14px;'>
+                            <b>Position 1 (%)</b> = How often you're in the #1 spot • >50% = You're overpaying!<br/>
+                            <b>Top 3 Position (%)</b> = Total time in positions 1-3 • You'll stay visible after decreasing bids<br/>
+                            <b>The problem:</b> Position 1 is expensive. You'd get most of these clicks at position 2-3 for less money
+                            </span>
+                        </div>
+                        """, unsafe_allow_html=True)
 
                         st.dataframe(display_df, use_container_width=True, hide_index=True)
                         
@@ -5558,23 +5904,46 @@ with main_tab2:
                         Low engagement suggests poor ad/keyword relevance. Fix ads before adjusting bids.
                         """)
 
-                        display_cols = ['Ad group', 'Campaign', 'CTR', 'Search impr. share',
-                                      'Cost', 'Clicks', 'Avg. CPC', 'recommendation']
-
-                        display_df = df_review[display_cols].copy()
-                        display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
-                        display_df['Search impr. share'] = display_df['Search impr. share'].apply(lambda x: format_ads_metric(x, 'percentage'))
-                        display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
-                        display_df['Clicks'] = display_df['Clicks'].apply(lambda x: format_ads_metric(x, 'number'))
-                        display_df['Avg. CPC'] = display_df['Avg. CPC'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        display_cols = ['Ad group', 'Campaign', 'Current Bid', 'Recommended New Bid',
+                                      'CTR', 'Search impr. share', 'Cost', 'Clicks']
+                        
+                        # Only include columns that exist
+                        available_cols = [col for col in display_cols if col in df_review.columns]
+                        display_df = df_review[available_cols].copy()
+                        
+                        # Format metrics
+                        if 'Current Bid' in display_df.columns:
+                            display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        if 'Recommended New Bid' in display_df.columns:
+                            display_df['Recommended New Bid'] = display_df['Recommended New Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        if 'CTR' in display_df.columns:
+                            display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                        if 'Search impr. share' in display_df.columns:
+                            display_df['Search impr. share'] = display_df['Search impr. share'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                        if 'Cost' in display_df.columns:
+                            display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        if 'Clicks' in display_df.columns:
+                            display_df['Clicks'] = display_df['Clicks'].apply(lambda x: format_ads_metric(x, 'number'))
                         
                         # Rename columns
-                        display_df = display_df.rename(columns={
-                            'CTR': 'CTR (Click Rate)',
-                            'Search impr. share': 'Impr. Share (%)',
-                            'Avg. CPC': 'Avg. CPC',
-                            'recommendation': 'Action'
-                        })
+                        rename_map = {
+                            'Current Bid': 'Current Bid',
+                            'Recommended New Bid': 'New Bid (-30%)',
+                            'Search impr. share': 'Impr. Share'
+                        }
+                        display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
+                        
+                        # Metric legend
+                        st.markdown("""
+                        <div style='background: #f8d7da; padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #E9736E;'>
+                            <strong>🚨 Column Definitions (Quality Issues):</strong><br/>
+                            <span style='color: #666; font-size: 14px;'>
+                            <b>CTR (Click Rate)</b> = Clicks ÷ Impressions • <1.5% is very low = poor relevance<br/>
+                            <b>Impr. Share (%)</b> = How much traffic you're getting • Low share + low CTR = double problem<br/>
+                            <b>The issue:</b> People see your ad but don't click. Your ad or keywords don't match their search intent
+                            </span>
+                        </div>
+                        """, unsafe_allow_html=True)
 
                         st.dataframe(display_df, use_container_width=True, hide_index=True)
                         
