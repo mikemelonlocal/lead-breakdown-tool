@@ -483,55 +483,82 @@ def load_ads_export(file):
         # Check file extension
         filename = file.name.lower()
         
+        # Detect if Microsoft based on filename
+        is_microsoft_filename = 'microsoft' in filename or 'bing' in filename or 'adgroupreport' in filename.replace('_', '').replace(' ', '')
+        
         if filename.endswith('.xlsx') or filename.endswith('.xls'):
-            # Excel format - skip header rows
-            df = pd.read_excel(file, skiprows=2)
+            # Excel format
+            if is_microsoft_filename:
+                # Microsoft Excel: Skip 6 rows to get to headers
+                df = pd.read_excel(file, skiprows=6)
+                st.caption("🔷 Detected Microsoft Ads format (Excel)")
+            else:
+                # Google Excel: Skip 2 rows
+                df = pd.read_excel(file, skiprows=2)
+                st.caption("📊 Detected Google Ads format (Excel)")
         else:
             # CSV format - handle UTF-16 encoding
-            # Read as bytes first to detect encoding
             content = file.read()
             
             # Try to decode as UTF-16
             try:
                 decoded = content.decode('utf-16-le')
-                lines = decoded.split('\n')
-                # Skip first 2 lines (title and date range)
-                csv_content = '\n'.join(lines[2:])
+                lines_decoded = decoded.split('\n')
+                
+                if is_microsoft_filename:
+                    # Microsoft CSV: Skip 6 rows
+                    csv_content = '\n'.join(lines_decoded[6:])
+                    st.caption("🔷 Detected Microsoft Ads format (CSV)")
+                else:
+                    # Google CSV: Skip 2 rows
+                    csv_content = '\n'.join(lines_decoded[2:])
+                    st.caption("📊 Detected Google Ads format (CSV)")
+                    
                 df = pd.read_csv(io.StringIO(csv_content), sep='\t')
             except:
                 # Fall back to UTF-8
                 file.seek(0)
-                df = pd.read_csv(file, sep='\t', skiprows=2)
+                if is_microsoft_filename:
+                    df = pd.read_csv(file, sep='\t', skiprows=6)
+                    st.caption("🔷 Detected Microsoft Ads format (CSV UTF-8)")
+                else:
+                    df = pd.read_csv(file, sep='\t', skiprows=2)
+                    st.caption("📊 Detected Google Ads format (CSV UTF-8)")
         
-        # Debug: Show original columns
-        st.caption(f"📋 Original columns in {file.name}: {', '.join(df.columns[:10].tolist())}...")
+        # Detect if Microsoft by checking for Microsoft-specific columns
+        if 'Account name' in df.columns or 'Impression share' in df.columns or 'Current maximum CPC' in df.columns:
+            is_microsoft = True
+        else:
+            is_microsoft = False
         
-        # Detect if this is Microsoft Ads and map columns to Google format
-        microsoft_column_map = {
-            'Account name': 'Account',
-            'Ad group': 'Ad group',  # Same in both
-            'Campaign': 'Campaign',  # Same in both
-            'Impressions': 'Impr.',
-            'Avg. CPC': 'Avg. CPC',  # Same in both
-            'CTR': 'CTR',  # Same in both
-            'Spend': 'Cost',
-            'Impr. share (%)': 'Search impr. share',
-            'Top impr. rate (%)': 'Search top IS',
-            'Abs. top impr. rate (%)': 'Search abs. top IS',
-            'Impr. share lost to rank (%)': 'Search lost IS (rank)',
-            'Ad group status': 'Ad group status',  # Same in both
-            'Bid': 'Default max. CPC',
-            'Campaign ID': 'Campaign ID',  # Same in both
-            'Ad group ID': 'Ad group ID',  # Same in both
-        }
-        
-        # Check if this looks like Microsoft data (has "Account name" instead of "Account")
-        is_microsoft = 'Account name' in df.columns or 'Impressions' in df.columns
-        
+        # Microsoft column mapping to Google format
         if is_microsoft:
-            st.caption("🔷 Detected Microsoft Ads format - applying column mapping")
+            microsoft_column_map = {
+                'Account name': 'Account',
+                'Campaign name': 'Campaign',
+                'Ad group': 'Ad group',
+                'Campaign ID': 'Campaign ID',
+                'Ad group ID': 'Ad group ID',
+                'Ad group status': 'Ad group status',
+                'Impressions': 'Impr.',
+                'Clicks': 'Clicks',
+                'CTR': 'CTR',
+                'Avg. CPC': 'Avg. CPC',
+                'Spend': 'Cost',
+                'Impression share': 'Search impr. share',
+                'Top impression rate': 'Search top IS',
+                'Absolute top impression rate': 'Search abs. top IS',
+                'Impression share lost to rank': 'Search lost IS (rank)',
+                'Top impression share': 'Search top IS',
+                'Absolute top impression share': 'Search abs. top IS',
+                'Current maximum CPC': 'Default max. CPC',
+                'Conversions': 'Conversions',
+                'Conversion rate': 'Conv. rate',
+            }
+            
             # Rename Microsoft columns to Google equivalents
             df = df.rename(columns=microsoft_column_map)
+            st.caption(f"✅ Mapped Microsoft columns to Google format")
             
             # Clean Campaign ID and Ad Group ID - remove brackets from Microsoft format
             if 'Campaign ID' in df.columns:
@@ -539,15 +566,11 @@ def load_ads_export(file):
             if 'Ad group ID' in df.columns:
                 df['Ad group ID'] = df['Ad group ID'].astype(str).str.replace('[', '').str.replace(']', '').str.strip()
         else:
-            st.caption("📊 Detected Google Ads format")
             # Google Ads - clean Campaign ID (remove .0 from floats)
             if 'Campaign ID' in df.columns:
                 df['Campaign ID'] = df['Campaign ID'].apply(lambda x: str(int(float(x))) if pd.notna(x) and str(x) != 'nan' else x)
             if 'Ad group ID' in df.columns:
                 df['Ad group ID'] = df['Ad group ID'].apply(lambda x: str(int(float(x))) if pd.notna(x) and str(x) != 'nan' else x)
-        
-        # Debug: Show mapped columns
-        st.caption(f"✅ After mapping: {', '.join(df.columns[:10].tolist())}...")
         
         # Clean numeric columns
         numeric_cols = ['Impr.', 'Clicks', 'Cost', 'Avg. CPC', 'Conversions', 'Cost / conv.']
@@ -561,7 +584,6 @@ def load_ads_export(file):
                     'Search exact match IS']
         for col in pct_cols:
             if col in df.columns:
-                # Microsoft already stores as percentages (50.0), Google uses percentages with % (50%)
                 # Check if values are already decimals (< 1) or percentages (> 1)
                 if df[col].notna().any():
                     sample_val = df[col].dropna().iloc[0] if len(df[col].dropna()) > 0 else 0
