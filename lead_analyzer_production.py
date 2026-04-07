@@ -6916,18 +6916,22 @@ with main_tab2:
                     st.info(f"📊 Showing all {len(all_accounts)} accounts ({total_ag_all:,} total ad groups)")
                 
                 # Combine ALL platforms into a single dataframe with Platform column (NO TABS)
+                # First, create the combined dataframe
+                combined_dfs = []
+                for platform_name, ads_df in ads_data_by_platform:
+                    df_copy = ads_df.copy()
+                    df_copy['Platform'] = platform_name
+                    combined_dfs.append(df_copy)
+                
+                all_ads_df = pd.concat(combined_dfs, ignore_index=True)
+                
+                # Show debug details in expander
                 with st.expander("🔧 Platform Combination Details", expanded=False):
-                    combined_dfs = []
                     for platform_name, ads_df in ads_data_by_platform:
-                        df_copy = ads_df.copy()
-                        # Add Platform column to distinguish Google vs Microsoft
-                        df_copy['Platform'] = platform_name
-                        combined_dfs.append(df_copy)
-                        st.caption(f"  → Adding {len(df_copy)} ad groups from **{platform_name}**")
-                        st.caption(f"     Columns: {', '.join(df_copy.columns[:10].tolist())}...")
+                        st.caption(f"  → Added {len(ads_df)} ad groups from **{platform_name}**")
+                        st.caption(f"     Columns: {', '.join(ads_df.columns[:10].tolist())}...")
                     
-                    # Merge everything together
-                    st.caption(f"✅ Combined dataframe: {len(all_ads_df):,} total ad groups")
+                    st.caption(f"\n✅ Combined dataframe: {len(all_ads_df):,} total ad groups")
                     
                     # Show platform breakdown
                     if 'Platform' in all_ads_df.columns:
@@ -6942,15 +6946,6 @@ with main_tab2:
                         has_impr = 'Impr.' in ads_df.columns
                         first_col = ads_df.columns[0] if len(ads_df.columns) > 0 else 'N/A'
                         st.caption(f"  {platform_name}: Has 'Account'={has_account}, Has 'Impr.'={has_impr}, First col='{first_col}'")
-                
-                # Actually do the merge (outside expander)
-                combined_dfs = []
-                for platform_name, ads_df in ads_data_by_platform:
-                    df_copy = ads_df.copy()
-                    df_copy['Platform'] = platform_name
-                    combined_dfs.append(df_copy)
-                
-                all_ads_df = pd.concat(combined_dfs, ignore_index=True)
                 
                 # Apply CSM filter if selected
                 if selected_csm != 'All CSMs' and shared_budget_df is not None and 'CSM' in shared_budget_df.columns:
