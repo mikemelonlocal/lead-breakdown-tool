@@ -656,13 +656,14 @@ def analyze_ads_account(df, thresholds):
         }
     
     # Filter to active ad groups with data
+    # Microsoft uses 'Active', Google uses 'Enabled'
     active_df = df[
         (df['Impr.'] > 0) & 
-        (df['Ad group status'] == 'Enabled')
+        (df['Ad group status'].isin(['Enabled', 'Active']))
     ].copy()
     
     # Debug: Show filtering results
-    st.caption(f"🔍 Filtered from {len(df):,} total ad groups to {len(active_df):,} active (Enabled + Impressions > 0)")
+    st.caption(f"🔍 Filtered from {len(df):,} total ad groups to {len(active_df):,} active (Enabled/Active + Impressions > 0)")
     if len(active_df) == 0:
         st.warning("⚠️ No active ad groups found!")
         st.info(f"Ad group status values in data: {df['Ad group status'].unique().tolist()}")
@@ -5789,9 +5790,12 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 # Try to find columns by name
                 for col in budget_df_raw.columns:
                     col_lower = str(col).lower().strip()
-                    if agent_col is None and ('agent' in col_lower or col_lower == 'name'):
+                    if agent_col is None and ('agent' in col_lower and 'status' not in col_lower or col_lower == 'name'):
                         agent_col = col
-                    if status_col is None and ('status' in col_lower or col_lower == 'state'):
+                    # Prioritize "Spend Status" over other status columns
+                    if status_col is None and 'spend' in col_lower and 'status' in col_lower:
+                        status_col = col
+                    elif status_col is None and ('status' in col_lower or col_lower == 'state'):
                         status_col = col
             else:
                 # Use default column names
