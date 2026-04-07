@@ -6683,29 +6683,35 @@ with main_tab2:
                 for ads_file in ads_files:
                     df = load_ads_export(ads_file)
                     if df is not None:
-                        # Detect platform from filename or campaign IDs
+                        # Detect platform from filename or data characteristics
                         filename_lower = ads_file.name.lower()
                         
                         # Check filename for platform indicators
-                        if 'microsoft' in filename_lower or 'bing' in filename_lower:
+                        if 'microsoft' in filename_lower or 'bing' in filename_lower or 'ad_group_report' in filename_lower.replace('_', '').replace(' ', ''):
                             platform = "Microsoft Ads"
                         elif 'google' in filename_lower:
                             platform = "Google Ads"
                         else:
-                            # Try to detect from Campaign ID column if it exists
-                            if 'Campaign ID' in df.columns:
-                                sample_ids = df['Campaign ID'].dropna().astype(str).head(10)
-                                # Microsoft IDs are typically in brackets or shorter
-                                # Google IDs are typically longer numeric strings
-                                if sample_ids.str.contains(r'^\[').any():
-                                    platform = "Microsoft Ads"
-                                elif sample_ids.str.len().mean() > 12:
-                                    platform = "Google Ads"
-                                else:
-                                    platform = ads_file.name.replace('.csv', '').replace('.xlsx', '').replace('.xls', '')
+                            # Check if file has Microsoft-specific metadata in the dataframe
+                            # Microsoft files will have certain column combinations after mapping
+                            has_device_type = 'Device type' in df.columns
+                            has_exact_match_is = 'Search exact match IS' in df.columns
+                            
+                            # Or check data patterns
+                            if has_device_type or has_exact_match_is:
+                                platform = "Microsoft Ads"
                             else:
-                                # Use filename as platform name
-                                platform = ads_file.name.replace('.csv', '').replace('.xlsx', '').replace('.xls', '')
+                                # Try Campaign ID format (though this is less reliable after cleaning)
+                                if 'Campaign ID' in df.columns:
+                                    sample_ids = df['Campaign ID'].dropna().astype(str).head(10)
+                                    # Google IDs are typically 10-11 digits
+                                    if sample_ids.str.len().mean() > 9:
+                                        platform = "Google Ads"
+                                    else:
+                                        platform = "Microsoft Ads"  # Shorter IDs are Microsoft
+                                else:
+                                    # Default to filename
+                                    platform = "Google Ads" if 'group' in filename_lower else "Microsoft Ads"
                         
                         ads_data_by_platform.append((platform, df))
                         st.info(f"📄 Loaded {ads_file.name}: {len(df):,} ad groups → **{platform}**")
