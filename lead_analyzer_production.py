@@ -2914,10 +2914,18 @@ with main_tab1:
                                 if agent_domain:
                                     break
                         
+                        # Determine which file(s) were uploaded
+                        uploaded_files = []
+                        if up_legacy:
+                            uploaded_files.append(up_legacy.name)
+                        if up_moa:
+                            uploaded_files.append(up_moa.name)
+                        stats_file_name = " + ".join(uploaded_files) if uploaded_files else "stats report"
+                        
                         # Store domain for matching in Tab 2
                         st.session_state.campaign_stats = campaign_stats_reset
                         st.session_state.stats_agent_domain = agent_domain  # Store the domain
-                        st.session_state.stats_file_uploaded = file_name  # Track which file this is from
+                        st.session_state.stats_file_uploaded = stats_file_name  # Track which file this is from
 
             
             status_text.text("📈 Aggregating results...")
