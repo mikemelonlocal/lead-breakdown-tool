@@ -584,15 +584,16 @@ def load_ads_export(file):
                     'Search exact match IS']
         for col in pct_cols:
             if col in df.columns:
+                # First clean the numeric values
+                df[col] = clean_numeric_ads(df[col])
+                
                 # Check if values are already decimals (< 1) or percentages (> 1)
-                if df[col].notna().any():
-                    sample_val = df[col].dropna().iloc[0] if len(df[col].dropna()) > 0 else 0
+                non_null_values = df[col].dropna()
+                if len(non_null_values) > 0:
+                    sample_val = non_null_values.iloc[0]
                     if sample_val > 1:
                         # It's a percentage, convert to decimal
-                        df[col] = clean_numeric_ads(df[col]) / 100
-                    else:
-                        # Already a decimal
-                        df[col] = clean_numeric_ads(df[col])
+                        df[col] = df[col] / 100
         
         # Parse bid column
         if 'Default max. CPC' in df.columns:
