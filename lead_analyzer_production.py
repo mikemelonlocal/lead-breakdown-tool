@@ -296,14 +296,15 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
     """
     Match campaigns and add conversion metrics to ads dataframe.
     
-    Matching strategy:
-    1. If url_report_df provided: Extract campaign IDs from URLs and match on ID
-    2. Otherwise: Match on campaign name (exact match, then fuzzy match)
+    Matching strategy (in priority order):
+    1. If url_report_df provided with Campaign ID column: Direct ID matching
+    2. If ads_df has Campaign ID column: Direct match with Tab 1 Campaign IDs
+    3. Otherwise: Match on campaign name (exact match, then fuzzy match)
     
     Args:
         ads_df: Ads account dataframe from Tab 2
         campaign_stats_df: Campaign stats from Tab 1
-        url_report_df: Optional URL report with Ad final URL column
+        url_report_df: Optional URL report with Campaign ID and Ad Group ID columns
     
     Returns:
         ads_df with added "Campaign Conversions" column
@@ -311,21 +312,24 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
     if campaign_stats_df is None or campaign_stats_df.empty:
         return ads_df
     
-    # Determine which column has campaign IDs in stats data
+    # Find Campaign ID column in Tab 1 stats
     stats_id_col = None
     for col in campaign_stats_df.columns:
         if 'campaign' in col.lower() and 'id' in col.lower():
             stats_id_col = col
             break
     
-    # Build campaign map from Tab 1 stats
+    # Build campaign map from Tab 1 stats (Campaign ID -> conversions)
     campaign_map = {}
     
     if stats_id_col:
         # Tab 1 has Campaign IDs column - use that as primary key
         for _, row in campaign_stats_df.iterrows():
             campaign_id = str(row[stats_id_col]).strip() if pd.notna(row[stats_id_col]) else None
-            if campaign_id:
+            if campaign_id and campaign_id != 'nan':
+                # Remove any decimal points from float strings (20643283194.0 -> 20643283194)
+                if '.' in campaign_id:
+                    campaign_id = campaign_id.split('.')[0]
                 campaign_map[campaign_id] = {
                     'conversions': row.get('Total Conversions', 0)
                 }
@@ -340,81 +344,132 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                     'conversions': row.get('Total Conversions', 0)
                 }
     
-    # Strategy 1: URL-based matching (if URL report provided)
-    if url_report_df is not None and not url_report_df.empty and 'Ad final URL' in url_report_df.columns:
-        import re
+    # Strategy 1: Direct Campaign ID matching with URL report
+    # Check if URL report has Campaign ID column (new format)
+    if url_report_df is not None and not url_report_df.empty:
+        # Look for Campaign ID column in URL report
+        url_campaign_id_col = None
+        url_adgroup_id_col = None
         
-        # Extract campaign IDs from URLs
-        def extract_campaign_id(url):
-            if pd.isna(url):
-                return None
-            match = re.search(r'cmpid=([^&]+)', str(url))
-            return match.group(1) if match else None
+        for col in url_report_df.columns:
+            col_lower = str(col).lower()
+            if 'campaign' in col_lower and 'id' in col_lower:
+                url_campaign_id_col = col
+            if 'ad' in col_lower and 'group' in col_lower and 'id' in col_lower:
+                url_adgroup_id_col = col
         
-        # Create Ad Group -> Campaign ID mapping from URL report
-        url_map = {}
-        for _, row in url_report_df.iterrows():
-            ad_group = str(row['Ad group']).strip() if 'Ad group' in row and pd.notna(row['Ad group']) else None
-            account = str(row['Account name']).strip() if 'Account name' in row and pd.notna(row['Account name']) else None
-            url = row.get('Ad final URL')
-            
-            if ad_group and url:
-                campaign_id = extract_campaign_id(url)
-                if campaign_id:
-                    # Use Account + Ad group as composite key for precise matching
+        # If URL report has Campaign ID column, use it for matching
+        if url_campaign_id_col:
+            # Create mapping: Account + Ad group -> Campaign ID
+            url_map = {}
+            for _, row in url_report_df.iterrows():
+                campaign_id = str(row[url_campaign_id_col]).strip() if pd.notna(row.get(url_campaign_id_col)) else None
+                
+                # Normalize Campaign ID (remove decimals from floats, clean brackets)
+                if campaign_id and campaign_id != 'nan':
+                    # Remove decimal points (20643283194.0 -> 20643283194)
+                    if '.' in campaign_id:
+                        campaign_id = campaign_id.split('.')[0]
+                    # Remove brackets ([604582413] -> 604582413)
+                    campaign_id = campaign_id.replace('[', '').replace(']', '').strip()
+                
+                # Try to get identifying info for the ad group
+                ad_group = None
+                account = None
+                
+                # Check for Ad group column
+                for col in ['Ad group', 'Ad group name', 'Adgroup']:
+                    if col in row and pd.notna(row[col]):
+                        ad_group = str(row[col]).strip()
+                        break
+                
+                # Check for Account column
+                for col in ['Account', 'Account name']:
+                    if col in row and pd.notna(row[col]):
+                        account = str(row[col]).strip()
+                        break
+                
+                if campaign_id and ad_group:
+                    # Use composite key for precise matching
                     key = f"{account}|{ad_group}" if account else ad_group
                     url_map[key] = campaign_id
-        
-        # Match ads data with campaign IDs
-        def get_conversions_by_url(row):
-            ad_group = str(row['Ad group']).strip() if pd.notna(row.get('Ad group')) else None
-            account = str(row['Account']).strip() if pd.notna(row.get('Account')) else None
             
-            if not ad_group:
+            # Match ads data using URL report mapping
+            def get_conversions_by_id(row):
+                ad_group = str(row['Ad group']).strip() if pd.notna(row.get('Ad group')) else None
+                account = str(row['Account']).strip() if pd.notna(row.get('Account')) else None
+                
+                if not ad_group:
+                    return None
+                
+                # Try composite key first (Account + Ad group)
+                key = f"{account}|{ad_group}" if account else ad_group
+                campaign_id = url_map.get(key)
+                
+                if not campaign_id:
+                    # Try just ad group
+                    campaign_id = url_map.get(ad_group)
+                
+                if campaign_id and campaign_id in campaign_map:
+                    return campaign_map[campaign_id]['conversions']
+                
                 return None
             
-            # Try composite key first (Account + Ad group)
-            key = f"{account}|{ad_group}" if account else ad_group
-            campaign_id = url_map.get(key)
-            
-            if not campaign_id:
-                # Try just ad group
-                campaign_id = url_map.get(ad_group)
-            
-            if campaign_id and campaign_id in campaign_map:
-                return campaign_map[campaign_id]['conversions']
-            
-            return None
-        
-        ads_df['Campaign Conversions'] = ads_df.apply(get_conversions_by_url, axis=1)
+            ads_df['Campaign Conversions'] = ads_df.apply(get_conversions_by_id, axis=1)
+            return ads_df
     
-    # Strategy 2: Name-based matching (default or fallback)
-    else:
-        def get_conversions_by_name(campaign_name):
-            if pd.isna(campaign_name):
+    # Strategy 2: Direct Campaign ID matching (if ads_df has Campaign ID column)
+    ads_campaign_id_col = None
+    for col in ads_df.columns:
+        if 'campaign' in col.lower() and 'id' in col.lower():
+            ads_campaign_id_col = col
+            break
+    
+    if ads_campaign_id_col and campaign_map:
+        def get_conversions_by_direct_id(campaign_id):
+            if pd.isna(campaign_id):
                 return None
+            campaign_id = str(campaign_id).strip()
             
-            campaign_name = str(campaign_name).strip()
+            # Normalize Campaign ID (same as URL report normalization)
+            if campaign_id and campaign_id != 'nan':
+                # Remove decimal points (20643283194.0 -> 20643283194)
+                if '.' in campaign_id:
+                    campaign_id = campaign_id.split('.')[0]
+                # Remove brackets ([604582413] -> 604582413)
+                campaign_id = campaign_id.replace('[', '').replace(']', '').strip()
             
-            # Try exact match first
-            if campaign_name in campaign_name_map:
-                return campaign_name_map[campaign_name]['conversions']
-            
-            # Try fuzzy match (strip device suffixes like "- Desktop", "- Mobile")
-            # Common patterns: "Legacy - Auto 0055 - SF Auto - Desktop" -> "Legacy - Auto 0055 - SF Auto"
-            base_name = campaign_name
-            for suffix in [' - Desktop', ' - Mobile', ' - Tablet']:
-                if base_name.endswith(suffix):
-                    base_name = base_name[:-len(suffix)]
-                    break
-            
-            if base_name != campaign_name and base_name in campaign_name_map:
-                return campaign_name_map[base_name]['conversions']
-            
+            return campaign_map.get(campaign_id, {}).get('conversions', None)
+        
+        ads_df['Campaign Conversions'] = ads_df[ads_campaign_id_col].apply(get_conversions_by_direct_id)
+        return ads_df
+        return ads_df
+    
+    # Strategy 3: Name-based matching (fallback)
+    def get_conversions_by_name(campaign_name):
+        if pd.isna(campaign_name):
             return None
         
-        if 'Campaign' in ads_df.columns:
-            ads_df['Campaign Conversions'] = ads_df['Campaign'].apply(get_conversions_by_name)
+        campaign_name = str(campaign_name).strip()
+        
+        # Try exact match first
+        if campaign_name in campaign_name_map:
+            return campaign_name_map[campaign_name]['conversions']
+        
+        # Try fuzzy match (strip device suffixes like "- Desktop", "- Mobile")
+        base_name = campaign_name
+        for suffix in [' - Desktop', ' - Mobile', ' - Tablet']:
+            if base_name.endswith(suffix):
+                base_name = base_name[:-len(suffix)]
+                break
+        
+        if base_name != campaign_name and base_name in campaign_name_map:
+            return campaign_name_map[base_name]['conversions']
+        
+        return None
+    
+    if 'Campaign' in ads_df.columns:
+        ads_df['Campaign Conversions'] = ads_df['Campaign'].apply(get_conversions_by_name)
     
     return ads_df
 
@@ -5729,44 +5784,104 @@ with main_tab2:
                 
                 # URL Report Upload (Optional) - for precise campaign ID matching
                 st.markdown("---")
-                with st.expander("🔗 **URL Report (Optional)** - For more precise campaign matching", expanded=False):
+                with st.expander("🔗 **URL Reports (Optional)** - For more precise campaign matching", expanded=False):
                     st.markdown("""
-                    Upload a URL report to match campaigns by ID instead of name. This is more accurate when campaign names vary (e.g., "Legacy - Auto 0055" vs "Legacy - Auto 0055 - Desktop").
+                    Upload URL reports to match campaigns by ID instead of name. This is more accurate when campaign names vary.
                     
                     **Benefits:**
-                    - ✅ More precise campaign matching using Campaign IDs from URLs
+                    - ✅ More precise campaign matching using Campaign IDs
                     - ✅ Handles campaign name variations automatically
-                    - ✅ Works even when device suffixes differ
+                    - ✅ Supports both Google Ads and Microsoft Advertising
+                    - ✅ Matches by Account + Ad group for perfect accuracy
                     
-                    **Required columns:** Account name, Ad group, Ad final URL (with cmpid parameter)
+                    **Tip:** If your agent runs ads on both Google and Microsoft, upload both reports for complete coverage.
                     
-                    **Example URL:** `https://domain.com/?cmpid=MLGDA0055-003RE2`
+                    **Required columns:** 
+                    - Account name (or Account)
+                    - Ad group (or Ad group name)
+                    - Campaign ID (e.g., `MLGDA0055-003RE2`, `MLBDSF001-001R`)
                     
-                    This will match the Campaign ID `MLGDA0055-003RE2` from your Tab 1 stats report.
+                    **Optional:** Ad Group ID for additional precision
                     """)
                     
-                    url_report_file = st.file_uploader(
-                        "Upload URL Report CSV",
-                        type=['csv'],
-                        key='url_report_upload',
-                        help="Google Ads report with Ad final URL column"
-                    )
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        google_url_file = st.file_uploader(
+                            "📊 Google Ads URL Report",
+                            type=['csv'],
+                            key='google_url_report',
+                            help="Google Ads report with Campaign ID and Ad group columns"
+                        )
+                    
+                    with col2:
+                        microsoft_url_file = st.file_uploader(
+                            "🔷 Microsoft Ads URL Report",
+                            type=['csv', 'xlsx'],
+                            key='microsoft_url_report',
+                            help="Microsoft Advertising report with Campaign ID and Ad group columns"
+                        )
                 
-                url_report_df = None
-                if url_report_file is not None:
+                # Combine URL reports
+                url_report_dfs = []
+                
+                if google_url_file is not None:
                     try:
                         # Try UTF-16 first (common Google Ads export format)
-                        url_report_df = pd.read_csv(url_report_file, encoding='utf-16', sep='\t', skiprows=2)
+                        google_df = pd.read_csv(google_url_file, encoding='utf-16', sep='\t', skiprows=2)
+                        url_report_dfs.append(google_df)
+                        st.success(f"✅ Loaded Google URL report: {len(google_df):,} rows")
                     except:
-                        url_report_file.seek(0)
+                        google_url_file.seek(0)
                         try:
-                            url_report_df = pd.read_csv(url_report_file, encoding='utf-8')
-                        except:
-                            url_report_file.seek(0)
-                            url_report_df = pd.read_csv(url_report_file)
-                    
-                    if url_report_df is not None and not url_report_df.empty:
-                        st.success(f"✅ Loaded URL report with {len(url_report_df):,} rows")
+                            google_df = pd.read_csv(google_url_file, encoding='utf-8')
+                            url_report_dfs.append(google_df)
+                            st.success(f"✅ Loaded Google URL report: {len(google_df):,} rows")
+                        except Exception as e:
+                            st.error(f"❌ Error loading Google URL report: {str(e)}")
+                
+                if microsoft_url_file is not None:
+                    try:
+                        # Microsoft exports as Excel with header rows
+                        if microsoft_url_file.name.endswith('.xlsx') or microsoft_url_file.name.endswith('.xls'):
+                            ms_df = pd.read_excel(microsoft_url_file, skiprows=5)
+                            # Set first row as header
+                            ms_df.columns = ms_df.iloc[0]
+                            ms_df = ms_df[1:].reset_index(drop=True)
+                        else:
+                            # CSV format
+                            ms_df = pd.read_csv(microsoft_url_file, encoding='utf-16', sep='\t', skiprows=5)
+                            ms_df.columns = ms_df.iloc[0]
+                            ms_df = ms_df[1:].reset_index(drop=True)
+                        
+                        # Microsoft column names: 'Campaign name', 'Ad group' (not 'Ad group name')
+                        # Standardize to match Google format
+                        rename_map = {}
+                        if 'Campaign name' in ms_df.columns:
+                            rename_map['Campaign name'] = 'Campaign'
+                        # Note: Microsoft uses 'Ad group', Google uses 'Ad group' - no rename needed
+                        
+                        if rename_map:
+                            ms_df = ms_df.rename(columns=rename_map)
+                        
+                        # Clean Campaign ID and Ad Group ID - remove brackets
+                        if 'Campaign ID' in ms_df.columns:
+                            ms_df['Campaign ID'] = ms_df['Campaign ID'].astype(str).str.replace('[', '').str.replace(']', '').str.strip()
+                        if 'Ad group ID' in ms_df.columns:
+                            ms_df['Ad group ID'] = ms_df['Ad group ID'].astype(str).str.replace('[', '').str.replace(']', '').str.strip()
+                        
+                        url_report_dfs.append(ms_df)
+                        st.success(f"✅ Loaded Microsoft URL report: {len(ms_df):,} rows")
+                    except Exception as e:
+                        st.error(f"❌ Error loading Microsoft URL report: {str(e)}")
+                        import traceback
+                        st.code(traceback.format_exc())
+                
+                # Combine all URL reports into one dataframe
+                url_report_df = None
+                if url_report_dfs:
+                    url_report_df = pd.concat(url_report_dfs, ignore_index=True)
+                    st.info(f"📊 Combined URL reports: {len(url_report_df):,} total rows from {len(url_report_dfs)} file(s)")
                 
                 # Enrich with campaign conversion data from Tab 1 (if available)
                 if 'campaign_stats' in st.session_state:
@@ -5774,13 +5889,23 @@ with main_tab2:
                     
                     # Show matching summary
                     matched_campaigns = ads_df['Campaign Conversions'].notna().sum()
-                    total_campaigns = len(ads_df['Campaign'].unique())
+                    total_ad_groups = len(ads_df)
                     
                     if url_report_df is not None:
-                        st.success(f"✅ Matched conversion data for {matched_campaigns} ad groups using Campaign IDs from URL report")
+                        # Check if URL report has Campaign ID column
+                        has_campaign_id = any('campaign' in str(col).lower() and 'id' in str(col).lower() for col in url_report_df.columns)
+                        if has_campaign_id:
+                            st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using Campaign IDs")
+                        else:
+                            st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups from URL report")
                     else:
-                        st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_campaigns} campaigns from Tab 1 (using campaign names)")
-                        st.info("💡 Upload a URL report above for more precise matching by Campaign ID")
+                        # Check if ads report has Campaign ID column
+                        has_campaign_id_in_ads = any('campaign' in str(col).lower() and 'id' in str(col).lower() for col in ads_df.columns)
+                        if has_campaign_id_in_ads:
+                            st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using Campaign IDs (direct match)")
+                        else:
+                            st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using campaign names")
+                            st.info("💡 Upload URL reports above for more precise matching by Campaign ID")
                 
                 
                 # Account Filter
