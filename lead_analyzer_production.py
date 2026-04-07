@@ -649,13 +649,6 @@ def analyze_ads_account(df, thresholds):
     Returns:
         Dictionary of categorized ad groups with recommendations
     """
-    # Debug incoming data
-    st.caption(f"📊 analyze_ads_account received: {len(df):,} rows, {len(df.columns)} columns")
-    if 'Platform' in df.columns:
-        platform_counts = df['Platform'].value_counts()
-        st.caption(f"  Platforms: {dict(platform_counts)}")
-    st.caption(f"  Sample columns: {df.columns[:8].tolist()}")
-    
     # Check required columns exist
     required_cols = ['Impr.', 'Ad group status']
     missing_cols = [col for col in required_cols if col not in df.columns]
@@ -679,8 +672,15 @@ def analyze_ads_account(df, thresholds):
         (df['Ad group status'].isin(['Enabled', 'Active']))
     ].copy()
     
-    # Debug: Show filtering results
-    st.caption(f"🔍 Filtered from {len(df):,} total ad groups to {len(active_df):,} active (Enabled/Active + Impressions > 0)")
+    # Show filtering results in expander
+    with st.expander("🔍 Analysis Details", expanded=False):
+        st.caption(f"📊 analyze_ads_account received: {len(df):,} rows, {len(df.columns)} columns")
+        if 'Platform' in df.columns:
+            platform_counts = df['Platform'].value_counts()
+            st.caption(f"  Platforms: {dict(platform_counts)}")
+        st.caption(f"  Sample columns: {df.columns[:8].tolist()}")
+        st.caption(f"🔍 Filtered from {len(df):,} total ad groups to {len(active_df):,} active (Enabled/Active + Impressions > 0)")
+        
     if len(active_df) == 0:
         st.warning("⚠️ No active ad groups found!")
         st.info(f"Ad group status values in data: {df['Ad group status'].unique().tolist()}")
@@ -6026,27 +6026,59 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
     
     
     # Apply account filter (passed from parent)
-    st.caption(f"🔍 Account filter: selected_account='{selected_account}', has Account column={'Account' in ads_df.columns}")
+    with st.expander("🔧 Filter Details", expanded=False):
+        st.caption(f"🔍 Account filter: selected_account='{selected_account}', has Account column={'Account' in ads_df.columns}")
+        
+        if selected_account != 'All Accounts' and 'Account' in ads_df.columns:
+            before_filter = len(ads_df)
+            st.caption(f"  Filtered from {before_filter:,} → filtering...")
+        else:
+            st.caption(f"  Using all {len(ads_df):,} ad groups")
     
     if selected_account != 'All Accounts' and 'Account' in ads_df.columns:
-        before_filter = len(ads_df)
         ads_df_filtered = ads_df[ads_df['Account'] == selected_account].copy()
-        after_filter = len(ads_df_filtered)
-        st.caption(f"  Filtered from {before_filter:,} → {after_filter:,} ad groups")
         
-        if after_filter == 0:
+        if len(ads_df_filtered) == 0:
             available_accounts = ads_df['Account'].unique()[:10]
             st.warning(f"⚠️ No rows match account '{selected_account}'. Available accounts: {list(available_accounts)}")
     else:
         ads_df_filtered = ads_df.copy()
-        st.caption(f"  Using all {len(ads_df_filtered):,} ad groups")
     
     # Apply stats account filter if checkbox is enabled
     if filter_to_stats_account:
+        with st.expander("📊 Stats Account Matching", expanded=False):
+            has_campaign_data = 'campaign_stats' in st.session_state and st.session_state.campaign_stats is not None
+            has_domain = 'stats_agent_domain' in st.session_state and st.session_state.stats_agent_domain is not None
+            
+            st.caption(f"🔍 Stats account filter active. Has campaign data: {has_campaign_data}, Has domain: {has_domain}")
+            
+            if has_campaign_data:
+                matched_account = None
+                
+                # Try to match using domain from URL report (if url_report_df exists)
+                if 'url_report_df' in locals() and url_report_df is not None and not url_report_df.empty and 'Ad final URL' in url_report_df.columns and has_domain:
+                    import re
+                    stats_domain = st.session_state.stats_agent_domain
+                    st.caption(f"🔍 Looking for domain: {stats_domain} in URL report")
+                    
+                    # Find accounts whose URLs contain the stats domain
+                    for _, row in url_report_df.iterrows():
+                        url = row.get('Ad final URL')
+                        account = row.get('Account name')
+                        
+                        if pd.notna(url) and pd.notna(account) and stats_domain in str(url):
+                            matched_account = str(account).strip()
+                            st.caption(f"✅ Found matching account: {matched_account}")
+                            break
+                    
+                    if not matched_account:
+                        st.warning(f"⚠️ No account found with domain '{stats_domain}' in URL report")
+                else:
+                    st.warning("⚠️ URL report not available or missing 'Ad final URL' column")
+        
+        # Actually apply the filter (outside expander)
         has_campaign_data = 'campaign_stats' in st.session_state and st.session_state.campaign_stats is not None
         has_domain = 'stats_agent_domain' in st.session_state and st.session_state.stats_agent_domain is not None
-        
-        st.caption(f"🔍 Stats account filter active. Has campaign data: {has_campaign_data}, Has domain: {has_domain}")
         
         if has_campaign_data:
             matched_account = None
@@ -6055,7 +6087,6 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             if 'url_report_df' in locals() and url_report_df is not None and not url_report_df.empty and 'Ad final URL' in url_report_df.columns and has_domain:
                 import re
                 stats_domain = st.session_state.stats_agent_domain
-                st.caption(f"🔍 Looking for domain: {stats_domain} in URL report")
                 
                 # Find accounts whose URLs contain the stats domain
                 for _, row in url_report_df.iterrows():
@@ -6064,13 +6095,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                     
                     if pd.notna(url) and pd.notna(account) and stats_domain in str(url):
                         matched_account = str(account).strip()
-                        st.caption(f"✅ Found matching account: {matched_account}")
                         break
-                
-                if not matched_account:
-                    st.warning(f"⚠️ No account found with domain '{stats_domain}' in URL report")
-            else:
-                st.warning("⚠️ URL report not available or missing 'Ad final URL' column")
             
             # If we found a matching account, filter to it
             if matched_account and matched_account in ads_df_filtered['Account'].values:
@@ -6731,50 +6756,51 @@ with main_tab2:
         )
 
         if ads_files:
-            with st.spinner('Loading ads data...'):
-                # Load all uploaded files and keep track of platform
-                ads_data_by_platform = []  # List of (platform_name, dataframe) tuples
-                
-                for ads_file in ads_files:
-                    df = load_ads_export(ads_file)
-                    if df is not None:
-                        # Detect platform from filename or data characteristics
-                        filename_lower = ads_file.name.lower()
-                        
-                        # Check filename for platform indicators
-                        # Microsoft: "Ad_Group_Report" (capital G with underscores)
-                        # Google: "Ad group report" (lowercase g with spaces)
-                        if 'microsoft' in filename_lower or 'bing' in filename_lower or 'Ad_Group_Report' in ads_file.name:
-                            platform = "Microsoft Ads"
-                        elif 'google' in filename_lower:
-                            platform = "Google Ads"
-                        else:
-                            # Check if file has Microsoft-specific metadata in the dataframe
-                            # Microsoft files will have certain column combinations after mapping
-                            has_device_type = 'Device type' in df.columns
-                            has_exact_match_is = 'Search exact match IS' in df.columns
+            with st.expander("📋 Loading Details", expanded=False):
+                with st.spinner('Loading ads data...'):
+                    # Load all uploaded files and keep track of platform
+                    ads_data_by_platform = []  # List of (platform_name, dataframe) tuples
+                    
+                    for ads_file in ads_files:
+                        df = load_ads_export(ads_file)
+                        if df is not None:
+                            # Detect platform from filename or data characteristics
+                            filename_lower = ads_file.name.lower()
                             
-                            # Or check data patterns
-                            if has_device_type or has_exact_match_is:
+                            # Check filename for platform indicators
+                            # Microsoft: "Ad_Group_Report" (capital G with underscores)
+                            # Google: "Ad group report" (lowercase g with spaces)
+                            if 'microsoft' in filename_lower or 'bing' in filename_lower or 'Ad_Group_Report' in ads_file.name:
                                 platform = "Microsoft Ads"
+                            elif 'google' in filename_lower:
+                                platform = "Google Ads"
                             else:
-                                # Try Campaign ID format (though this is less reliable after cleaning)
-                                if 'Campaign ID' in df.columns:
-                                    sample_ids = df['Campaign ID'].dropna().astype(str).head(10)
-                                    # Google IDs are typically 10-11 digits
-                                    if sample_ids.str.len().mean() > 9:
-                                        platform = "Google Ads"
-                                    else:
-                                        platform = "Microsoft Ads"  # Shorter IDs are Microsoft
+                                # Check if file has Microsoft-specific metadata in the dataframe
+                                # Microsoft files will have certain column combinations after mapping
+                                has_device_type = 'Device type' in df.columns
+                                has_exact_match_is = 'Search exact match IS' in df.columns
+                                
+                                # Or check data patterns
+                                if has_device_type or has_exact_match_is:
+                                    platform = "Microsoft Ads"
                                 else:
-                                    # Default to filename
-                                    platform = "Google Ads" if 'group' in filename_lower else "Microsoft Ads"
-                        
-                        ads_data_by_platform.append((platform, df))
-                        st.info(f"📄 Loaded {ads_file.name}: {len(df):,} ad groups → **{platform}**")
-                
-                if not ads_data_by_platform:
-                    st.error("❌ No valid ad group data could be loaded")
+                                    # Try Campaign ID format (though this is less reliable after cleaning)
+                                    if 'Campaign ID' in df.columns:
+                                        sample_ids = df['Campaign ID'].dropna().astype(str).head(10)
+                                        # Google IDs are typically 10-11 digits
+                                        if sample_ids.str.len().mean() > 9:
+                                            platform = "Google Ads"
+                                        else:
+                                            platform = "Microsoft Ads"  # Shorter IDs are Microsoft
+                                    else:
+                                        # Default to filename
+                                        platform = "Google Ads" if 'group' in filename_lower else "Microsoft Ads"
+                            
+                            ads_data_by_platform.append((platform, df))
+                            st.info(f"📄 Loaded {ads_file.name}: {len(df):,} ad groups → **{platform}**")
+                    
+                    if not ads_data_by_platform:
+                        st.error("❌ No valid ad group data could be loaded")
 
             if ads_data_by_platform:
                 st.success(f"✅ Loaded {len(ads_data_by_platform)} platform(s) for independent analysis")
@@ -6890,19 +6916,41 @@ with main_tab2:
                     st.info(f"📊 Showing all {len(all_accounts)} accounts ({total_ag_all:,} total ad groups)")
                 
                 # Combine ALL platforms into a single dataframe with Platform column (NO TABS)
+                with st.expander("🔧 Platform Combination Details", expanded=False):
+                    combined_dfs = []
+                    for platform_name, ads_df in ads_data_by_platform:
+                        df_copy = ads_df.copy()
+                        # Add Platform column to distinguish Google vs Microsoft
+                        df_copy['Platform'] = platform_name
+                        combined_dfs.append(df_copy)
+                        st.caption(f"  → Adding {len(df_copy)} ad groups from **{platform_name}**")
+                        st.caption(f"     Columns: {', '.join(df_copy.columns[:10].tolist())}...")
+                    
+                    # Merge everything together
+                    st.caption(f"✅ Combined dataframe: {len(all_ads_df):,} total ad groups")
+                    
+                    # Show platform breakdown
+                    if 'Platform' in all_ads_df.columns:
+                        platform_counts = all_ads_df['Platform'].value_counts()
+                        for platform, count in platform_counts.items():
+                            st.caption(f"  • {platform}: {count:,} ad groups")
+                    
+                    # Show column sample from each platform
+                    st.caption(f"\n🔍 Column check:")
+                    for platform_name, ads_df in ads_data_by_platform:
+                        has_account = 'Account' in ads_df.columns
+                        has_impr = 'Impr.' in ads_df.columns
+                        first_col = ads_df.columns[0] if len(ads_df.columns) > 0 else 'N/A'
+                        st.caption(f"  {platform_name}: Has 'Account'={has_account}, Has 'Impr.'={has_impr}, First col='{first_col}'")
+                
+                # Actually do the merge (outside expander)
                 combined_dfs = []
                 for platform_name, ads_df in ads_data_by_platform:
                     df_copy = ads_df.copy()
-                    # Add Platform column to distinguish Google vs Microsoft
                     df_copy['Platform'] = platform_name
                     combined_dfs.append(df_copy)
-                    st.caption(f"  → Adding {len(df_copy)} ad groups from **{platform_name}**")
-                    st.caption(f"     Columns: {', '.join(df_copy.columns[:10].tolist())}...")
                 
-                # Merge everything together
                 all_ads_df = pd.concat(combined_dfs, ignore_index=True)
-                
-                st.caption(f"✅ Combined dataframe: {len(all_ads_df):,} total ad groups")
                 
                 # Apply CSM filter if selected
                 if selected_csm != 'All CSMs' and shared_budget_df is not None and 'CSM' in shared_budget_df.columns:
@@ -6915,20 +6963,7 @@ with main_tab2:
                     after_csm_filter = len(all_ads_df)
                     
                     st.info(f"🎯 **CSM Filter**: {selected_csm} → {len(csm_accounts)} accounts, {after_csm_filter:,} ad groups")
-                
-                # Show platform breakdown
-                if 'Platform' in all_ads_df.columns:
-                    platform_counts = all_ads_df['Platform'].value_counts()
-                    for platform, count in platform_counts.items():
-                        st.caption(f"  • {platform}: {count:,} ad groups")
-                
-                # Show column sample from each platform
-                st.caption(f"\n🔍 Column check:")
-                for platform_name, ads_df in ads_data_by_platform:
-                    has_account = 'Account' in ads_df.columns
-                    has_impr = 'Impr.' in ads_df.columns
-                    first_col = ads_df.columns[0] if len(ads_df.columns) > 0 else 'N/A'
-                    st.caption(f"  {platform_name}: Has 'Account'={has_account}, Has 'Impr.'={has_impr}, First col='{first_col}'")
+
                 
                 # Ensure all required columns exist (add with NaN if missing)
                 required_columns = [
