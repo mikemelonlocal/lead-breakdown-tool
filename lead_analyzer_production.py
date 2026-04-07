@@ -6660,9 +6660,17 @@ with main_tab2:
                     # Add Platform column to distinguish Google vs Microsoft
                     df_copy['Platform'] = platform_name
                     combined_dfs.append(df_copy)
+                    st.caption(f"  → Adding {len(df_copy)} ad groups from **{platform_name}**")
                 
                 # Merge everything together
                 all_ads_df = pd.concat(combined_dfs, ignore_index=True)
+                
+                # Debug: Show platform breakdown
+                if 'Platform' in all_ads_df.columns:
+                    platform_breakdown = all_ads_df['Platform'].value_counts()
+                    st.success(f"✅ Combined dataframe: {len(all_ads_df):,} total ad groups")
+                    for platform, count in platform_breakdown.items():
+                        st.caption(f"  • {platform}: {count:,} ad groups")
                 
                 # Process as single combined analysis (NO TABS - all data in one view)
                 process_ads_platform(
