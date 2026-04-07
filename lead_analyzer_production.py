@@ -5634,7 +5634,7 @@ with main_tab2:
                         """)
 
                         # Display table
-                        display_cols = ['Ad group', 'Campaign', 'Current Bid', 'Recommended New Bid',
+                        display_cols = ['Account', 'Ad group', 'Campaign', 'Current Bid', 'Recommended New Bid',
                                       'CTR', 'Search impr. share', 'Search lost IS (rank)', 
                                       'Cost', 'Clicks']
                         
@@ -5729,7 +5729,7 @@ with main_tab2:
                             """)
 
 
-                        display_cols = ['Ad group', 'Campaign', 'Budget Status', 'Current Bid', 'Recommended New Bid',
+                        display_cols = ['Account', 'Ad group', 'Campaign', 'Budget Status', 'Current Bid', 'Recommended New Bid',
                                       'Search impr. share', 'Search lost IS (rank)', 'Search top IS', 
                                       'CTR', 'Cost']
                         
@@ -5802,10 +5802,12 @@ with main_tab2:
                         Perfect position 2-3 sweet spot! Keep these bids as-is.
                         """)
 
-                        display_cols = ['Ad group', 'Campaign', 'Search top IS', 'Search abs. top IS',
+                        display_cols = ['Account', 'Ad group', 'Campaign', 'Search top IS', 'Search abs. top IS',
                                       'CTR', 'Avg. CPC', 'Cost']
 
-                        display_df = df_maintain[display_cols].copy()
+                        # Only include columns that exist
+                        available_cols = [col for col in display_cols if col in df_maintain.columns]
+                        display_df = df_maintain[available_cols].copy()
                         display_df['Search top IS'] = display_df['Search top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
                         display_df['Search abs. top IS'] = display_df['Search abs. top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
                         display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
@@ -5848,7 +5850,7 @@ with main_tab2:
                         These ad groups are appearing in position 1 too often. Decrease bids to drop to position 2-3.
                         """)
 
-                        display_cols = ['Ad group', 'Campaign', 'Budget Status', 'Current Bid', 'Recommended New Bid',
+                        display_cols = ['Account', 'Ad group', 'Campaign', 'Budget Status', 'Current Bid', 'Recommended New Bid',
                                       'Search abs. top IS', 'Search top IS', 'Cost']
                         
                         # Only include columns that exist
@@ -5913,7 +5915,7 @@ with main_tab2:
                         Low engagement suggests poor ad/keyword relevance. Fix ads before adjusting bids.
                         """)
 
-                        display_cols = ['Ad group', 'Campaign', 'Current Bid', 'Recommended New Bid',
+                        display_cols = ['Account', 'Ad group', 'Campaign', 'Current Bid', 'Recommended New Bid',
                                       'CTR', 'Search impr. share', 'Cost', 'Clicks']
                         
                         # Only include columns that exist
@@ -5980,11 +5982,14 @@ with main_tab2:
                         Consider pausing to simplify account management.
                         """)
 
-                        display_cols = ['Ad group', 'Campaign']
+                        display_cols = ['Account', 'Ad group', 'Campaign']
                         if 'Default max. CPC' in df_cleanup.columns:
                             display_cols.append('Default max. CPC')
+                        
+                        # Only include columns that exist
+                        available_cols = [col for col in display_cols if col in df_cleanup.columns]
 
-                        st.dataframe(df_cleanup[display_cols], use_container_width=True, hide_index=True)
+                        st.dataframe(df_cleanup[available_cols], use_container_width=True, hide_index=True)
 
                         csv = df_cleanup.to_csv(index=False)
                         st.download_button(
