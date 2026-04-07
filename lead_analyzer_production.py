@@ -484,7 +484,17 @@ def load_ads_export(file):
         filename = file.name.lower()
         
         # Detect if Microsoft based on filename
-        is_microsoft_filename = 'microsoft' in filename or 'bing' in filename or 'adgroupreport' in filename.replace('_', '').replace(' ', '')
+        # Microsoft files: "Ad_Group_Report.xlsx" (underscore + capital G)
+        # Google files: "Ad group report.csv" (space + lowercase g)
+        original_name = file.name
+        is_microsoft_filename = (
+            'microsoft' in filename or 
+            'bing' in filename or 
+            'Ad_Group_Report' in original_name  # Capital G with underscores = Microsoft
+        )
+        
+        # Debug output
+        st.caption(f"📋 Loading {file.name}: Microsoft detection = {is_microsoft_filename}")
         
         if filename.endswith('.xlsx') or filename.endswith('.xls'):
             # Excel format
@@ -6013,6 +6023,8 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
         has_campaign_data = 'campaign_stats' in st.session_state and st.session_state.campaign_stats is not None
         has_domain = 'stats_agent_domain' in st.session_state and st.session_state.stats_agent_domain is not None
         
+        st.caption(f"🔍 Stats account filter active. Has campaign data: {has_campaign_data}, Has domain: {has_domain}")
+        
         if has_campaign_data:
             matched_account = None
             
@@ -6020,6 +6032,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             if 'url_report_df' in locals() and url_report_df is not None and not url_report_df.empty and 'Ad final URL' in url_report_df.columns and has_domain:
                 import re
                 stats_domain = st.session_state.stats_agent_domain
+                st.caption(f"🔍 Looking for domain: {stats_domain} in URL report")
                 
                 # Find accounts whose URLs contain the stats domain
                 for _, row in url_report_df.iterrows():
@@ -6028,13 +6041,21 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                     
                     if pd.notna(url) and pd.notna(account) and stats_domain in str(url):
                         matched_account = str(account).strip()
+                        st.caption(f"✅ Found matching account: {matched_account}")
                         break
+                
+                if not matched_account:
+                    st.warning(f"⚠️ No account found with domain '{stats_domain}' in URL report")
+            else:
+                st.warning("⚠️ URL report not available or missing 'Ad final URL' column")
             
             # If we found a matching account, filter to it
             if matched_account and matched_account in ads_df_filtered['Account'].values:
                 ads_df_filtered = ads_df_filtered[ads_df_filtered['Account'] == matched_account].copy()
                 file_name = st.session_state.get('stats_file_uploaded', 'stats report')
                 st.info(f"📊 Showing data for: **{matched_account}** (from {file_name}) — {len(ads_df_filtered):,} ad groups")
+            elif matched_account:
+                st.warning(f"⚠️ Account '{matched_account}' not found in ad group data")
 
     # Run analysis on filtered data
     with st.spinner('Analyzing account health...'):
