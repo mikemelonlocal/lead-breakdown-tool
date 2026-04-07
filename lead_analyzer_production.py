@@ -503,6 +503,9 @@ def load_ads_export(file):
                 file.seek(0)
                 df = pd.read_csv(file, sep='\t', skiprows=2)
         
+        # Debug: Show original columns
+        st.caption(f"📋 Original columns in {file.name}: {', '.join(df.columns[:10].tolist())}...")
+        
         # Detect if this is Microsoft Ads and map columns to Google format
         microsoft_column_map = {
             'Account name': 'Account',
@@ -526,6 +529,7 @@ def load_ads_export(file):
         is_microsoft = 'Account name' in df.columns or 'Impressions' in df.columns
         
         if is_microsoft:
+            st.caption("🔷 Detected Microsoft Ads format - applying column mapping")
             # Rename Microsoft columns to Google equivalents
             df = df.rename(columns=microsoft_column_map)
             
@@ -535,11 +539,15 @@ def load_ads_export(file):
             if 'Ad group ID' in df.columns:
                 df['Ad group ID'] = df['Ad group ID'].astype(str).str.replace('[', '').str.replace(']', '').str.strip()
         else:
+            st.caption("📊 Detected Google Ads format")
             # Google Ads - clean Campaign ID (remove .0 from floats)
             if 'Campaign ID' in df.columns:
                 df['Campaign ID'] = df['Campaign ID'].apply(lambda x: str(int(float(x))) if pd.notna(x) and str(x) != 'nan' else x)
             if 'Ad group ID' in df.columns:
                 df['Ad group ID'] = df['Ad group ID'].apply(lambda x: str(int(float(x))) if pd.notna(x) and str(x) != 'nan' else x)
+        
+        # Debug: Show mapped columns
+        st.caption(f"✅ After mapping: {', '.join(df.columns[:10].tolist())}...")
         
         # Clean numeric columns
         numeric_cols = ['Impr.', 'Clicks', 'Cost', 'Avg. CPC', 'Conversions', 'Cost / conv.']
