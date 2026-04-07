@@ -2849,29 +2849,53 @@ with main_tab1:
             if not df_in.empty:
                 campaign_col = get_col(df_in, ["campaign_id", "campaign id", "campaign"])
                 if campaign_col:
-                    # Count leads by campaign
-                    campaign_stats = df_in.groupby(campaign_col).agg({
-                        get_col(df_in, ["quote_starts", "quote starts", "quote start", "qs"]): 'sum',
-                        get_col(df_in, ["phone_clicks", "phone clicks", "phone click"]): 'sum',
-                        get_col(df_in, ["sms_clicks", "sms clicks", "sms click"]): 'sum'
-                    }).fillna(0)
-                    
-                    # Calculate total conversions
+                    # Get column names that exist
                     qs_col = get_col(df_in, ["quote_starts", "quote starts", "quote start", "qs"])
                     phone_col = get_col(df_in, ["phone_clicks", "phone clicks", "phone click"])
                     sms_col = get_col(df_in, ["sms_clicks", "sms clicks", "sms click"])
                     
-                    campaign_stats['Total Conversions'] = 0
-                    if qs_col and include_quote_starts:
-                        campaign_stats['Total Conversions'] += campaign_stats[qs_col]
-                    if phone_col and include_phone_clicks:
-                        campaign_stats['Total Conversions'] += campaign_stats[phone_col]
-                    if sms_col and include_sms_clicks:
-                        campaign_stats['Total Conversions'] += campaign_stats[sms_col]
+                    # Build aggregation dict only for columns that exist
+                    agg_dict = {}
+                    if qs_col:
+                        agg_dict[qs_col] = 'sum'
+                    if phone_col:
+                        agg_dict[phone_col] = 'sum'
+                    if sms_col:
+                        agg_dict[sms_col] = 'sum'
                     
-                    # Store in session state
-                    st.session_state.campaign_stats = campaign_stats.reset_index()
-                    st.session_state.campaign_stats.columns = ['Campaign', 'Quote Starts', 'Phone Clicks', 'SMS Clicks', 'Total Conversions']
+                    # Only aggregate if we have at least one conversion column
+                    if agg_dict:
+                        campaign_stats = df_in.groupby(campaign_col).agg(agg_dict).fillna(0)
+                        
+                        # Calculate total conversions based on what user included
+                        campaign_stats['Total Conversions'] = 0
+                        if qs_col and include_quote_starts and qs_col in campaign_stats.columns:
+                            campaign_stats['Total Conversions'] += campaign_stats[qs_col]
+                        if phone_col and include_phone_clicks and phone_col in campaign_stats.columns:
+                            campaign_stats['Total Conversions'] += campaign_stats[phone_col]
+                        if sms_col and include_sms_clicks and sms_col in campaign_stats.columns:
+                            campaign_stats['Total Conversions'] += campaign_stats[sms_col]
+                        
+                        # Store in session state with standardized column names
+                        campaign_stats_reset = campaign_stats.reset_index()
+                        
+                        # Rename columns to standard names
+                        rename_map = {campaign_col: 'Campaign'}
+                        if qs_col:
+                            rename_map[qs_col] = 'Quote Starts'
+                        if phone_col:
+                            rename_map[phone_col] = 'Phone Clicks'
+                        if sms_col:
+                            rename_map[sms_col] = 'SMS Clicks'
+                        
+                        campaign_stats_reset = campaign_stats_reset.rename(columns=rename_map)
+                        
+                        # Ensure all expected columns exist (fill with 0 if missing)
+                        for col in ['Quote Starts', 'Phone Clicks', 'SMS Clicks']:
+                            if col not in campaign_stats_reset.columns:
+                                campaign_stats_reset[col] = 0
+                        
+                        st.session_state.campaign_stats = campaign_stats_reset
 
             
             status_text.text("📈 Aggregating results...")
