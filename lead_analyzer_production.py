@@ -595,6 +595,22 @@ def analyze_ads_account(df, thresholds):
     Returns:
         Dictionary of categorized ad groups with recommendations
     """
+    # Check required columns exist
+    required_cols = ['Impr.', 'Ad group status']
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        st.error(f"❌ Missing required columns: {', '.join(missing_cols)}")
+        st.error(f"Available columns: {', '.join(df.columns.tolist())}")
+        return {
+            'major_opportunity': pd.DataFrame(),
+            'losing_auctions': pd.DataFrame(),
+            'perfect_position': pd.DataFrame(),
+            'overpaying_position_1': pd.DataFrame(),
+            'poor_quality': pd.DataFrame(),
+            'no_conversions': pd.DataFrame(),
+            'zero_impressions': pd.DataFrame()
+        }
+    
     # Filter to active ad groups with data
     active_df = df[
         (df['Impr.'] > 0) & 
@@ -6719,9 +6735,23 @@ with main_tab2:
                     df_copy['Platform'] = platform_name
                     combined_dfs.append(df_copy)
                     st.caption(f"  → Adding {len(df_copy)} ad groups from **{platform_name}**")
+                    st.caption(f"     Columns: {', '.join(df_copy.columns[:10].tolist())}...")
                 
                 # Merge everything together
                 all_ads_df = pd.concat(combined_dfs, ignore_index=True)
+                
+                # Ensure all required columns exist (add with NaN if missing)
+                required_columns = [
+                    'Account', 'Ad group', 'Campaign', 'Platform',
+                    'Impr.', 'Clicks', 'Cost', 'Avg. CPC', 'CTR',
+                    'Search impr. share', 'Search top IS', 'Search abs. top IS', 'Search lost IS (rank)',
+                    'Ad group status', 'Default max. CPC', 'Current Bid'
+                ]
+                
+                for col in required_columns:
+                    if col not in all_ads_df.columns:
+                        all_ads_df[col] = pd.NA
+                        st.warning(f"⚠️ Column '{col}' missing - added with blank values")
                 
                 # Debug: Show platform breakdown
                 if 'Platform' in all_ads_df.columns:
