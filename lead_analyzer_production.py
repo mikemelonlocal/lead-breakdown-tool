@@ -475,8 +475,9 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
 
 def load_ads_export(file):
     """
-    Load and clean Google Ads ad group export.
+    Load and clean Google Ads or Microsoft Ads ad group export.
     Handles both CSV (UTF-16 tab-separated) and XLSX formats.
+    Automatically detects and maps Microsoft column names to Google format.
     """
     try:
         # Check file extension
@@ -502,6 +503,44 @@ def load_ads_export(file):
                 file.seek(0)
                 df = pd.read_csv(file, sep='\t', skiprows=2)
         
+        # Detect if this is Microsoft Ads and map columns to Google format
+        microsoft_column_map = {
+            'Account name': 'Account',
+            'Ad group': 'Ad group',  # Same in both
+            'Campaign': 'Campaign',  # Same in both
+            'Impressions': 'Impr.',
+            'Avg. CPC': 'Avg. CPC',  # Same in both
+            'CTR': 'CTR',  # Same in both
+            'Spend': 'Cost',
+            'Impr. share (%)': 'Search impr. share',
+            'Top impr. rate (%)': 'Search top IS',
+            'Abs. top impr. rate (%)': 'Search abs. top IS',
+            'Impr. share lost to rank (%)': 'Search lost IS (rank)',
+            'Ad group status': 'Ad group status',  # Same in both
+            'Bid': 'Default max. CPC',
+            'Campaign ID': 'Campaign ID',  # Same in both
+            'Ad group ID': 'Ad group ID',  # Same in both
+        }
+        
+        # Check if this looks like Microsoft data (has "Account name" instead of "Account")
+        is_microsoft = 'Account name' in df.columns or 'Impressions' in df.columns
+        
+        if is_microsoft:
+            # Rename Microsoft columns to Google equivalents
+            df = df.rename(columns=microsoft_column_map)
+            
+            # Clean Campaign ID and Ad Group ID - remove brackets from Microsoft format
+            if 'Campaign ID' in df.columns:
+                df['Campaign ID'] = df['Campaign ID'].astype(str).str.replace('[', '').str.replace(']', '').str.strip()
+            if 'Ad group ID' in df.columns:
+                df['Ad group ID'] = df['Ad group ID'].astype(str).str.replace('[', '').str.replace(']', '').str.strip()
+        else:
+            # Google Ads - clean Campaign ID (remove .0 from floats)
+            if 'Campaign ID' in df.columns:
+                df['Campaign ID'] = df['Campaign ID'].apply(lambda x: str(int(float(x))) if pd.notna(x) and str(x) != 'nan' else x)
+            if 'Ad group ID' in df.columns:
+                df['Ad group ID'] = df['Ad group ID'].apply(lambda x: str(int(float(x))) if pd.notna(x) and str(x) != 'nan' else x)
+        
         # Clean numeric columns
         numeric_cols = ['Impr.', 'Clicks', 'Cost', 'Avg. CPC', 'Conversions', 'Cost / conv.']
         for col in numeric_cols:
@@ -514,7 +553,16 @@ def load_ads_export(file):
                     'Search exact match IS']
         for col in pct_cols:
             if col in df.columns:
-                df[col] = clean_numeric_ads(df[col]) / 100
+                # Microsoft already stores as percentages (50.0), Google uses percentages with % (50%)
+                # Check if values are already decimals (< 1) or percentages (> 1)
+                if df[col].notna().any():
+                    sample_val = df[col].dropna().iloc[0] if len(df[col].dropna()) > 0 else 0
+                    if sample_val > 1:
+                        # It's a percentage, convert to decimal
+                        df[col] = clean_numeric_ads(df[col]) / 100
+                    else:
+                        # Already a decimal
+                        df[col] = clean_numeric_ads(df[col])
         
         # Parse bid column
         if 'Default max. CPC' in df.columns:
@@ -524,6 +572,8 @@ def load_ads_export(file):
         
     except Exception as e:
         st.error(f"Error loading ads export: {str(e)}")
+        import traceback
+        st.code(traceback.format_exc())
         return None
 
 def analyze_ads_account(df, thresholds):
