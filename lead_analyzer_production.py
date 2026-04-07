@@ -476,23 +476,31 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
 def load_ads_export(file):
     """
     Load and clean Google Ads ad group export.
-    Handles UTF-16 encoding and tab-separated format.
+    Handles both CSV (UTF-16 tab-separated) and XLSX formats.
     """
     try:
-        # Read as bytes first to detect encoding
-        content = file.read()
+        # Check file extension
+        filename = file.name.lower()
         
-        # Try to decode as UTF-16
-        try:
-            decoded = content.decode('utf-16-le')
-            lines = decoded.split('\n')
-            # Skip first 2 lines (title and date range)
-            csv_content = '\n'.join(lines[2:])
-            df = pd.read_csv(io.StringIO(csv_content), sep='\t')
-        except:
-            # Fall back to UTF-8
-            file.seek(0)
-            df = pd.read_csv(file, sep='\t', skiprows=2)
+        if filename.endswith('.xlsx') or filename.endswith('.xls'):
+            # Excel format - skip header rows
+            df = pd.read_excel(file, skiprows=2)
+        else:
+            # CSV format - handle UTF-16 encoding
+            # Read as bytes first to detect encoding
+            content = file.read()
+            
+            # Try to decode as UTF-16
+            try:
+                decoded = content.decode('utf-16-le')
+                lines = decoded.split('\n')
+                # Skip first 2 lines (title and date range)
+                csv_content = '\n'.join(lines[2:])
+                df = pd.read_csv(io.StringIO(csv_content), sep='\t')
+            except:
+                # Fall back to UTF-8
+                file.seek(0)
+                df = pd.read_csv(file, sep='\t', skiprows=2)
         
         # Clean numeric columns
         numeric_cols = ['Impr.', 'Clicks', 'Cost', 'Avg. CPC', 'Conversions', 'Cost / conv.']
@@ -5642,8 +5650,8 @@ with main_tab2:
     
     # File upload
         ads_file = st.file_uploader(
-            "Upload Ad Group Report (CSV)",
-            type=['csv'],
+            "Upload Ad Group Report (CSV or Excel)",
+            type=['csv', 'xlsx', 'xls'],
             key='ads_upload',
             help="Export from Google Ads: Reports → Ad Groups → Include impression share columns"
         )
@@ -5670,43 +5678,52 @@ with main_tab2:
                     """)
                     
                     budget_file = st.file_uploader(
-                        "Upload Budget Report CSV",
-                        type=['csv'],
+                        "Upload Budget Report (CSV or Excel)",
+                        type=['csv', 'xlsx', 'xls'],
                         key='budget_upload',
-                        help="CSV with Agent names and Budget Status"
+                        help="Budget report with Agent names and Budget Status"
                     )
                 
                 budget_df = None
                 if budget_file is not None:
                     try:
-                        # Read first line to check if it's a header or data
-                        budget_file.seek(0)
-                        first_line = budget_file.readline().decode('utf-8').strip()
-                        first_values = first_line.split(',')
+                        # Check file extension
+                        filename = budget_file.name.lower()
                         
-                        # Check if first line looks like headers (contains text like "Agent", "Status")
-                        # vs data (contains values like "Underspending", "Overspending", agent names)
-                        first_line_lower = first_line.lower()
-                        has_header_keywords = any(word in first_line_lower for word in ['agent', 'status', 'budget id', 'description', 'platform'])
-                        has_data_keywords = any(word in first_line_lower for word in ['underspending', 'overspending', 'optimization', 'no conversions'])
-                        
-                        # Reset to beginning
-                        budget_file.seek(0)
-                        
-                        if has_header_keywords and not has_data_keywords:
-                            # Has headers - read normally
-                            budget_df_raw = pd.read_csv(budget_file)
+                        if filename.endswith('.xlsx') or filename.endswith('.xls'):
+                            # Excel format
+                            budget_df_raw = pd.read_excel(budget_file)
                             has_headers = True
                         else:
-                            # No headers or first row is data - specify column names
-                            budget_df_raw = pd.read_csv(
-                                budget_file,
-                                header=None,
-                                names=['Budget Id', 'Agent', 'Status', 'Description', 'Platform', 
-                                       'Monthly Cap', 'Daily Cap', 'Spend']
-                            )
-                            has_headers = False
-                            st.warning("⚠️ No headers detected. Assuming columns: [Budget Id, Agent, Status, Description, Platform, Monthly Cap, Daily Cap, Spend]")
+                            # CSV format - check for headers
+                            # Read first line to check if it's a header or data
+                            budget_file.seek(0)
+                            first_line = budget_file.readline().decode('utf-8').strip()
+                            first_values = first_line.split(',')
+                            
+                            # Check if first line looks like headers (contains text like "Agent", "Status")
+                            # vs data (contains values like "Underspending", "Overspending", agent names)
+                            first_line_lower = first_line.lower()
+                            has_header_keywords = any(word in first_line_lower for word in ['agent', 'status', 'budget id', 'description', 'platform'])
+                            has_data_keywords = any(word in first_line_lower for word in ['underspending', 'overspending', 'optimization', 'no conversions'])
+                            
+                            # Reset to beginning
+                            budget_file.seek(0)
+                            
+                            if has_header_keywords and not has_data_keywords:
+                                # Has headers - read normally
+                                budget_df_raw = pd.read_csv(budget_file)
+                                has_headers = True
+                            else:
+                                # No headers or first row is data - specify column names
+                                budget_df_raw = pd.read_csv(
+                                    budget_file,
+                                    header=None,
+                                    names=['Budget Id', 'Agent', 'Status', 'Description', 'Platform', 
+                                           'Monthly Cap', 'Daily Cap', 'Spend']
+                                )
+                                has_headers = False
+                                st.warning("⚠️ No headers detected. Assuming columns: [Budget Id, Agent, Status, Description, Platform, Monthly Cap, Daily Cap, Spend]")
                         
                         # Auto-detect Agent and Status columns (case-insensitive)
                         agent_col = None
@@ -5809,7 +5826,7 @@ with main_tab2:
                     with col1:
                         google_url_file = st.file_uploader(
                             "📊 Google Ads URL Report",
-                            type=['csv'],
+                            type=['csv', 'xlsx', 'xls'],
                             key='google_url_report',
                             help="Google Ads report with Campaign ID and Ad group columns"
                         )
@@ -5817,7 +5834,7 @@ with main_tab2:
                     with col2:
                         microsoft_url_file = st.file_uploader(
                             "🔷 Microsoft Ads URL Report",
-                            type=['csv', 'xlsx'],
+                            type=['csv', 'xlsx', 'xls'],
                             key='microsoft_url_report',
                             help="Microsoft Advertising report with Campaign ID and Ad group columns"
                         )
@@ -5827,18 +5844,30 @@ with main_tab2:
                 
                 if google_url_file is not None:
                     try:
-                        # Try UTF-16 first (common Google Ads export format)
-                        google_df = pd.read_csv(google_url_file, encoding='utf-16', sep='\t', skiprows=2)
-                        url_report_dfs.append(google_df)
-                        st.success(f"✅ Loaded Google URL report: {len(google_df):,} rows")
-                    except:
-                        google_url_file.seek(0)
-                        try:
-                            google_df = pd.read_csv(google_url_file, encoding='utf-8')
+                        # Check file extension
+                        filename = google_url_file.name.lower()
+                        
+                        if filename.endswith('.xlsx') or filename.endswith('.xls'):
+                            # Excel format
+                            google_df = pd.read_excel(google_url_file, skiprows=2)
                             url_report_dfs.append(google_df)
                             st.success(f"✅ Loaded Google URL report: {len(google_df):,} rows")
-                        except Exception as e:
-                            st.error(f"❌ Error loading Google URL report: {str(e)}")
+                        else:
+                            # CSV format - try UTF-16 first (common Google Ads export format)
+                            try:
+                                google_df = pd.read_csv(google_url_file, encoding='utf-16', sep='\t', skiprows=2)
+                                url_report_dfs.append(google_df)
+                                st.success(f"✅ Loaded Google URL report: {len(google_df):,} rows")
+                            except:
+                                google_url_file.seek(0)
+                                try:
+                                    google_df = pd.read_csv(google_url_file, encoding='utf-8')
+                                    url_report_dfs.append(google_df)
+                                    st.success(f"✅ Loaded Google URL report: {len(google_df):,} rows")
+                                except Exception as e:
+                                    st.error(f"❌ Error loading Google URL report: {str(e)}")
+                    except Exception as e:
+                        st.error(f"❌ Error loading Google URL report: {str(e)}")
                 
                 if microsoft_url_file is not None:
                     try:
