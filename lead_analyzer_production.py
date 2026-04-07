@@ -354,6 +354,9 @@ def analyze_ads_account(df, thresholds):
         (df['Ad group status'] == 'Enabled')
     ].copy()
     
+    # Check if Budget Status column exists
+    has_budget_data = 'Budget Status' in active_df.columns
+    
     results = {}
     
     # 1. OVERPAYING FOR POSITION 1 (prioritize if Overspending)
@@ -380,9 +383,6 @@ def analyze_ads_account(df, thresholds):
         results['overpaying_position_1']['Recommended New Bid'] = results['overpaying_position_1']['Current Bid'] * 0.825
     
     # 2. LOSING AUCTIONS TO RANK (ONLY if budget has room - Underspending status)
-    # Check if Budget Status column exists
-    has_budget_data = 'Budget Status' in active_df.columns
-    
     if has_budget_data:
         # WITH budget data: Only show if Underspending
         results['losing_auctions'] = active_df[
