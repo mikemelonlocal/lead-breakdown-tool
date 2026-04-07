@@ -2895,7 +2895,29 @@ with main_tab1:
                             if col not in campaign_stats_reset.columns:
                                 campaign_stats_reset[col] = 0
                         
+                        # Try to extract domain from stats data to identify the agent
+                        # Look for URL columns in the stats report
+                        import re
+                        agent_domain = None
+                        url_cols = [col for col in df_in.columns if 'url' in col.lower() or 'link' in col.lower() or 'landing' in col.lower()]
+                        
+                        if url_cols:
+                            # Try to extract domain from first URL column
+                            for url_col in url_cols:
+                                sample_urls = df_in[url_col].dropna().head(5)
+                                for url in sample_urls:
+                                    if pd.notna(url) and 'http' in str(url).lower():
+                                        match = re.search(r'https?://(?:www\.)?([^/?]+)', str(url))
+                                        if match:
+                                            agent_domain = match.group(1)
+                                            break
+                                if agent_domain:
+                                    break
+                        
+                        # Store domain for matching in Tab 2
                         st.session_state.campaign_stats = campaign_stats_reset
+                        st.session_state.stats_agent_domain = agent_domain  # Store the domain
+                        st.session_state.stats_file_uploaded = file_name  # Track which file this is from
 
             
             status_text.text("📈 Aggregating results...")
@@ -5760,23 +5782,86 @@ with main_tab2:
                     accounts = [str(acc).strip() for acc in accounts if str(acc).strip() != '']
                     accounts = sorted(set(accounts))  # Remove duplicates and sort
                     
-                    # Add "All Accounts" option
-                    account_options = ['All Accounts'] + accounts
+                    # Check if we have campaign stats from Tab 1
+                    has_campaign_data = 'campaign_stats' in st.session_state and st.session_state.campaign_stats is not None
+                    has_domain = 'stats_agent_domain' in st.session_state and st.session_state.stats_agent_domain is not None
                     
-                    selected_account = st.selectbox(
-                        "Filter by Account",
-                        options=account_options,
-                        key='account_filter',
-                        help="View recommendations for a specific agent or all accounts combined"
-                    )
+                    # Create two columns for filter controls
+                    filter_col1, filter_col2 = st.columns([3, 2])
                     
-                    # Filter dataframe if specific account selected
+                    with filter_col1:
+                        # Add "All Accounts" option
+                        account_options = ['All Accounts'] + accounts
+                        
+                        selected_account = st.selectbox(
+                            "Filter by Account",
+                            options=account_options,
+                            key='account_filter',
+                            help="View recommendations for a specific agent or all accounts combined"
+                        )
+                    
+                    with filter_col2:
+                        # Only show checkbox if we have campaign conversion data
+                        if has_campaign_data:
+                            filter_to_stats_account = st.checkbox(
+                                "📊 Only account from stats",
+                                value=False,
+                                key='filter_stats_account',
+                                help="Filter to only show the account from the Tab 1 stats report"
+                            )
+                        else:
+                            filter_to_stats_account = False
+                    
+                    # Apply account filter
                     if selected_account != 'All Accounts':
                         ads_df_filtered = ads_df[ads_df['Account'] == selected_account].copy()
-                        st.info(f"📊 Showing data for: **{selected_account}** ({len(ads_df_filtered):,} ad groups)")
                     else:
                         ads_df_filtered = ads_df.copy()
-                        st.info(f"📊 Showing data for: **All {len(accounts)} accounts** ({len(ads_df_filtered):,} ad groups)")
+                    
+                    # Apply stats account filter if checkbox is enabled
+                    if filter_to_stats_account and has_campaign_data:
+                        matched_account = None
+                        
+                        # Try to match using domain from URL report
+                        if url_report_df is not None and not url_report_df.empty and 'Ad final URL' in url_report_df.columns and has_domain:
+                            import re
+                            stats_domain = st.session_state.stats_agent_domain
+                            
+                            # Find accounts whose URLs contain the stats domain
+                            for _, row in url_report_df.iterrows():
+                                url = row.get('Ad final URL')
+                                account = row.get('Account name')
+                                
+                                if pd.notna(url) and pd.notna(account) and stats_domain in str(url):
+                                    matched_account = str(account).strip()
+                                    break
+                        
+                        # If we found a matching account, filter to it
+                        if matched_account and matched_account in ads_df_filtered['Account'].values:
+                            ads_df_filtered = ads_df_filtered[ads_df_filtered['Account'] == matched_account].copy()
+                            file_name = st.session_state.get('stats_file_uploaded', 'stats report')
+                            st.info(f"📊 Showing data for: **{matched_account}** (from {file_name}) — {len(ads_df_filtered):,} ad groups")
+                        elif matched_account:
+                            st.warning(f"⚠️ Account '{matched_account}' from stats report not found in Ad Group Report")
+                            st.info(f"📊 Showing data for: **All {len(accounts)} accounts** ({len(ads_df_filtered):,} ad groups)")
+                        else:
+                            # Fallback: filter to accounts with conversion data
+                            if 'Campaign Conversions' in ads_df_filtered.columns:
+                                accounts_with_conversions = ads_df_filtered[ads_df_filtered['Campaign Conversions'].notna()]['Account'].unique()
+                                if len(accounts_with_conversions) > 0:
+                                    ads_df_filtered = ads_df_filtered[ads_df_filtered['Account'].isin(accounts_with_conversions)].copy()
+                                    st.info(f"📊 Showing accounts with conversion data: **{len(accounts_with_conversions)} accounts** ({len(ads_df_filtered):,} ad groups)")
+                                    st.caption("💡 Upload URL report for precise account matching by domain")
+                                else:
+                                    st.warning("⚠️ No accounts found with conversion data")
+                            else:
+                                st.info(f"📊 Showing data for: **All {len(accounts)} accounts** ({len(ads_df_filtered):,} ad groups)")
+                    else:
+                        # Show normal info message
+                        if selected_account != 'All Accounts':
+                            st.info(f"📊 Showing data for: **{selected_account}** ({len(ads_df_filtered):,} ad groups)")
+                        else:
+                            st.info(f"📊 Showing data for: **All {len(accounts)} accounts** ({len(ads_df_filtered):,} ad groups)")
                 else:
                     ads_df_filtered = ads_df.copy()
 
