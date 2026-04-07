@@ -5377,17 +5377,26 @@ with main_tab2:
             if ads_df is not None:
                 st.success(f"✅ Loaded {len(ads_df):,} ad groups from {len(ads_df['Account'].unique())} account(s)")
                 
-                # Budget Report Upload (Optional)
+                # Budget Report Upload (Optional) - in an expander for visibility
                 st.markdown("---")
-                st.markdown("#### 💰 Budget Report (Optional)")
-                st.markdown("Upload your budget report to filter recommendations by spending status")
-                
-                budget_file = st.file_uploader(
-                    "Upload Budget Report CSV",
-                    type=['csv'],
-                    key='budget_upload',
-                    help="CSV with columns: Agent, Status (Underspending/Overspending/etc)"
-                )
+                with st.expander("💰 **Budget Report (Optional)** - Click to upload", expanded=True):
+                    st.markdown("""
+                    Upload your budget report to automatically filter recommendations by spending status.
+                    
+                    **Benefits:**
+                    - ✅ Only shows "Increase Bids" for accounts that are **Underspending**
+                    - ⚠️ Prioritizes "Decrease Bids" for accounts that are **Overspending**
+                    - 📊 Adds Budget Status column to all recommendations
+                    
+                    **Required columns:** Agent (or Name), Status (Underspending/Overspending/etc)
+                    """)
+                    
+                    budget_file = st.file_uploader(
+                        "Upload Budget Report CSV",
+                        type=['csv'],
+                        key='budget_upload',
+                        help="CSV with Agent names and Budget Status"
+                    )
                 
                 budget_df = None
                 if budget_file is not None:
