@@ -5648,20 +5648,34 @@ with main_tab2:
                 'min_spend_threshold': 20.0,
             }
     
-    # File upload
-        ads_file = st.file_uploader(
-            "Upload Ad Group Report (CSV or Excel)",
+    # File upload - accept multiple files
+        ads_files = st.file_uploader(
+            "Upload Ad Group Report(s) (CSV or Excel)",
             type=['csv', 'xlsx', 'xls'],
             key='ads_upload',
-            help="Export from Google Ads: Reports → Ad Groups → Include impression share columns"
+            accept_multiple_files=True,
+            help="Upload one or more Ad Group Reports (e.g., separate Google and Microsoft exports)"
         )
 
-        if ads_file is not None:
+        if ads_files:
             with st.spinner('Loading ads data...'):
-                ads_df = load_ads_export(ads_file)
+                # Load all uploaded files
+                ads_dfs = []
+                for ads_file in ads_files:
+                    df = load_ads_export(ads_file)
+                    if df is not None:
+                        ads_dfs.append(df)
+                        st.info(f"📄 Loaded {ads_file.name}: {len(df):,} ad groups")
+                
+                # Combine all dataframes
+                if ads_dfs:
+                    ads_df = pd.concat(ads_dfs, ignore_index=True)
+                    st.success(f"✅ Combined {len(ads_files)} file(s): {len(ads_df):,} total ad groups from {len(ads_df['Account'].unique())} account(s)")
+                else:
+                    ads_df = None
+                    st.error("❌ No valid ad group data could be loaded")
 
             if ads_df is not None:
-                st.success(f"✅ Loaded {len(ads_df):,} ad groups from {len(ads_df['Account'].unique())} account(s)")
                 
                 # Budget Report Upload (Optional) - in an expander for visibility
                 st.markdown("---")
