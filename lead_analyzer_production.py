@@ -649,6 +649,13 @@ def analyze_ads_account(df, thresholds):
     Returns:
         Dictionary of categorized ad groups with recommendations
     """
+    # Debug incoming data
+    st.caption(f"📊 analyze_ads_account received: {len(df):,} rows, {len(df.columns)} columns")
+    if 'Platform' in df.columns:
+        platform_counts = df['Platform'].value_counts()
+        st.caption(f"  Platforms: {dict(platform_counts)}")
+    st.caption(f"  Sample columns: {df.columns[:8].tolist()}")
+    
     # Check required columns exist
     required_cols = ['Impr.', 'Ad group status']
     missing_cols = [col for col in required_cols if col not in df.columns]
@@ -6013,10 +6020,20 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
     
     
     # Apply account filter (passed from parent)
+    st.caption(f"🔍 Account filter: selected_account='{selected_account}', has Account column={'Account' in ads_df.columns}")
+    
     if selected_account != 'All Accounts' and 'Account' in ads_df.columns:
+        before_filter = len(ads_df)
         ads_df_filtered = ads_df[ads_df['Account'] == selected_account].copy()
+        after_filter = len(ads_df_filtered)
+        st.caption(f"  Filtered from {before_filter:,} → {after_filter:,} ad groups")
+        
+        if after_filter == 0:
+            available_accounts = ads_df['Account'].unique()[:10]
+            st.warning(f"⚠️ No rows match account '{selected_account}'. Available accounts: {list(available_accounts)}")
     else:
         ads_df_filtered = ads_df.copy()
+        st.caption(f"  Using all {len(ads_df_filtered):,} ad groups")
     
     # Apply stats account filter if checkbox is enabled
     if filter_to_stats_account:
@@ -6821,6 +6838,22 @@ with main_tab2:
                 
                 # Merge everything together
                 all_ads_df = pd.concat(combined_dfs, ignore_index=True)
+                
+                st.caption(f"✅ Combined dataframe: {len(all_ads_df):,} total ad groups")
+                
+                # Show platform breakdown
+                if 'Platform' in all_ads_df.columns:
+                    platform_counts = all_ads_df['Platform'].value_counts()
+                    for platform, count in platform_counts.items():
+                        st.caption(f"  • {platform}: {count:,} ad groups")
+                
+                # Show column sample from each platform
+                st.caption(f"\n🔍 Column check:")
+                for platform_name, ads_df in ads_data_by_platform:
+                    has_account = 'Account' in ads_df.columns
+                    has_impr = 'Impr.' in ads_df.columns
+                    first_col = ads_df.columns[0] if len(ads_df.columns) > 0 else 'N/A'
+                    st.caption(f"  {platform_name}: Has 'Account'={has_account}, Has 'Impr.'={has_impr}, First col='{first_col}'")
                 
                 # Ensure all required columns exist (add with NaN if missing)
                 required_columns = [
