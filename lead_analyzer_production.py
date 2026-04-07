@@ -292,6 +292,132 @@ def match_budget_to_accounts(ads_df, budget_df):
     
     return ads_df
 
+def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None):
+    """
+    Match campaigns and add conversion metrics to ads dataframe.
+    
+    Matching strategy:
+    1. If url_report_df provided: Extract campaign IDs from URLs and match on ID
+    2. Otherwise: Match on campaign name (exact match, then fuzzy match)
+    
+    Args:
+        ads_df: Ads account dataframe from Tab 2
+        campaign_stats_df: Campaign stats from Tab 1
+        url_report_df: Optional URL report with Ad final URL column
+    
+    Returns:
+        ads_df with added "Campaign Conversions" column
+    """
+    if campaign_stats_df is None or campaign_stats_df.empty:
+        return ads_df
+    
+    # Determine which column has campaign IDs in stats data
+    stats_id_col = None
+    for col in campaign_stats_df.columns:
+        if 'campaign' in col.lower() and 'id' in col.lower():
+            stats_id_col = col
+            break
+    
+    # Build campaign map from Tab 1 stats
+    campaign_map = {}
+    
+    if stats_id_col:
+        # Tab 1 has Campaign IDs column - use that as primary key
+        for _, row in campaign_stats_df.iterrows():
+            campaign_id = str(row[stats_id_col]).strip() if pd.notna(row[stats_id_col]) else None
+            if campaign_id:
+                campaign_map[campaign_id] = {
+                    'conversions': row.get('Total Conversions', 0)
+                }
+    
+    # Also map by campaign name as fallback
+    campaign_name_map = {}
+    if 'Campaign' in campaign_stats_df.columns:
+        for _, row in campaign_stats_df.iterrows():
+            campaign_name = str(row['Campaign']).strip() if pd.notna(row['Campaign']) else None
+            if campaign_name:
+                campaign_name_map[campaign_name] = {
+                    'conversions': row.get('Total Conversions', 0)
+                }
+    
+    # Strategy 1: URL-based matching (if URL report provided)
+    if url_report_df is not None and not url_report_df.empty and 'Ad final URL' in url_report_df.columns:
+        import re
+        
+        # Extract campaign IDs from URLs
+        def extract_campaign_id(url):
+            if pd.isna(url):
+                return None
+            match = re.search(r'cmpid=([^&]+)', str(url))
+            return match.group(1) if match else None
+        
+        # Create Ad Group -> Campaign ID mapping from URL report
+        url_map = {}
+        for _, row in url_report_df.iterrows():
+            ad_group = str(row['Ad group']).strip() if 'Ad group' in row and pd.notna(row['Ad group']) else None
+            account = str(row['Account name']).strip() if 'Account name' in row and pd.notna(row['Account name']) else None
+            url = row.get('Ad final URL')
+            
+            if ad_group and url:
+                campaign_id = extract_campaign_id(url)
+                if campaign_id:
+                    # Use Account + Ad group as composite key for precise matching
+                    key = f"{account}|{ad_group}" if account else ad_group
+                    url_map[key] = campaign_id
+        
+        # Match ads data with campaign IDs
+        def get_conversions_by_url(row):
+            ad_group = str(row['Ad group']).strip() if pd.notna(row.get('Ad group')) else None
+            account = str(row['Account']).strip() if pd.notna(row.get('Account')) else None
+            
+            if not ad_group:
+                return None
+            
+            # Try composite key first (Account + Ad group)
+            key = f"{account}|{ad_group}" if account else ad_group
+            campaign_id = url_map.get(key)
+            
+            if not campaign_id:
+                # Try just ad group
+                campaign_id = url_map.get(ad_group)
+            
+            if campaign_id and campaign_id in campaign_map:
+                return campaign_map[campaign_id]['conversions']
+            
+            return None
+        
+        ads_df['Campaign Conversions'] = ads_df.apply(get_conversions_by_url, axis=1)
+    
+    # Strategy 2: Name-based matching (default or fallback)
+    else:
+        def get_conversions_by_name(campaign_name):
+            if pd.isna(campaign_name):
+                return None
+            
+            campaign_name = str(campaign_name).strip()
+            
+            # Try exact match first
+            if campaign_name in campaign_name_map:
+                return campaign_name_map[campaign_name]['conversions']
+            
+            # Try fuzzy match (strip device suffixes like "- Desktop", "- Mobile")
+            # Common patterns: "Legacy - Auto 0055 - SF Auto - Desktop" -> "Legacy - Auto 0055 - SF Auto"
+            base_name = campaign_name
+            for suffix in [' - Desktop', ' - Mobile', ' - Tablet']:
+                if base_name.endswith(suffix):
+                    base_name = base_name[:-len(suffix)]
+                    break
+            
+            if base_name != campaign_name and base_name in campaign_name_map:
+                return campaign_name_map[base_name]['conversions']
+            
+            return None
+        
+        if 'Campaign' in ads_df.columns:
+            ads_df['Campaign Conversions'] = ads_df['Campaign'].apply(get_conversions_by_name)
+    
+    return ads_df
+
 def load_ads_export(file):
     """
     Load and clean Google Ads ad group export.
@@ -450,7 +576,20 @@ def analyze_ads_account(df, thresholds):
     if 'Current Bid' in results['major_opportunity'].columns:
         results['major_opportunity']['Recommended New Bid'] = results['major_opportunity']['Current Bid'] * 1.45
     
-    # 6. ZERO IMPRESSIONS
+    # 6. NO CONVERSIONS (only if campaign conversion data available)
+    if 'Campaign Conversions' in active_df.columns:
+        results['no_conversions'] = active_df[
+            (active_df['Campaign Conversions'] == 0) &
+            (active_df['Cost'] > 100)  # Significant spend
+        ].copy()
+        results['no_conversions']['recommendation'] = 'Review targeting OR pause campaign'
+        results['no_conversions']['reason'] = 'High spend, zero conversions'
+        results['no_conversions']['priority'] = 'High'
+    else:
+        # If no conversion data, return empty dataframe
+        results['no_conversions'] = pd.DataFrame()
+    
+    # 7. ZERO IMPRESSIONS
     results['zero_impressions'] = df[
         (df['Impr.'] == 0) &
         (df['Ad group status'] == 'Enabled')
@@ -2704,6 +2843,36 @@ with main_tab1:
                 include_phone=include_phone_clicks,
                 include_sms=include_sms_clicks
             )
+            
+            # Store campaign-level stats in session state for Tab 2
+            # Aggregate by campaign to get conversions and CPL
+            if not df_in.empty:
+                campaign_col = get_col(df_in, ["campaign_id", "campaign id", "campaign"])
+                if campaign_col:
+                    # Count leads by campaign
+                    campaign_stats = df_in.groupby(campaign_col).agg({
+                        get_col(df_in, ["quote_starts", "quote starts", "quote start", "qs"]): 'sum',
+                        get_col(df_in, ["phone_clicks", "phone clicks", "phone click"]): 'sum',
+                        get_col(df_in, ["sms_clicks", "sms clicks", "sms click"]): 'sum'
+                    }).fillna(0)
+                    
+                    # Calculate total conversions
+                    qs_col = get_col(df_in, ["quote_starts", "quote starts", "quote start", "qs"])
+                    phone_col = get_col(df_in, ["phone_clicks", "phone clicks", "phone click"])
+                    sms_col = get_col(df_in, ["sms_clicks", "sms clicks", "sms click"])
+                    
+                    campaign_stats['Total Conversions'] = 0
+                    if qs_col and include_quote_starts:
+                        campaign_stats['Total Conversions'] += campaign_stats[qs_col]
+                    if phone_col and include_phone_clicks:
+                        campaign_stats['Total Conversions'] += campaign_stats[phone_col]
+                    if sms_col and include_sms_clicks:
+                        campaign_stats['Total Conversions'] += campaign_stats[sms_col]
+                    
+                    # Store in session state
+                    st.session_state.campaign_stats = campaign_stats.reset_index()
+                    st.session_state.campaign_stats.columns = ['Campaign', 'Quote Starts', 'Phone Clicks', 'SMS Clicks', 'Total Conversions']
+
             
             status_text.text("📈 Aggregating results...")
             progress_bar.progress(90)
@@ -5504,6 +5673,62 @@ with main_tab2:
                     total = len(ads_df['Account'].unique())
                     st.info(f"✅ Matched budget status for {matched} of {total} accounts")
                 
+                # URL Report Upload (Optional) - for precise campaign ID matching
+                st.markdown("---")
+                with st.expander("🔗 **URL Report (Optional)** - For more precise campaign matching", expanded=False):
+                    st.markdown("""
+                    Upload a URL report to match campaigns by ID instead of name. This is more accurate when campaign names vary (e.g., "Legacy - Auto 0055" vs "Legacy - Auto 0055 - Desktop").
+                    
+                    **Benefits:**
+                    - ✅ More precise campaign matching using Campaign IDs from URLs
+                    - ✅ Handles campaign name variations automatically
+                    - ✅ Works even when device suffixes differ
+                    
+                    **Required columns:** Account name, Ad group, Ad final URL (with cmpid parameter)
+                    
+                    **Example URL:** `https://domain.com/?cmpid=MLGDA0055-003RE2`
+                    
+                    This will match the Campaign ID `MLGDA0055-003RE2` from your Tab 1 stats report.
+                    """)
+                    
+                    url_report_file = st.file_uploader(
+                        "Upload URL Report CSV",
+                        type=['csv'],
+                        key='url_report_upload',
+                        help="Google Ads report with Ad final URL column"
+                    )
+                
+                url_report_df = None
+                if url_report_file is not None:
+                    try:
+                        # Try UTF-16 first (common Google Ads export format)
+                        url_report_df = pd.read_csv(url_report_file, encoding='utf-16', sep='\t', skiprows=2)
+                    except:
+                        url_report_file.seek(0)
+                        try:
+                            url_report_df = pd.read_csv(url_report_file, encoding='utf-8')
+                        except:
+                            url_report_file.seek(0)
+                            url_report_df = pd.read_csv(url_report_file)
+                    
+                    if url_report_df is not None and not url_report_df.empty:
+                        st.success(f"✅ Loaded URL report with {len(url_report_df):,} rows")
+                
+                # Enrich with campaign conversion data from Tab 1 (if available)
+                if 'campaign_stats' in st.session_state:
+                    ads_df = enrich_ads_with_campaign_stats(ads_df, st.session_state.campaign_stats, url_report_df)
+                    
+                    # Show matching summary
+                    matched_campaigns = ads_df['Campaign Conversions'].notna().sum()
+                    total_campaigns = len(ads_df['Campaign'].unique())
+                    
+                    if url_report_df is not None:
+                        st.success(f"✅ Matched conversion data for {matched_campaigns} ad groups using Campaign IDs from URL report")
+                    else:
+                        st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_campaigns} campaigns from Tab 1 (using campaign names)")
+                        st.info("💡 Upload a URL report above for more precise matching by Campaign ID")
+                
+                
                 # Account Filter
                 if 'Account' in ads_df.columns:
                     # Get unique accounts, remove NaN, convert to strings, and sort
@@ -5618,6 +5843,7 @@ with main_tab2:
                     f"✅ Maintain ({len(analysis_results['perfect_position'])})",
                     f"🔻 Decrease Bids ({len(analysis_results['overpaying_position_1'])})",
                     f"⚠️ Review ({len(analysis_results['poor_quality'])})",
+                    f"❌ No Conversions ({len(analysis_results['no_conversions'])})",
                     f"🛑 Cleanup ({len(analysis_results['zero_impressions'])})"
                 ])
 
@@ -5634,7 +5860,8 @@ with main_tab2:
                         """)
 
                         # Display table
-                        display_cols = ['Account', 'Ad group', 'Campaign', 'Current Bid', 'Recommended New Bid',
+                        display_cols = ['Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
+                                      'Current Bid', 'Recommended New Bid',
                                       'CTR', 'Search impr. share', 'Search lost IS (rank)', 
                                       'Cost', 'Clicks']
                         
@@ -5644,6 +5871,8 @@ with main_tab2:
                         display_df = df_opp[available_cols].copy()
                         
                         # Format metrics
+                        if 'Campaign Conversions' in display_df.columns:
+                            display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
                         if 'Current Bid' in display_df.columns:
                             display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
                         if 'Recommended New Bid' in display_df.columns:
@@ -5663,6 +5892,7 @@ with main_tab2:
                         rename_map = {
                             'Current Bid': 'Current Bid',
                             'Recommended New Bid': 'New Bid (+45%)',
+                            'Campaign Conversions': 'Campaign Leads',
                             'CTR': 'CTR',
                             'Search impr. share': 'Impr. Share',
                             'Search lost IS (rank)': 'Lost to Bids'
@@ -5729,15 +5959,17 @@ with main_tab2:
                             """)
 
 
-                        display_cols = ['Account', 'Ad group', 'Campaign', 'Budget Status', 'Current Bid', 'Recommended New Bid',
-                                      'Search impr. share', 'Search lost IS (rank)', 'Search top IS', 
-                                      'CTR', 'Cost']
+                        display_cols = ['Account', 'Ad group', 'Campaign', 'Campaign Conversions', 'Budget Status', 
+                                      'Current Bid', 'Recommended New Bid', 'Search impr. share', 
+                                      'Search lost IS (rank)', 'Search top IS', 'CTR', 'Cost']
                         
                         # Only include columns that exist
                         available_cols = [col for col in display_cols if col in df_inc.columns]
                         display_df = df_inc[available_cols].copy()
                         
                         # Format metrics
+                        if 'Campaign Conversions' in display_df.columns:
+                            display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
                         if 'Current Bid' in display_df.columns:
                             display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
                         if 'Recommended New Bid' in display_df.columns:
@@ -5802,12 +6034,16 @@ with main_tab2:
                         Perfect position 2-3 sweet spot! Keep these bids as-is.
                         """)
 
-                        display_cols = ['Account', 'Ad group', 'Campaign', 'Search top IS', 'Search abs. top IS',
-                                      'CTR', 'Avg. CPC', 'Cost']
+                        display_cols = ['Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
+                                      'Search top IS', 'Search abs. top IS', 'CTR', 'Avg. CPC', 'Cost']
 
                         # Only include columns that exist
                         available_cols = [col for col in display_cols if col in df_maintain.columns]
                         display_df = df_maintain[available_cols].copy()
+                        
+                        # Format metrics
+                        if 'Campaign Conversions' in display_df.columns:
+                            display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
                         display_df['Search top IS'] = display_df['Search top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
                         display_df['Search abs. top IS'] = display_df['Search abs. top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
                         display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
@@ -5850,7 +6086,8 @@ with main_tab2:
                         These ad groups are appearing in position 1 too often. Decrease bids to drop to position 2-3.
                         """)
 
-                        display_cols = ['Account', 'Ad group', 'Campaign', 'Budget Status', 'Current Bid', 'Recommended New Bid',
+                        display_cols = ['Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
+                                      'Budget Status', 'Current Bid', 'Recommended New Bid',
                                       'Search abs. top IS', 'Search top IS', 'Cost']
                         
                         # Only include columns that exist
@@ -5858,6 +6095,8 @@ with main_tab2:
                         display_df = df_dec[available_cols].copy()
                         
                         # Format metrics
+                        if 'Campaign Conversions' in display_df.columns:
+                            display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
                         if 'Current Bid' in display_df.columns:
                             display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
                         if 'Recommended New Bid' in display_df.columns:
@@ -5915,14 +6154,17 @@ with main_tab2:
                         Low engagement suggests poor ad/keyword relevance. Fix ads before adjusting bids.
                         """)
 
-                        display_cols = ['Account', 'Ad group', 'Campaign', 'Current Bid', 'Recommended New Bid',
-                                      'CTR', 'Search impr. share', 'Cost', 'Clicks']
+                        display_cols = ['Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
+                                      'Current Bid', 'Recommended New Bid', 'CTR', 'Search impr. share', 
+                                      'Cost', 'Clicks']
                         
                         # Only include columns that exist
                         available_cols = [col for col in display_cols if col in df_review.columns]
                         display_df = df_review[available_cols].copy()
                         
                         # Format metrics
+                        if 'Campaign Conversions' in display_df.columns:
+                            display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
                         if 'Current Bid' in display_df.columns:
                             display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
                         if 'Recommended New Bid' in display_df.columns:
@@ -5971,8 +6213,85 @@ with main_tab2:
                     else:
                         st.success("✅ No major quality issues detected.")
 
-                # Cleanup
+                # No Conversions (only shows if campaign data available)
                 with rec_tabs[5]:
+                    df_no_conv = analysis_results['no_conversions']
+                    if len(df_no_conv) > 0:
+                        st.markdown(f"""
+                        **Logic:** Campaign has 0 conversions AND Cost >$100
+
+                        These ad groups are in campaigns spending money but generating ZERO leads. 
+                        This is the highest priority issue - you're wasting budget.
+                        
+                        **Possible causes:**
+                        - Wrong audience targeting
+                        - Landing page issues  
+                        - Tracking problems
+                        - Poor keyword intent match
+                        """)
+
+                        display_cols = ['Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
+                                      'Current Bid', 'Cost', 'Clicks', 'CTR', 'Search impr. share']
+                        
+                        # Only include columns that exist
+                        available_cols = [col for col in display_cols if col in df_no_conv.columns]
+                        display_df = df_no_conv[available_cols].copy()
+                        
+                        # Format metrics
+                        if 'Campaign Conversions' in display_df.columns:
+                            display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
+                        if 'Current Bid' in display_df.columns:
+                            display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        if 'Cost' in display_df.columns:
+                            display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+                        if 'Clicks' in display_df.columns:
+                            display_df['Clicks'] = display_df['Clicks'].apply(lambda x: format_ads_metric(x, 'number'))
+                        if 'CTR' in display_df.columns:
+                            display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                        if 'Search impr. share' in display_df.columns:
+                            display_df['Search impr. share'] = display_df['Search impr. share'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                        
+                        # Rename columns
+                        rename_map = {
+                            'Campaign Conversions': 'Campaign Leads',
+                            'Search impr. share': 'Impr. Share'
+                        }
+                        display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
+                        
+                        # Metric legend
+                        st.markdown("""
+                        <div style='background: #f8d7da; padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #E9736E;'>
+                            <strong>🚨 CRITICAL: Zero Conversions!</strong><br/>
+                            <span style='color: #666; font-size: 14px;'>
+                            <b>Campaign Leads</b> = Total conversions for the entire campaign (all ad groups combined)<br/>
+                            <b>Action</b> = PAUSE these campaigns immediately OR investigate why tracking shows zero conversions<br/>
+                            <b>Warning:</b> You're spending money and getting clicks but NO leads
+                            </span>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                        st.dataframe(display_df, use_container_width=True, hide_index=True)
+                        
+                        # Show total wasted spend
+                        total_waste = df_no_conv['Cost'].sum()
+                        st.error(f"💸 **Total Wasted Spend:** ${total_waste:,.2f} across {len(df_no_conv)} ad groups with zero conversions")
+
+                        csv = df_no_conv.to_csv(index=False)
+                        st.download_button(
+                            "⬇️ Download No Conversions List",
+                            csv,
+                            "no_conversions.csv",
+                            "text/csv",
+                            use_container_width=True
+                        )
+                    else:
+                        if 'Campaign Conversions' in ads_df_filtered.columns:
+                            st.success("✅ All campaigns with significant spend are generating conversions!")
+                        else:
+                            st.info("ℹ️ No campaign conversion data available. Upload stats in Tab 1 to see this analysis.")
+
+                # Cleanup
+                with rec_tabs[6]:
                     df_cleanup = analysis_results['zero_impressions']
                     if len(df_cleanup) > 0:
                         st.markdown(f"""
