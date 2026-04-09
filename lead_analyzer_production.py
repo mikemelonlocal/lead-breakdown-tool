@@ -317,15 +317,25 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
     
     # Helper function to detect office from campaign name
     def detect_office(campaign_name):
-        """Detect office (Legacy or MOA) from campaign name."""
+        """Detect office (Legacy or MOA) from campaign name.
+        
+        Logic:
+        - Campaign contains "MOA" → MOA office
+        - Campaign contains "Legacy" → Legacy office
+        - Neither → Default to Legacy office
+        """
         if pd.isna(campaign_name):
-            return None
+            return 'Legacy'  # Default to Legacy
+        
         name_upper = str(campaign_name).upper()
-        if 'LEGACY' in name_upper:
-            return 'Legacy'
-        elif 'MOA' in name_upper:
+        
+        # Check for MOA first (more specific)
+        if 'MOA' in name_upper:
             return 'MOA'
-        return None
+        
+        # Everything else defaults to Legacy
+        # (including campaigns with "Legacy" in name and campaigns with neither)
+        return 'Legacy'
     
     # Find Campaign ID column in Tab 1 stats
     stats_id_col = None
@@ -446,18 +456,18 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                     campaign_id = url_map.get(ad_group)
                 
                 if campaign_id:
-                    # Determine office from campaign name
-                    office = detect_office(campaign_name) if has_office else None
+                    # Determine office from campaign name (always returns Legacy or MOA)
+                    office = detect_office(campaign_name)
                     
-                    # Try office-specific match first
-                    if office:
+                    # Use office-specific match if stats have office column
+                    if has_office:
                         lookup_key = (campaign_id, office)
                         if lookup_key in campaign_map:
                             return campaign_map[lookup_key]['conversions']
-                    
-                    # Fallback to non-office match
-                    if campaign_id in campaign_map:
-                        return campaign_map[campaign_id]['conversions']
+                    else:
+                        # No office in stats - direct match
+                        if campaign_id in campaign_map:
+                            return campaign_map[campaign_id]['conversions']
                 
                 return None
             
@@ -488,17 +498,19 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                 # Remove brackets ([604582413] -> 604582413)
                 campaign_id = campaign_id.replace('[', '').replace(']', '').strip()
             
-            # Determine office from campaign name
-            office = detect_office(campaign_name) if has_office else None
+            # Determine office from campaign name (always returns Legacy or MOA)
+            office = detect_office(campaign_name)
             
-            # Try office-specific match first
-            if office:
+            # Use office-specific match if stats have office column
+            if has_office:
                 lookup_key = (campaign_id, office)
                 if lookup_key in campaign_map:
                     return campaign_map[lookup_key]['conversions']
+            else:
+                # No office in stats - direct match
+                return campaign_map.get(campaign_id, {}).get('conversions', None)
             
-            # Fallback to non-office match
-            return campaign_map.get(campaign_id, {}).get('conversions', None)
+            return None
         
         ads_df['Campaign Conversions'] = ads_df.apply(get_conversions_by_direct_id, axis=1)
         return ads_df
@@ -510,35 +522,40 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         
         campaign_name = str(campaign_name).strip()
         
-        # Determine office from campaign name
-        office = detect_office(campaign_name) if has_office else None
+        # Determine office from campaign name (always returns Legacy or MOA)
+        office = detect_office(campaign_name)
         
-        # Try office-specific exact match first
-        if office:
+        # Use office-specific match if stats have office column
+        if has_office:
+            # Try exact match with office
             lookup_key = (campaign_name, office)
             if lookup_key in campaign_name_map:
                 return campaign_name_map[lookup_key]['conversions']
-        
-        # Try non-office exact match
-        if campaign_name in campaign_name_map:
-            return campaign_name_map[campaign_name]['conversions']
-        
-        # Try fuzzy match (strip device suffixes like "- Desktop", "- Mobile")
-        base_name = campaign_name
-        for suffix in [' - Desktop', ' - Mobile', ' - Tablet']:
-            if base_name.endswith(suffix):
-                base_name = base_name[:-len(suffix)]
-                break
-        
-        if base_name != campaign_name:
-            # Try office-specific fuzzy match
-            if office:
+            
+            # Try fuzzy match (strip device suffixes like "- Desktop", "- Mobile")
+            base_name = campaign_name
+            for suffix in [' - Desktop', ' - Mobile', ' - Tablet']:
+                if base_name.endswith(suffix):
+                    base_name = base_name[:-len(suffix)]
+                    break
+            
+            if base_name != campaign_name:
                 lookup_key = (base_name, office)
                 if lookup_key in campaign_name_map:
                     return campaign_name_map[lookup_key]['conversions']
+        else:
+            # No office in stats - try direct name matching
+            if campaign_name in campaign_name_map:
+                return campaign_name_map[campaign_name]['conversions']
             
-            # Try non-office fuzzy match
-            if base_name in campaign_name_map:
+            # Try fuzzy match
+            base_name = campaign_name
+            for suffix in [' - Desktop', ' - Mobile', ' - Tablet']:
+                if base_name.endswith(suffix):
+                    base_name = base_name[:-len(suffix)]
+                    break
+            
+            if base_name != campaign_name and base_name in campaign_name_map:
                 return campaign_name_map[base_name]['conversions']
         
         return None
