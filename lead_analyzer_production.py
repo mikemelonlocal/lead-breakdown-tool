@@ -5879,12 +5879,22 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
     
     # Match budget status to accounts if budget data provided
     if budget_df is not None:
+        # Debug: Show what we're working with
+        with st.expander("🔧 Budget Matching Debug", expanded=False):
+            st.caption(f"Budget DF shape: {budget_df.shape}")
+            st.caption(f"Budget DF columns: {budget_df.columns.tolist()}")
+            if len(budget_df) > 0:
+                st.caption(f"Sample row: {budget_df.iloc[0].to_dict()}")
+        
         ads_df = match_budget_to_accounts(ads_df, budget_df)
         
-        # Show matching summary
-        matched = ads_df['Budget Status'].notna().sum()
-        total = len(ads_df['Account'].unique())
-        st.info(f"✅ Matched budget status for {matched} of {total} accounts")
+        # Show matching summary (only if Budget Status column was added)
+        if 'Budget Status' in ads_df.columns:
+            matched = ads_df['Budget Status'].notna().sum()
+            total = len(ads_df['Account'].unique())
+            st.info(f"✅ Matched budget status for {matched} of {total} accounts")
+        else:
+            st.warning("⚠️ Budget data loaded but 'Budget Status' column not found")
     
     # URL Report Upload (Optional) - for precise campaign ID matching
     st.markdown("---")
@@ -6775,26 +6785,15 @@ with main_tab2:
                             elif 'google' in filename_lower:
                                 platform = "Google Ads"
                             else:
-                                # Check if file has Microsoft-specific metadata in the dataframe
-                                # Microsoft files will have certain column combinations after mapping
+                                # Check if file has Microsoft-specific columns after mapping
+                                # "Device type" is unique to Microsoft (Google doesn't have this)
                                 has_device_type = 'Device type' in df.columns
-                                has_exact_match_is = 'Search exact match IS' in df.columns
                                 
-                                # Or check data patterns
-                                if has_device_type or has_exact_match_is:
+                                if has_device_type:
                                     platform = "Microsoft Ads"
                                 else:
-                                    # Try Campaign ID format (though this is less reliable after cleaning)
-                                    if 'Campaign ID' in df.columns:
-                                        sample_ids = df['Campaign ID'].dropna().astype(str).head(10)
-                                        # Google IDs are typically 10-11 digits
-                                        if sample_ids.str.len().mean() > 9:
-                                            platform = "Google Ads"
-                                        else:
-                                            platform = "Microsoft Ads"  # Shorter IDs are Microsoft
-                                    else:
-                                        # Default to filename
-                                        platform = "Google Ads" if 'group' in filename_lower else "Microsoft Ads"
+                                    # Must be Google
+                                    platform = "Google Ads"
                             
                             ads_data_by_platform.append((platform, df))
                             st.info(f"📄 Loaded {ads_file.name}: {len(df):,} ad groups → **{platform}**")
@@ -6832,16 +6831,59 @@ with main_tab2:
                     try:
                         filename = shared_budget_file.name.lower()
                         if filename.endswith('.xlsx') or filename.endswith('.xls'):
-                            shared_budget_df = pd.read_excel(shared_budget_file)
+                            budget_df_raw = pd.read_excel(shared_budget_file)
                         else:
-                            shared_budget_df = pd.read_csv(shared_budget_file)
+                            budget_df_raw = pd.read_csv(shared_budget_file)
                         
-                        st.success(f"✅ Loaded budget data for {len(shared_budget_df)} account(s)")
+                        st.success(f"✅ Loaded budget data for {len(budget_df_raw)} account(s)")
                         
-                        # Extract CSM list if column exists
-                        if 'CSM' in shared_budget_df.columns:
-                            available_csms = sorted(shared_budget_df['CSM'].dropna().unique().tolist())
+                        # Extract Agent and Status columns
+                        # Look for 'Agent' column
+                        agent_col = None
+                        for col in budget_df_raw.columns:
+                            if 'agent' in str(col).lower() and 'status' not in str(col).lower():
+                                agent_col = col
+                                break
+                        
+                        # Look for Status column - prioritize 'Spend Status'
+                        status_col = None
+                        for col in budget_df_raw.columns:
+                            col_lower = str(col).lower()
+                            if 'spend' in col_lower and 'status' in col_lower:
+                                status_col = col
+                                break
+                        
+                        if status_col is None:
+                            for col in budget_df_raw.columns:
+                                if 'status' in str(col).lower():
+                                    status_col = col
+                                    break
+                        
+                        # Create processed budget dataframe with Agent and Status
+                        if agent_col and status_col:
+                            shared_budget_df = budget_df_raw[[agent_col, status_col]].copy()
+                            shared_budget_df.columns = ['Agent', 'Status']
+                            
+                            # Clean data
+                            shared_budget_df = shared_budget_df.dropna(subset=['Agent', 'Status'])
+                            shared_budget_df['Agent'] = shared_budget_df['Agent'].astype(str).str.strip()
+                            shared_budget_df['Status'] = shared_budget_df['Status'].astype(str).str.strip()
+                            
+                            st.caption(f"📋 Using columns: '{agent_col}' → Agent, '{status_col}' → Status")
+                        else:
+                            st.error(f"❌ Could not find Agent and Status columns in budget file")
+                            st.caption(f"Available columns: {', '.join(budget_df_raw.columns.tolist()[:10])}")
+                            shared_budget_df = None
+                        
+                        # Extract CSM list if column exists (from raw data)
+                        if shared_budget_df is not None and 'CSM' in budget_df_raw.columns:
+                            available_csms = sorted(budget_df_raw['CSM'].dropna().unique().tolist())
                             st.caption(f"📊 Found {len(available_csms)} CSM(s): {', '.join(available_csms)}")
+                            
+                            # Add CSM to processed budget df for filtering
+                            if agent_col in budget_df_raw.columns and 'CSM' in budget_df_raw.columns:
+                                csm_map = budget_df_raw.set_index(agent_col)['CSM'].to_dict()
+                                shared_budget_df['CSM'] = shared_budget_df['Agent'].map(csm_map)
                         
                     except Exception as e:
                         st.error(f"❌ Error loading budget report: {str(e)}")
