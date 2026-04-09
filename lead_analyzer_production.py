@@ -7349,10 +7349,8 @@ if 'debug_info' in st.session_state and st.session_state.debug_info:
             )
         
         with col2:
-            # Copy button using Streamlit's built-in functionality
-            if st.button("📋 Copy to Clipboard", use_container_width=True):
-                st.code(debug_text, language=None)
-                st.success("✅ Debug info displayed above - you can select and copy it")
+            st.markdown("**📋 Copy Debug Text:**")
+            st.code(debug_text, language=None)
 
 # ---- Footer ----
 st.markdown("<hr/>", unsafe_allow_html=True)
