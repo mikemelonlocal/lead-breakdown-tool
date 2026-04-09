@@ -399,7 +399,102 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         st.session_state.debug_info['url_report_columns'] = url_report_df.columns.tolist()
         st.session_state.debug_info['url_report_shape'] = url_report_df.shape
         
-        # Look for Final URL column
+        # FIRST: Try to match using Campaign ID column from URL report (most reliable)
+        url_campaign_id_col = None
+        for col in url_report_df.columns:
+            if 'campaign' in col.lower() and 'id' in col.lower():
+                url_campaign_id_col = col
+                break
+        
+        if url_campaign_id_col and campaign_map:
+            # Create mapping: (Account + Ad Group) -> Campaign ID
+            ad_group_to_campaign_id = {}
+            
+            for _, row in url_report_df.iterrows():
+                campaign_id = str(row.get(url_campaign_id_col, '')).strip() if pd.notna(row.get(url_campaign_id_col)) else None
+                ad_group = None
+                account = None
+                campaign_name = None
+                
+                # Get Ad Group
+                for col in ['Ad group', 'Ad group name', 'Adgroup']:
+                    if col in row and pd.notna(row[col]):
+                        ad_group = str(row[col]).strip()
+                        break
+                
+                # Get Account
+                for col in ['Account', 'Account name']:
+                    if col in row and pd.notna(row[col]):
+                        account = str(row[col]).strip()
+                        break
+                
+                # Get Campaign Name
+                for col in ['Campaign', 'Campaign name']:
+                    if col in row and pd.notna(row[col]):
+                        campaign_name = str(row[col]).strip()
+                        break
+                
+                if ad_group and campaign_id and campaign_id != 'nan':
+                    # Normalize Campaign ID
+                    if '.' in campaign_id:
+                        campaign_id = campaign_id.split('.')[0]
+                    
+                    # Use composite key for precise matching
+                    key = f"{account}|{ad_group}" if account else ad_group
+                    ad_group_to_campaign_id[key] = {
+                        'campaign_id': campaign_id,
+                        'campaign_name': campaign_name
+                    }
+            
+            # Match ads data using Campaign ID from URL report
+            def get_conversions_via_campaign_id(row):
+                ad_group = str(row.get('Ad group', '')).strip() if pd.notna(row.get('Ad group')) else None
+                account = str(row.get('Account', '')).strip() if pd.notna(row.get('Account')) else None
+                
+                if not ad_group:
+                    return None
+                
+                # Try composite key first (Account + Ad group)
+                key = f"{account}|{ad_group}" if account else ad_group
+                mapping_data = ad_group_to_campaign_id.get(key)
+                
+                if not mapping_data:
+                    # Try just ad group
+                    mapping_data = ad_group_to_campaign_id.get(ad_group)
+                
+                if not mapping_data:
+                    return None
+                
+                campaign_id = mapping_data['campaign_id']
+                campaign_name = mapping_data.get('campaign_name', '')
+                
+                # Detect office from campaign name (always returns Legacy or MOA)
+                office = detect_office(campaign_name)
+                
+                # Use office-specific match if stats have office column
+                if has_office:
+                    lookup_key = (campaign_id, office)
+                    if lookup_key in campaign_map:
+                        return campaign_map[lookup_key]['conversions']
+                else:
+                    # No office in stats - direct match
+                    if campaign_id in campaign_map:
+                        return campaign_map[campaign_id]['conversions']
+                
+                return None
+            
+            ads_df['Campaign Conversions'] = ads_df.apply(get_conversions_via_campaign_id, axis=1)
+            
+            # Store debug info
+            st.session_state.debug_info['url_campaign_id_matching'] = {
+                'url_campaign_id_col': url_campaign_id_col,
+                'mappings_created': len(ad_group_to_campaign_id),
+                'sample_mappings': list(ad_group_to_campaign_id.items())[:5]
+            }
+            
+            return ads_df
+        
+        # FALLBACK: Look for Final URL column and extract tracking IDs (less reliable)
         final_url_col = None
         for col in url_report_df.columns:
             col_lower = str(col).lower()
@@ -3289,6 +3384,12 @@ with main_tab1:
                         for col in ['Quote Starts', 'Phone Clicks', 'SMS Clicks']:
                             if col not in campaign_stats_reset.columns:
                                 campaign_stats_reset[col] = 0
+                        
+                        # Add Platform detection using existing classify_platform function
+                        # For stats data, we don't have traffic source, so pass empty string
+                        campaign_stats_reset['Platform'] = campaign_stats_reset['Campaign'].apply(
+                            lambda x: classify_platform(str(x), '')
+                        )
                         
                         # Try to extract domain from stats data to identify the agent
                         # Look for URL columns in the stats report
@@ -6930,6 +7031,13 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
 # ========== TAB 2: ADS ACCOUNT HEALTH ==========
 with main_tab2:
         st.markdown("### Ads Account Health Checker")
+        
+        # DEBUG: Check if campaign_stats exists
+        if 'campaign_stats' in st.session_state:
+            st.success(f"✅ Campaign stats available: {len(st.session_state.campaign_stats)} campaigns from Tab 1")
+        else:
+            st.warning("⚠️ No campaign stats found - upload stats in Tab 1 to enable conversion matching")
+        
         st.markdown("""
         Upload your Google Ads **Ad Group Report** to get bid optimization recommendations 
         based on your position 2-3 strategy.
