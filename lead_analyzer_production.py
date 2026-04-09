@@ -301,6 +301,9 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
     2. If ads_df has Campaign ID column: Direct match with Tab 1 Campaign IDs
     3. Otherwise: Match on campaign name (exact match, then fuzzy match)
     
+    Office filtering: If campaign_stats has an Office column, campaigns are matched
+    by office based on whether campaign name contains "Legacy" or "MOA"
+    
     Args:
         ads_df: Ads account dataframe from Tab 2
         campaign_stats_df: Campaign stats from Tab 1
@@ -312,6 +315,18 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
     if campaign_stats_df is None or campaign_stats_df.empty:
         return ads_df
     
+    # Helper function to detect office from campaign name
+    def detect_office(campaign_name):
+        """Detect office (Legacy or MOA) from campaign name."""
+        if pd.isna(campaign_name):
+            return None
+        name_upper = str(campaign_name).upper()
+        if 'LEGACY' in name_upper:
+            return 'Legacy'
+        elif 'MOA' in name_upper:
+            return 'MOA'
+        return None
+    
     # Find Campaign ID column in Tab 1 stats
     stats_id_col = None
     for col in campaign_stats_df.columns:
@@ -319,8 +334,12 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
             stats_id_col = col
             break
     
-    # Build campaign map from Tab 1 stats (Campaign ID -> conversions)
+    # Build campaign map from Tab 1 stats
+    # Key is (Campaign ID or Name, Office) -> conversions
     campaign_map = {}
+    
+    # Check if Office column exists (multi-office scenario)
+    has_office = 'Office' in campaign_stats_df.columns
     
     if stats_id_col:
         # Tab 1 has Campaign IDs column - use that as primary key
@@ -330,7 +349,15 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                 # Remove any decimal points from float strings (20643283194.0 -> 20643283194)
                 if '.' in campaign_id:
                     campaign_id = campaign_id.split('.')[0]
-                campaign_map[campaign_id] = {
+                
+                # Store with office if available
+                if has_office:
+                    office = row.get('Office', 'Unknown')
+                    key = (campaign_id, office)
+                else:
+                    key = campaign_id
+                    
+                campaign_map[key] = {
                     'conversions': row.get('Total Conversions', 0)
                 }
     
@@ -340,7 +367,14 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         for _, row in campaign_stats_df.iterrows():
             campaign_name = str(row['Campaign']).strip() if pd.notna(row['Campaign']) else None
             if campaign_name:
-                campaign_name_map[campaign_name] = {
+                # Store with office if available
+                if has_office:
+                    office = row.get('Office', 'Unknown')
+                    key = (campaign_name, office)
+                else:
+                    key = campaign_name
+                    
+                campaign_name_map[key] = {
                     'conversions': row.get('Total Conversions', 0)
                 }
     
@@ -398,6 +432,7 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
             def get_conversions_by_id(row):
                 ad_group = str(row['Ad group']).strip() if pd.notna(row.get('Ad group')) else None
                 account = str(row['Account']).strip() if pd.notna(row.get('Account')) else None
+                campaign_name = str(row.get('Campaign', '')).strip() if pd.notna(row.get('Campaign')) else None
                 
                 if not ad_group:
                     return None
@@ -410,8 +445,19 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                     # Try just ad group
                     campaign_id = url_map.get(ad_group)
                 
-                if campaign_id and campaign_id in campaign_map:
-                    return campaign_map[campaign_id]['conversions']
+                if campaign_id:
+                    # Determine office from campaign name
+                    office = detect_office(campaign_name) if has_office else None
+                    
+                    # Try office-specific match first
+                    if office:
+                        lookup_key = (campaign_id, office)
+                        if lookup_key in campaign_map:
+                            return campaign_map[lookup_key]['conversions']
+                    
+                    # Fallback to non-office match
+                    if campaign_id in campaign_map:
+                        return campaign_map[campaign_id]['conversions']
                 
                 return None
             
@@ -426,7 +472,10 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
             break
     
     if ads_campaign_id_col and campaign_map:
-        def get_conversions_by_direct_id(campaign_id):
+        def get_conversions_by_direct_id(row):
+            campaign_id = row[ads_campaign_id_col]
+            campaign_name = str(row.get('Campaign', '')).strip() if pd.notna(row.get('Campaign')) else None
+            
             if pd.isna(campaign_id):
                 return None
             campaign_id = str(campaign_id).strip()
@@ -439,10 +488,19 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                 # Remove brackets ([604582413] -> 604582413)
                 campaign_id = campaign_id.replace('[', '').replace(']', '').strip()
             
+            # Determine office from campaign name
+            office = detect_office(campaign_name) if has_office else None
+            
+            # Try office-specific match first
+            if office:
+                lookup_key = (campaign_id, office)
+                if lookup_key in campaign_map:
+                    return campaign_map[lookup_key]['conversions']
+            
+            # Fallback to non-office match
             return campaign_map.get(campaign_id, {}).get('conversions', None)
         
-        ads_df['Campaign Conversions'] = ads_df[ads_campaign_id_col].apply(get_conversions_by_direct_id)
-        return ads_df
+        ads_df['Campaign Conversions'] = ads_df.apply(get_conversions_by_direct_id, axis=1)
         return ads_df
     
     # Strategy 3: Name-based matching (fallback)
@@ -452,7 +510,16 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         
         campaign_name = str(campaign_name).strip()
         
-        # Try exact match first
+        # Determine office from campaign name
+        office = detect_office(campaign_name) if has_office else None
+        
+        # Try office-specific exact match first
+        if office:
+            lookup_key = (campaign_name, office)
+            if lookup_key in campaign_name_map:
+                return campaign_name_map[lookup_key]['conversions']
+        
+        # Try non-office exact match
         if campaign_name in campaign_name_map:
             return campaign_name_map[campaign_name]['conversions']
         
@@ -463,8 +530,16 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                 base_name = base_name[:-len(suffix)]
                 break
         
-        if base_name != campaign_name and base_name in campaign_name_map:
-            return campaign_name_map[base_name]['conversions']
+        if base_name != campaign_name:
+            # Try office-specific fuzzy match
+            if office:
+                lookup_key = (base_name, office)
+                if lookup_key in campaign_name_map:
+                    return campaign_name_map[lookup_key]['conversions']
+            
+            # Try non-office fuzzy match
+            if base_name in campaign_name_map:
+                return campaign_name_map[base_name]['conversions']
         
         return None
     
@@ -3126,7 +3201,8 @@ with main_tab1:
                     
                     # Only aggregate if we have at least one conversion column
                     if agg_dict:
-                        campaign_stats = df_in.groupby(campaign_col).agg(agg_dict).fillna(0)
+                        # Group by BOTH campaign and agency to preserve office information
+                        campaign_stats = df_in.groupby([campaign_col, 'agency']).agg(agg_dict).fillna(0)
                         
                         # Calculate total conversions based on what user included
                         campaign_stats['Total Conversions'] = 0
@@ -3141,7 +3217,10 @@ with main_tab1:
                         campaign_stats_reset = campaign_stats.reset_index()
                         
                         # Rename columns to standard names
-                        rename_map = {campaign_col: 'Campaign'}
+                        rename_map = {
+                            campaign_col: 'Campaign',
+                            'agency': 'Office'  # Rename agency to Office for clarity
+                        }
                         if qs_col:
                             rename_map[qs_col] = 'Quote Starts'
                         if phone_col:
