@@ -840,11 +840,11 @@ def analyze_ads_account(df, thresholds):
     # 6. NO CONVERSIONS (only if campaign conversion data available)
     if 'Campaign Conversions' in active_df.columns:
         results['no_conversions'] = active_df[
-            (active_df['Campaign Conversions'] == 0) &
+            ((active_df['Campaign Conversions'] == 0) | (active_df['Campaign Conversions'].isna())) &
             (active_df['Cost'] > 100)  # Significant spend
         ].copy()
         results['no_conversions']['recommendation'] = 'Review targeting OR pause campaign'
-        results['no_conversions']['reason'] = 'High spend, zero conversions'
+        results['no_conversions']['reason'] = 'High spend, zero or missing conversions'
         results['no_conversions']['priority'] = 'High'
     else:
         # If no conversion data, return empty dataframe
