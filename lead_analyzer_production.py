@@ -3321,6 +3321,11 @@ with main_tab1:
                         st.session_state.campaign_stats = campaign_stats_reset
                         st.session_state.stats_agent_domain = agent_domain  # Store the domain
                         st.session_state.stats_file_uploaded = stats_file_name  # Track which file this is from
+                        
+                        # Show confirmation that data is ready for Tab 2
+                        st.success(f"✅ Campaign stats stored for Tab 2: {len(campaign_stats_reset)} campaigns with conversion data")
+                        if agent_domain:
+                            st.info(f"🔗 Detected domain: {agent_domain} (will auto-filter in Tab 2)")
 
             
             status_text.text("📈 Aggregating results...")
