@@ -713,6 +713,7 @@ def analyze_ads_account(df, thresholds):
     # Calculate recommended new bid (17.5% decrease - midpoint of 15-20%)
     if 'Current Bid' in results['overpaying_position_1'].columns:
         results['overpaying_position_1']['Recommended New Bid'] = results['overpaying_position_1']['Current Bid'] * 0.825
+        results['overpaying_position_1']['Bid Change %'] = ((results['overpaying_position_1']['Recommended New Bid'] - results['overpaying_position_1']['Current Bid']) / results['overpaying_position_1']['Current Bid'] * 100).round(0).astype('Int64')
     
     # 2. LOSING AUCTIONS TO RANK (ONLY if budget has room - Underspending status)
     if has_budget_data:
@@ -741,9 +742,34 @@ def analyze_ads_account(df, thresholds):
         results['losing_auctions']['reason'] = 'Low impression share + losing auctions to rank'
         results['losing_auctions']['priority'] = 'High'
     
-    # Calculate recommended new bid (35% increase - midpoint of 30-40%)
-    if 'Current Bid' in results['losing_auctions'].columns:
-        results['losing_auctions']['Recommended New Bid'] = results['losing_auctions']['Current Bid'] * 1.35
+    # Calculate recommended new bid based on lost IS (rank)
+    # More lost IS = bigger increase needed
+    if 'Current Bid' in results['losing_auctions'].columns and 'Search lost IS (rank)' in results['losing_auctions'].columns:
+        def calculate_bid_increase(row):
+            lost_is = row['Search lost IS (rank)']
+            current_bid = row['Current Bid']
+            
+            if pd.isna(lost_is) or pd.isna(current_bid):
+                return current_bid
+            
+            # Determine increase percentage based on lost IS
+            if lost_is >= 0.40:  # Losing 40%+ of auctions
+                increase_pct = 0.45  # +45%
+            elif lost_is >= 0.30:  # Losing 30-40%
+                increase_pct = 0.35  # +35%
+            elif lost_is >= 0.25:  # Losing 25-30%
+                increase_pct = 0.30  # +30%
+            else:  # Losing under 25%
+                increase_pct = 0.25  # +25%
+            
+            return current_bid * (1 + increase_pct)
+        
+        results['losing_auctions']['Recommended New Bid'] = results['losing_auctions'].apply(calculate_bid_increase, axis=1)
+        results['losing_auctions']['Bid Change %'] = ((results['losing_auctions']['Recommended New Bid'] - results['losing_auctions']['Current Bid']) / results['losing_auctions']['Current Bid'] * 100).round(0).astype('Int64')
+    else:
+        # Fallback if columns missing
+        if 'Current Bid' in results['losing_auctions'].columns:
+            results['losing_auctions']['Recommended New Bid'] = results['losing_auctions']['Current Bid'] * 1.35
     
     # 3. PERFECT POSITION 2-3
     results['perfect_position'] = active_df[
@@ -768,6 +794,7 @@ def analyze_ads_account(df, thresholds):
     # Calculate recommended new bid (30% decrease)
     if 'Current Bid' in results['poor_quality'].columns:
         results['poor_quality']['Recommended New Bid'] = results['poor_quality']['Current Bid'] * 0.70
+        results['poor_quality']['Bid Change %'] = ((results['poor_quality']['Recommended New Bid'] - results['poor_quality']['Current Bid']) / results['poor_quality']['Current Bid'] * 100).round(0).astype('Int64')
     
     # 5. MAJOR OPPORTUNITY
     results['major_opportunity'] = active_df[
@@ -778,9 +805,34 @@ def analyze_ads_account(df, thresholds):
     results['major_opportunity']['recommendation'] = 'Increase bid 40-50%'
     results['major_opportunity']['reason'] = 'High quality traffic, low market share'
     results['major_opportunity']['priority'] = 'Very High'
-    # Calculate recommended new bid (45% increase - midpoint of 40-50%)
-    if 'Current Bid' in results['major_opportunity'].columns:
-        results['major_opportunity']['Recommended New Bid'] = results['major_opportunity']['Current Bid'] * 1.45
+    # Calculate recommended bid increase based on impression share gap
+    # Lower IS = bigger opportunity = bigger increase
+    if 'Current Bid' in results['major_opportunity'].columns and 'Search impr. share' in results['major_opportunity'].columns:
+        def calculate_opportunity_bid(row):
+            impr_share = row['Search impr. share']
+            current_bid = row['Current Bid']
+            
+            if pd.isna(impr_share) or pd.isna(current_bid):
+                return current_bid
+            
+            # Determine increase based on how low impression share is
+            if impr_share < 0.15:  # Under 15% share - huge opportunity
+                increase_pct = 0.50  # +50%
+            elif impr_share < 0.20:  # 15-20% share
+                increase_pct = 0.45  # +45%
+            elif impr_share < 0.25:  # 20-25% share
+                increase_pct = 0.40  # +40%
+            else:  # 25-30% share
+                increase_pct = 0.35  # +35%
+            
+            return current_bid * (1 + increase_pct)
+        
+        results['major_opportunity']['Recommended New Bid'] = results['major_opportunity'].apply(calculate_opportunity_bid, axis=1)
+        results['major_opportunity']['Bid Change %'] = ((results['major_opportunity']['Recommended New Bid'] - results['major_opportunity']['Current Bid']) / results['major_opportunity']['Current Bid'] * 100).round(0).astype('Int64')
+    else:
+        # Fallback
+        if 'Current Bid' in results['major_opportunity'].columns:
+            results['major_opportunity']['Recommended New Bid'] = results['major_opportunity']['Current Bid'] * 1.45
     
     # 6. NO CONVERSIONS (only if campaign conversion data available)
     if 'Campaign Conversions' in active_df.columns:
@@ -6256,7 +6308,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             # Rename columns with helpful descriptions
             rename_map = {
                 'Current Bid': 'Current Bid',
-                'Recommended New Bid': 'New Bid (+45%)',
+                'Recommended New Bid': 'New Bid',
                 'Campaign Conversions': 'Campaign Leads',
                 'CTR': 'CTR',
                 'Search impr. share': 'Impr. Share',
@@ -6325,7 +6377,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
 
 
             display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 'Budget Status', 
-                          'Current Bid', 'Recommended New Bid', 'Search impr. share', 
+                          'Current Bid', 'Recommended New Bid', 'Bid Change %', 'Search impr. share', 
                           'Search lost IS (rank)', 'Search top IS', 'CTR', 'Cost']
             
             # Only include columns that exist
@@ -6339,6 +6391,8 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
             if 'Recommended New Bid' in display_df.columns:
                 display_df['Recommended New Bid'] = display_df['Recommended New Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+            if 'Bid Change %' in display_df.columns:
+                display_df['Bid Change %'] = display_df['Bid Change %'].apply(lambda x: f"+{int(x)}%" if pd.notna(x) else '--')
             if 'Search impr. share' in display_df.columns:
                 display_df['Search impr. share'] = display_df['Search impr. share'].apply(lambda x: format_ads_metric(x, 'percentage'))
             if 'Search lost IS (rank)' in display_df.columns:
@@ -6353,7 +6407,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             # Rename columns
             rename_map = {
                 'Current Bid': 'Current Bid',
-                'Recommended New Bid': 'New Bid (+35%)',
+                'Recommended New Bid': 'New Bid',
                 'Search impr. share': 'Impr. Share',
                 'Search lost IS (rank)': 'Lost to Bids',
                 'Search top IS': 'Top 3 %'
@@ -6452,7 +6506,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             """)
 
             display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
-                          'Budget Status', 'Current Bid', 'Recommended New Bid',
+                          'Budget Status', 'Current Bid', 'Recommended New Bid', 'Bid Change %',
                           'Search abs. top IS', 'Search top IS', 'Cost']
             
             # Only include columns that exist
@@ -6466,6 +6520,8 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
             if 'Recommended New Bid' in display_df.columns:
                 display_df['Recommended New Bid'] = display_df['Recommended New Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+            if 'Bid Change %' in display_df.columns:
+                display_df['Bid Change %'] = display_df['Bid Change %'].apply(lambda x: f"{int(x)}%" if pd.notna(x) else '--')
             if 'Search abs. top IS' in display_df.columns:
                 display_df['Search abs. top IS'] = display_df['Search abs. top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
             if 'Search top IS' in display_df.columns:
@@ -6476,7 +6532,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             # Rename columns
             rename_map = {
                 'Current Bid': 'Current Bid',
-                'Recommended New Bid': 'New Bid (-17.5%)',
+                'Recommended New Bid': 'New Bid',
                 'Search abs. top IS': 'Position 1 %',
                 'Search top IS': 'Top 3 %'
             }
@@ -6520,7 +6576,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             """)
 
             display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
-                          'Current Bid', 'Recommended New Bid', 'CTR', 'Search impr. share', 
+                          'Current Bid', 'Recommended New Bid', 'Bid Change %', 'CTR', 'Search impr. share', 
                           'Cost', 'Clicks']
             
             # Only include columns that exist
@@ -6534,6 +6590,8 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
             if 'Recommended New Bid' in display_df.columns:
                 display_df['Recommended New Bid'] = display_df['Recommended New Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+            if 'Bid Change %' in display_df.columns:
+                display_df['Bid Change %'] = display_df['Bid Change %'].apply(lambda x: f"{int(x)}%" if pd.notna(x) else '--')
             if 'CTR' in display_df.columns:
                 display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
             if 'Search impr. share' in display_df.columns:
@@ -6546,7 +6604,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             # Rename columns
             rename_map = {
                 'Current Bid': 'Current Bid',
-                'Recommended New Bid': 'New Bid (-30%)',
+                'Recommended New Bid': 'New Bid',
                 'Search impr. share': 'Impr. Share'
             }
             display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
