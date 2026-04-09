@@ -392,10 +392,12 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
     # URL report contains Final URLs with tracking IDs like: ?cmpid=MLBDSF001-001R
     # We extract tracking ID from Final URL, then match to Tab 1 stats
     if url_report_df is not None and not url_report_df.empty:
-        # DEBUG: Show what columns we have in URL report
-        with st.expander("🔍 URL Report Debug"):
-            st.write("**URL Report Columns:**", url_report_df.columns.tolist())
-            st.write("**URL Report Shape:**", url_report_df.shape)
+        # Store debug info in session state
+        if 'debug_info' not in st.session_state:
+            st.session_state.debug_info = {}
+        
+        st.session_state.debug_info['url_report_columns'] = url_report_df.columns.tolist()
+        st.session_state.debug_info['url_report_shape'] = url_report_df.shape
         
         # Look for Final URL column
         final_url_col = None
@@ -405,20 +407,15 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                 final_url_col = col
                 break
         
-        if not final_url_col:
-            with st.expander("⚠️ URL Report Issue"):
-                st.warning(f"Could not find Final URL column in URL report. Columns: {url_report_df.columns.tolist()}")
+        st.session_state.debug_info['final_url_col'] = final_url_col
         
         # If URL report has Final URL column, extract tracking Campaign IDs
         if final_url_col:
             import re
             
-            with st.expander("🔍 URL Extraction Debug"):
-                st.write(f"**Found Final URL column:** `{final_url_col}`")
-                sample_urls = url_report_df[final_url_col].dropna().head(5).tolist()
-                st.write("**Sample URLs:**")
-                for url in sample_urls:
-                    st.code(url)
+            # Sample URLs for debug
+            sample_urls = url_report_df[final_url_col].dropna().head(5).tolist()
+            st.session_state.debug_info['sample_urls'] = sample_urls
             
             # Create mapping: (Account + Ad Group) -> (Tracking Campaign ID, Campaign Name)
             url_map = {}
@@ -473,13 +470,10 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                         'campaign_name': campaign_name
                     }
             
-            with st.expander("🔍 URL Extraction Results"):
-                st.write(f"**Extracted tracking IDs from {extracted_count} URLs**")
-                st.write(f"**Created {len(url_map)} ad group mappings**")
-                if url_map:
-                    st.write("**Sample mappings (first 5):**")
-                    for i, (key, value) in enumerate(list(url_map.items())[:5]):
-                        st.write(f"  - `{key}` → Tracking ID: `{value['tracking_id']}`, Campaign: `{value['campaign_name']}`")
+            # Store extraction results
+            st.session_state.debug_info['extracted_count'] = extracted_count
+            st.session_state.debug_info['url_map_count'] = len(url_map)
+            st.session_state.debug_info['url_map_sample'] = list(url_map.items())[:5]
             
             # Match ads data using URL report mapping
             def get_conversions_via_url_report(row):
@@ -7149,15 +7143,7 @@ with main_tab2:
                 
                 filter_col1, filter_col2, filter_col3 = st.columns([3, 2, 2])
                 
-                with filter_col1:
-                    account_options = ['All Accounts'] + all_accounts
-                    selected_account = st.selectbox(
-                        "Filter by Account",
-                        options=account_options,
-                        key='shared_account_filter',
-                        help="View data for a specific agent across all platforms, or all accounts combined"
-                    )
-                
+                # CSM filter first (determines available accounts)
                 with filter_col2:
                     # CSM filter (only if budget data with CSM column is available)
                     if available_csms:
@@ -7170,6 +7156,25 @@ with main_tab2:
                         )
                     else:
                         selected_csm = 'All CSMs'
+                
+                # Account filter (filtered by CSM if selected)
+                with filter_col1:
+                    # Filter account options by selected CSM
+                    if selected_csm != 'All CSMs' and shared_budget_df is not None and 'CSM' in shared_budget_df.columns:
+                        # Get accounts for this CSM
+                        csm_accounts = shared_budget_df[shared_budget_df['CSM'] == selected_csm]['Agent'].unique().tolist()
+                        # Only show accounts that exist in both budget and ads data
+                        available_accounts = [acc for acc in all_accounts if acc in csm_accounts]
+                        account_options = ['All Accounts'] + available_accounts
+                    else:
+                        account_options = ['All Accounts'] + all_accounts
+                    
+                    selected_account = st.selectbox(
+                        "Filter by Account",
+                        options=account_options,
+                        key='shared_account_filter',
+                        help="View data for a specific agent across all platforms, or all accounts combined"
+                    )
                 
                 with filter_col3:
                     # Check if we have campaign stats from Tab 1
@@ -7276,6 +7281,39 @@ with main_tab2:
                     shared_budget_df  # Pass the budget data
                 )
                 
+
+
+
+# ---- Consolidated Debug Section ----
+if 'debug_info' in st.session_state and st.session_state.debug_info:
+    st.markdown("---")
+    with st.expander("🔍 **Debugging Information** - Click to expand", expanded=False):
+        debug = st.session_state.debug_info
+        
+        st.markdown("### 📊 URL Report Processing")
+        if 'url_report_columns' in debug:
+            st.write(f"**Columns found:** {len(debug['url_report_columns'])}")
+            st.code(", ".join(debug['url_report_columns']))
+            st.write(f"**Shape:** {debug.get('url_report_shape', 'N/A')}")
+        
+        if 'final_url_col' in debug:
+            if debug['final_url_col']:
+                st.success(f"✅ Final URL column detected: `{debug['final_url_col']}`")
+                if 'sample_urls' in debug:
+                    st.write("**Sample URLs:**")
+                    for url in debug['sample_urls']:
+                        st.code(url, language=None)
+            else:
+                st.error("❌ No Final URL column found")
+        
+        if 'extracted_count' in debug:
+            st.write(f"**Tracking IDs extracted:** {debug['extracted_count']}")
+            st.write(f"**Ad group mappings created:** {debug.get('url_map_count', 0)}")
+            
+            if 'url_map_sample' in debug and debug['url_map_sample']:
+                st.write("**Sample mappings:**")
+                for key, value in debug['url_map_sample']:
+                    st.write(f"  - `{key}` → ID: `{value['tracking_id']}`, Campaign: `{value.get('campaign_name', 'N/A')}`")
 
 # ---- Footer ----
 st.markdown("<hr/>", unsafe_allow_html=True)
