@@ -7337,6 +7337,35 @@ if 'debug_info' in st.session_state and st.session_state.debug_info:
                     st.write(f"  - `{key}` → ID: `{value['tracking_id']}`, Campaign: `{value.get('campaign_name', 'N/A')}`")
                     debug_text += mapping_line + "\n"
         
+        # Add Campaign Stats debug info
+        if 'campaign_stats' in st.session_state and st.session_state.campaign_stats is not None:
+            st.markdown("### 📊 Campaign Stats (from Tab 1)")
+            debug_text += "\nCAMPAIGN STATS (from Tab 1)\n"
+            
+            stats_df = st.session_state.campaign_stats
+            st.write(f"**Shape:** {stats_df.shape}")
+            st.write(f"**Columns:** {', '.join(stats_df.columns.tolist())}")
+            debug_text += f"Shape: {stats_df.shape}\n"
+            debug_text += f"Columns: {', '.join(stats_df.columns.tolist())}\n"
+            
+            if 'Office' in stats_df.columns:
+                office_dist = stats_df['Office'].value_counts().to_dict()
+                st.write(f"**Office Distribution:** {office_dist}")
+                debug_text += f"Office Distribution: {office_dist}\n"
+            
+            # Sample campaigns
+            if 'Campaign' in stats_df.columns and 'Total Conversions' in stats_df.columns:
+                sample = stats_df[['Campaign', 'Total Conversions']].head(5)
+                st.write("**Sample campaigns with conversions:**")
+                for idx, row in sample.iterrows():
+                    st.write(f"  - {row['Campaign']}: {row['Total Conversions']} conversions")
+                    debug_text += f"  - {row['Campaign']}: {row['Total Conversions']} conversions\n"
+            
+            debug_text += "\n"
+        else:
+            st.warning("⚠️ No campaign stats found in session state")
+            debug_text += "\nWARNING: No campaign stats found - upload stats in Tab 1\n\n"
+        
         # Add download and copy buttons
         st.markdown("---")
         col1, col2 = st.columns(2)
