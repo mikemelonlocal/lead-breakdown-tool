@@ -6162,12 +6162,52 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
     
     # Enrich with campaign conversion data from Tab 1 (if available)
     if 'campaign_stats' in st.session_state:
+        # Debug: Show campaign_stats structure
+        with st.expander("🔍 Campaign Stats Debug (Office Matching)"):
+            st.write("**Campaign Stats Shape:**", st.session_state.campaign_stats.shape)
+            st.write("**Campaign Stats Columns:**", st.session_state.campaign_stats.columns.tolist())
+            
+            if 'Office' in st.session_state.campaign_stats.columns:
+                st.write("**Office Distribution:**", st.session_state.campaign_stats['Office'].value_counts().to_dict())
+                st.write("**Sample Campaign Stats (first 10):**")
+                st.dataframe(st.session_state.campaign_stats[['Campaign', 'Office', 'Total Conversions']].head(10))
+            else:
+                st.warning("⚠️ No 'Office' column found in campaign_stats - office matching will not work!")
+                st.write("**Sample Campaign Stats (first 10):**")
+                st.dataframe(st.session_state.campaign_stats.head(10))
+        
         ads_df = enrich_ads_with_campaign_stats(ads_df, st.session_state.campaign_stats, url_report_df)
         
         # Show matching summary only if the column was added
         if 'Campaign Conversions' in ads_df.columns:
             matched_campaigns = ads_df['Campaign Conversions'].notna().sum()
             total_ad_groups = len(ads_df)
+            
+            # Debug: Show matching details by office
+            with st.expander("🔍 Office Matching Results"):
+                if 'Office' in st.session_state.campaign_stats.columns:
+                    st.write("**Matching by Office:**")
+                    
+                    # Sample matched campaigns
+                    matched_df = ads_df[ads_df['Campaign Conversions'].notna()][['Campaign', 'Campaign Conversions']].head(10)
+                    if len(matched_df) > 0:
+                        st.write(f"**Matched Campaigns (showing {len(matched_df)} of {matched_campaigns}):**")
+                        st.dataframe(matched_df)
+                    
+                    # Sample unmatched campaigns
+                    unmatched_df = ads_df[ads_df['Campaign Conversions'].isna()][['Campaign']].head(10)
+                    if len(unmatched_df) > 0:
+                        st.write(f"**Unmatched Campaigns (showing {len(unmatched_df)} of {total_ad_groups - matched_campaigns}):**")
+                        for idx, row in unmatched_df.iterrows():
+                            campaign = row['Campaign']
+                            # Detect what office this campaign would be assigned
+                            if 'MOA' in str(campaign).upper():
+                                detected_office = 'MOA'
+                            else:
+                                detected_office = 'Legacy'
+                            st.write(f"  - `{campaign}` → Detected office: **{detected_office}**")
+                else:
+                    st.write("No office-based matching (Office column missing)")
             
             if url_report_df is not None:
                 # Check if URL report has Campaign ID column
