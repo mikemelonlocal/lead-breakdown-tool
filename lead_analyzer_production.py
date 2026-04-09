@@ -743,7 +743,7 @@ def analyze_ads_account(df, thresholds):
         results['losing_auctions']['priority'] = 'High'
     
     # Calculate recommended new bid based on lost IS (rank)
-    # More lost IS = bigger increase needed
+    # Use sliding scale: the more IS lost, the bigger the increase
     if 'Current Bid' in results['losing_auctions'].columns and 'Search lost IS (rank)' in results['losing_auctions'].columns:
         def calculate_bid_increase(row):
             lost_is = row['Search lost IS (rank)']
@@ -752,15 +752,16 @@ def analyze_ads_account(df, thresholds):
             if pd.isna(lost_is) or pd.isna(current_bid):
                 return current_bid
             
-            # Determine increase percentage based on lost IS
-            if lost_is >= 0.40:  # Losing 40%+ of auctions
-                increase_pct = 0.45  # +45%
-            elif lost_is >= 0.30:  # Losing 30-40%
-                increase_pct = 0.35  # +35%
-            elif lost_is >= 0.25:  # Losing 25-30%
-                increase_pct = 0.30  # +30%
-            else:  # Losing under 25%
-                increase_pct = 0.25  # +25%
+            # Sliding scale formula: 20% base + (lost_is * 50%)
+            # Lost IS 20% → +30% bid increase
+            # Lost IS 30% → +35% bid increase  
+            # Lost IS 40% → +40% bid increase
+            # Lost IS 50% → +45% bid increase
+            # Lost IS 60% → +50% bid increase
+            increase_pct = 0.20 + (lost_is * 0.50)
+            
+            # Cap at +60% max to avoid extreme increases
+            increase_pct = min(increase_pct, 0.60)
             
             return current_bid * (1 + increase_pct)
         
@@ -806,7 +807,7 @@ def analyze_ads_account(df, thresholds):
     results['major_opportunity']['reason'] = 'High quality traffic, low market share'
     results['major_opportunity']['priority'] = 'Very High'
     # Calculate recommended bid increase based on impression share gap
-    # Lower IS = bigger opportunity = bigger increase
+    # Use sliding scale: lower IS = bigger opportunity = bigger increase
     if 'Current Bid' in results['major_opportunity'].columns and 'Search impr. share' in results['major_opportunity'].columns:
         def calculate_opportunity_bid(row):
             impr_share = row['Search impr. share']
@@ -815,15 +816,17 @@ def analyze_ads_account(df, thresholds):
             if pd.isna(impr_share) or pd.isna(current_bid):
                 return current_bid
             
-            # Determine increase based on how low impression share is
-            if impr_share < 0.15:  # Under 15% share - huge opportunity
-                increase_pct = 0.50  # +50%
-            elif impr_share < 0.20:  # 15-20% share
-                increase_pct = 0.45  # +45%
-            elif impr_share < 0.25:  # 20-25% share
-                increase_pct = 0.40  # +40%
-            else:  # 25-30% share
-                increase_pct = 0.35  # +35%
+            # Sliding scale formula: 70% base - (impr_share * 100%)
+            # Impr Share 5% → +65% bid increase
+            # Impr Share 10% → +60% bid increase
+            # Impr Share 15% → +55% bid increase
+            # Impr Share 20% → +50% bid increase
+            # Impr Share 25% → +45% bid increase
+            # Impr Share 30% → +40% bid increase
+            increase_pct = 0.70 - (impr_share * 1.00)
+            
+            # Floor at +30% min and cap at +70% max
+            increase_pct = max(0.30, min(increase_pct, 0.70))
             
             return current_bid * (1 + increase_pct)
         
