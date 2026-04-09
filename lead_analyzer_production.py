@@ -388,90 +388,111 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                     'conversions': row.get('Total Conversions', 0)
                 }
     
-    # Strategy 1: Direct Campaign ID matching with URL report
-    # Check if URL report has Campaign ID column (new format)
+    # Strategy 1: Extract tracking Campaign IDs from URL report Final URLs
+    # URL report contains Final URLs with tracking IDs like: ?cmpid=MLBDSF001-001R
+    # We extract tracking ID from Final URL, then match to Tab 1 stats
     if url_report_df is not None and not url_report_df.empty:
-        # Look for Campaign ID column in URL report
-        url_campaign_id_col = None
-        url_adgroup_id_col = None
-        
+        # Look for Final URL column
+        final_url_col = None
         for col in url_report_df.columns:
             col_lower = str(col).lower()
-            if 'campaign' in col_lower and 'id' in col_lower:
-                url_campaign_id_col = col
-            if 'ad' in col_lower and 'group' in col_lower and 'id' in col_lower:
-                url_adgroup_id_col = col
+            if any(term in col_lower for term in ['final', 'url', 'landing', 'destination']):
+                final_url_col = col
+                break
         
-        # If URL report has Campaign ID column, use it for matching
-        if url_campaign_id_col:
-            # Create mapping: Account + Ad group -> Campaign ID
+        # If URL report has Final URL column, extract tracking Campaign IDs
+        if final_url_col:
+            import re
+            
+            # Create mapping: (Account + Ad Group) -> (Tracking Campaign ID, Campaign Name)
             url_map = {}
+            
             for _, row in url_report_df.iterrows():
-                campaign_id = str(row[url_campaign_id_col]).strip() if pd.notna(row.get(url_campaign_id_col)) else None
+                final_url = str(row.get(final_url_col, '')).strip() if pd.notna(row.get(final_url_col)) else None
                 
-                # Normalize Campaign ID (remove decimals from floats, clean brackets)
-                if campaign_id and campaign_id != 'nan':
-                    # Remove decimal points (20643283194.0 -> 20643283194)
-                    if '.' in campaign_id:
-                        campaign_id = campaign_id.split('.')[0]
-                    # Remove brackets ([604582413] -> 604582413)
-                    campaign_id = campaign_id.replace('[', '').replace(']', '').strip()
+                if not final_url or final_url == 'nan':
+                    continue
                 
-                # Try to get identifying info for the ad group
+                # Extract tracking Campaign ID from URL parameters
+                # Look for patterns like: cmpid=MLBDSF001-001R, campaignid=..., utm_campaign=...
+                tracking_id = None
+                for param in ['cmpid=', 'campaignid=', 'utm_campaign=', 'campaign=']:
+                    if param in final_url.lower():
+                        # Extract value after parameter
+                        match = re.search(rf'{param}([^&\s]+)', final_url, re.IGNORECASE)
+                        if match:
+                            tracking_id = match.group(1).strip()
+                            break
+                
+                if not tracking_id:
+                    continue
+                
+                # Get Ad Group, Account, and Campaign Name for matching
                 ad_group = None
                 account = None
+                campaign_name = None
                 
-                # Check for Ad group column
                 for col in ['Ad group', 'Ad group name', 'Adgroup']:
                     if col in row and pd.notna(row[col]):
                         ad_group = str(row[col]).strip()
                         break
                 
-                # Check for Account column
                 for col in ['Account', 'Account name']:
                     if col in row and pd.notna(row[col]):
                         account = str(row[col]).strip()
                         break
                 
-                if campaign_id and ad_group:
+                for col in ['Campaign', 'Campaign name']:
+                    if col in row and pd.notna(row[col]):
+                        campaign_name = str(row[col]).strip()
+                        break
+                
+                if ad_group and tracking_id:
                     # Use composite key for precise matching
                     key = f"{account}|{ad_group}" if account else ad_group
-                    url_map[key] = campaign_id
+                    url_map[key] = {
+                        'tracking_id': tracking_id,
+                        'campaign_name': campaign_name
+                    }
             
             # Match ads data using URL report mapping
-            def get_conversions_by_id(row):
-                ad_group = str(row['Ad group']).strip() if pd.notna(row.get('Ad group')) else None
-                account = str(row['Account']).strip() if pd.notna(row.get('Account')) else None
-                campaign_name = str(row.get('Campaign', '')).strip() if pd.notna(row.get('Campaign')) else None
+            def get_conversions_via_url_report(row):
+                ad_group = str(row.get('Ad group', '')).strip() if pd.notna(row.get('Ad group')) else None
+                account = str(row.get('Account', '')).strip() if pd.notna(row.get('Account')) else None
                 
                 if not ad_group:
                     return None
                 
                 # Try composite key first (Account + Ad group)
                 key = f"{account}|{ad_group}" if account else ad_group
-                campaign_id = url_map.get(key)
+                url_data = url_map.get(key)
                 
-                if not campaign_id:
+                if not url_data:
                     # Try just ad group
-                    campaign_id = url_map.get(ad_group)
+                    url_data = url_map.get(ad_group)
                 
-                if campaign_id:
-                    # Determine office from campaign name (always returns Legacy or MOA)
-                    office = detect_office(campaign_name)
-                    
-                    # Use office-specific match if stats have office column
-                    if has_office:
-                        lookup_key = (campaign_id, office)
-                        if lookup_key in campaign_map:
-                            return campaign_map[lookup_key]['conversions']
-                    else:
-                        # No office in stats - direct match
-                        if campaign_id in campaign_map:
-                            return campaign_map[campaign_id]['conversions']
+                if not url_data:
+                    return None
+                
+                tracking_id = url_data['tracking_id']
+                campaign_name = url_data.get('campaign_name', '')
+                
+                # Detect office from campaign name (always returns Legacy or MOA)
+                office = detect_office(campaign_name)
+                
+                # Use office-specific match if stats have office column
+                if has_office:
+                    lookup_key = (tracking_id, office)
+                    if lookup_key in campaign_map:
+                        return campaign_map[lookup_key]['conversions']
+                else:
+                    # No office in stats - direct match
+                    if tracking_id in campaign_map:
+                        return campaign_map[tracking_id]['conversions']
                 
                 return None
             
-            ads_df['Campaign Conversions'] = ads_df.apply(get_conversions_by_id, axis=1)
+            ads_df['Campaign Conversions'] = ads_df.apply(get_conversions_via_url_report, axis=1)
             return ads_df
     
     # Strategy 2: Direct Campaign ID matching (if ads_df has Campaign ID column)
