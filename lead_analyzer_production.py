@@ -3055,10 +3055,7 @@ with main_tab1:
         if up_moa:
             file_status.append(f"✅ MOA: `{up_moa.name}`")
         st.markdown(" • ".join(file_status))
-        
-        # Add analyze button
-        if st.button("🔄 Refresh Analysis", type="primary", use_container_width=True, help="Click after uploading or changing files to reload the analysis"):
-            st.rerun()
+        st.caption("💡 Analysis will update automatically when files change")
     
     # Track file changes to force rerun on change
     current_files = {
