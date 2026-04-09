@@ -7290,30 +7290,69 @@ if 'debug_info' in st.session_state and st.session_state.debug_info:
     with st.expander("🔍 **Debugging Information** - Click to expand", expanded=False):
         debug = st.session_state.debug_info
         
+        # Build debug text for download/copy
+        debug_text = "=== LEAD ANALYZER DEBUG REPORT ===\n\n"
+        
         st.markdown("### 📊 URL Report Processing")
         if 'url_report_columns' in debug:
             st.write(f"**Columns found:** {len(debug['url_report_columns'])}")
             st.code(", ".join(debug['url_report_columns']))
             st.write(f"**Shape:** {debug.get('url_report_shape', 'N/A')}")
+            
+            debug_text += "URL REPORT PROCESSING\n"
+            debug_text += f"Columns found: {len(debug['url_report_columns'])}\n"
+            debug_text += f"Columns: {', '.join(debug['url_report_columns'])}\n"
+            debug_text += f"Shape: {debug.get('url_report_shape', 'N/A')}\n\n"
         
         if 'final_url_col' in debug:
             if debug['final_url_col']:
                 st.success(f"✅ Final URL column detected: `{debug['final_url_col']}`")
+                debug_text += f"Final URL column: {debug['final_url_col']}\n\n"
+                
                 if 'sample_urls' in debug:
                     st.write("**Sample URLs:**")
+                    debug_text += "Sample URLs:\n"
                     for url in debug['sample_urls']:
                         st.code(url, language=None)
+                        debug_text += f"  - {url}\n"
+                    debug_text += "\n"
             else:
                 st.error("❌ No Final URL column found")
+                debug_text += "ERROR: No Final URL column found\n\n"
         
         if 'extracted_count' in debug:
             st.write(f"**Tracking IDs extracted:** {debug['extracted_count']}")
             st.write(f"**Ad group mappings created:** {debug.get('url_map_count', 0)}")
             
+            debug_text += f"Tracking IDs extracted: {debug['extracted_count']}\n"
+            debug_text += f"Ad group mappings created: {debug.get('url_map_count', 0)}\n\n"
+            
             if 'url_map_sample' in debug and debug['url_map_sample']:
                 st.write("**Sample mappings:**")
+                debug_text += "Sample mappings:\n"
                 for key, value in debug['url_map_sample']:
+                    mapping_line = f"  - {key} → ID: {value['tracking_id']}, Campaign: {value.get('campaign_name', 'N/A')}"
                     st.write(f"  - `{key}` → ID: `{value['tracking_id']}`, Campaign: `{value.get('campaign_name', 'N/A')}`")
+                    debug_text += mapping_line + "\n"
+        
+        # Add download and copy buttons
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.download_button(
+                label="📥 Download Debug Report",
+                data=debug_text,
+                file_name="lead_analyzer_debug.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+        
+        with col2:
+            # Copy button using Streamlit's built-in functionality
+            if st.button("📋 Copy to Clipboard", use_container_width=True):
+                st.code(debug_text, language=None)
+                st.success("✅ Debug info displayed above - you can select and copy it")
 
 # ---- Footer ----
 st.markdown("<hr/>", unsafe_allow_html=True)
