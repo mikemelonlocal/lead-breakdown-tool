@@ -392,6 +392,11 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
     # URL report contains Final URLs with tracking IDs like: ?cmpid=MLBDSF001-001R
     # We extract tracking ID from Final URL, then match to Tab 1 stats
     if url_report_df is not None and not url_report_df.empty:
+        # DEBUG: Show what columns we have in URL report
+        with st.expander("🔍 URL Report Debug"):
+            st.write("**URL Report Columns:**", url_report_df.columns.tolist())
+            st.write("**URL Report Shape:**", url_report_df.shape)
+        
         # Look for Final URL column
         final_url_col = None
         for col in url_report_df.columns:
@@ -400,12 +405,24 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                 final_url_col = col
                 break
         
+        if not final_url_col:
+            with st.expander("⚠️ URL Report Issue"):
+                st.warning(f"Could not find Final URL column in URL report. Columns: {url_report_df.columns.tolist()}")
+        
         # If URL report has Final URL column, extract tracking Campaign IDs
         if final_url_col:
             import re
             
+            with st.expander("🔍 URL Extraction Debug"):
+                st.write(f"**Found Final URL column:** `{final_url_col}`")
+                sample_urls = url_report_df[final_url_col].dropna().head(5).tolist()
+                st.write("**Sample URLs:**")
+                for url in sample_urls:
+                    st.code(url)
+            
             # Create mapping: (Account + Ad Group) -> (Tracking Campaign ID, Campaign Name)
             url_map = {}
+            extracted_count = 0
             
             for _, row in url_report_df.iterrows():
                 final_url = str(row.get(final_url_col, '')).strip() if pd.notna(row.get(final_url_col)) else None
@@ -422,6 +439,7 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                         match = re.search(rf'{param}([^&\s]+)', final_url, re.IGNORECASE)
                         if match:
                             tracking_id = match.group(1).strip()
+                            extracted_count += 1
                             break
                 
                 if not tracking_id:
@@ -454,6 +472,14 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                         'tracking_id': tracking_id,
                         'campaign_name': campaign_name
                     }
+            
+            with st.expander("🔍 URL Extraction Results"):
+                st.write(f"**Extracted tracking IDs from {extracted_count} URLs**")
+                st.write(f"**Created {len(url_map)} ad group mappings**")
+                if url_map:
+                    st.write("**Sample mappings (first 5):**")
+                    for i, (key, value) in enumerate(list(url_map.items())[:5]):
+                        st.write(f"  - `{key}` → Tracking ID: `{value['tracking_id']}`, Campaign: `{value['campaign_name']}`")
             
             # Match ads data using URL report mapping
             def get_conversions_via_url_report(row):
