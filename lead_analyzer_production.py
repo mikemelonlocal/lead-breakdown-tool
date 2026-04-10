@@ -3575,34 +3575,11 @@ with main_tab1:
                 
                 if enriched_count > 0:
                     st.success(f"✅ Enriched {enriched_count}/{total_with_campaign} campaigns with Product from mapping")
-                    
-                    # Debug: Show sample mappings and matching attempts
-                    with st.expander("🔍 Product Mapping Debug", expanded=False):
-                        if match_attempts:
-                            st.write("**Matching Attempts (first 20):**")
-                            st.dataframe(pd.DataFrame(match_attempts), hide_index=True)
-                        
-                        debug_sample = df_in[df_in['Product'].notna()][['_cleaned_campaign_id', 'Product']].drop_duplicates().head(10)
-                        st.write("**Sample Matched Campaign IDs:**")
-                        st.dataframe(debug_sample, hide_index=True)
-                        
-                        # Show product distribution from mapping
-                        product_counts = df_in['Product'].value_counts()
-                        st.write("**Product Distribution (from mapping):**")
-                        st.dataframe(product_counts.reset_index().rename(columns={'index': 'Product', 'Product': 'Count'}), hide_index=True)
                 else:
                     st.warning(f"⚠️ No Campaign IDs matched to Products. Campaign numbers may not exist in mapping.")
-                    
-                    # Debug: Show what campaign IDs we're trying to match
-                    with st.expander("🔍 Matching Debug - No Matches Found", expanded=True):
-                        st.write("**Campaign IDs in data (first 10):**")
-                        sample_ids = df_in['_cleaned_campaign_id'].dropna().unique()[:10]
-                        for cid in sample_ids:
-                            st.code(cid)
-                        
-                        if match_attempts:
-                            st.write("**Matching Attempts:**")
-                            st.dataframe(pd.DataFrame(match_attempts), hide_index=True)
+                
+                # Store matching attempts for consolidated debug report
+                st.session_state.product_matching_debug = match_attempts
                 
                 # Clean up temporary column
                 df_in = df_in.drop(columns=['_cleaned_campaign_id'])
@@ -7526,6 +7503,29 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 if 'tab1_domain_detected' in debug and debug['tab1_domain_detected']:
                     st.write(f"**Agent Domain Detected:** `{debug['tab1_domain_detected']}`")
                     debug_text += f"\nAgent Domain Detected: {debug['tab1_domain_detected']}\n"
+            
+            # Product Matching Debug
+            if 'product_matching_debug' in st.session_state and st.session_state.product_matching_debug:
+                st.markdown("### 🎯 Product Matching Debug")
+                st.write("**Matching Attempts (first 20 Campaign IDs):**")
+                debug_text += "\n=== PRODUCT MATCHING DEBUG ===\n\n"
+                
+                matching_df = pd.DataFrame(st.session_state.product_matching_debug)
+                st.dataframe(matching_df, hide_index=True, use_container_width=True)
+                
+                # Add to text export
+                debug_text += "Matching Attempts:\n"
+                for idx, row in matching_df.iterrows():
+                    debug_text += f"  Campaign ID: {row['Campaign ID']}\n"
+                    debug_text += f"  Patterns: {row['Pattern']}\n"
+                    debug_text += f"  Product: {row['Product']}\n"
+                    debug_text += f"  Matched: {row['Matched']}\n\n"
+                
+                # Show summary stats
+                matched_count = matching_df[matching_df['Matched'] == 'YES'].shape[0]
+                total_count = matching_df.shape[0]
+                st.write(f"**Match Rate (in sample):** {matched_count}/{total_count} ({100*matched_count/total_count:.1f}%)")
+                debug_text += f"\nMatch Rate (in sample): {matched_count}/{total_count} ({100*matched_count/total_count:.1f}%)\n"
             
             # Download/Copy buttons
             st.markdown("---")
