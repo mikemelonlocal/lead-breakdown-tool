@@ -344,53 +344,123 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
             stats_id_col = col
             break
     
-    # Build campaign map from Tab 1 stats
-    # Key is (Campaign ID or Name, Office) -> conversions
+    # Build campaign map from Tab 1 stats using Domain + Campaign prefix
+    # This allows matching URLs like "insurancequotesouth.com/.../cmpid=MLGDF172-001R" 
+    # to stats like "insurancequotesouth.com + MLGDF172-001HVT1"
     campaign_map = {}
     
-    # Check if Office column exists (multi-office scenario)
+    # Check if Domain and Office columns exist
+    has_domain = 'Domain' in campaign_stats_df.columns
     has_office = 'Office' in campaign_stats_df.columns
     
-    if stats_id_col:
-        # Tab 1 has Campaign IDs column - use that as primary key
-        for _, row in campaign_stats_df.iterrows():
-            campaign_id = str(row[stats_id_col]).strip() if pd.notna(row[stats_id_col]) else None
-            if campaign_id and campaign_id != 'nan':
-                # Remove any decimal points from float strings (20643283194.0 -> 20643283194)
-                if '.' in campaign_id:
-                    campaign_id = campaign_id.split('.')[0]
-                
-                # Store with office if available
-                if has_office:
-                    office = row.get('Office', 'Unknown')
-                    key = (campaign_id, office)
-                else:
-                    key = campaign_id
-                    
-                campaign_map[key] = {
-                    'conversions': row.get('Total Conversions', 0)
-                }
-    
-    # Also map by campaign name as fallback
-    campaign_name_map = {}
     if 'Campaign' in campaign_stats_df.columns:
         for _, row in campaign_stats_df.iterrows():
-            campaign_name = str(row['Campaign']).strip() if pd.notna(row['Campaign']) else None
-            if campaign_name:
-                # Store with office if available
-                if has_office:
-                    office = row.get('Office', 'Unknown')
-                    key = (campaign_name, office)
-                else:
-                    key = campaign_name
-                    
-                campaign_name_map[key] = {
-                    'conversions': row.get('Total Conversions', 0)
+            campaign_id = str(row['Campaign']).strip() if pd.notna(row['Campaign']) else None
+            if not campaign_id or campaign_id == 'nan':
+                continue
+            
+            # Extract campaign prefix (MLGDF172-001HVT1 -> MLGDF172)
+            campaign_prefix = campaign_id.split('-')[0] if '-' in campaign_id else campaign_id
+            
+            # Build key: (Domain, Campaign_Prefix, Office) or variations
+            if has_domain and has_office:
+                domain = str(row.get('Domain', '')).strip().lower() if pd.notna(row.get('Domain')) else None
+                office = row.get('Office', 'Unknown')
+                if domain:
+                    # Normalize domain (remove www., http://, https://)
+                    domain = domain.replace('http://', '').replace('https://', '').replace('www.', '')
+                    key = (domain, campaign_prefix, office)
+                    campaign_map[key] = {
+                        'conversions': row.get('Total Conversions', 0),
+                        'full_campaign_id': campaign_id
+                    }
+            elif has_domain:
+                domain = str(row.get('Domain', '')).strip().lower() if pd.notna(row.get('Domain')) else None
+                if domain:
+                    domain = domain.replace('http://', '').replace('https://', '').replace('www.', '')
+                    key = (domain, campaign_prefix)
+                    campaign_map[key] = {
+                        'conversions': row.get('Total Conversions', 0),
+                        'full_campaign_id': campaign_id
+                    }
+            elif has_office:
+                office = row.get('Office', 'Unknown')
+                key = (campaign_prefix, office)
+                campaign_map[key] = {
+                    'conversions': row.get('Total Conversions', 0),
+                    'full_campaign_id': campaign_id
+                }
+            else:
+                key = campaign_prefix
+                campaign_map[key] = {
+                    'conversions': row.get('Total Conversions', 0),
+                    'full_campaign_id': campaign_id
                 }
     
-    # Strategy 1: Extract tracking Campaign IDs from URL report Final URLs
-    # URL report contains Final URLs with tracking IDs like: ?cmpid=MLBDSF001-001R
-    # We extract tracking ID from Final URL, then match to Tab 1 stats
+    # Strategy 1: Match using Campaign Name from ad group report
+    # Campaign names like "Legacy - Fire 172 - SF Renters Insurance - Desktop"
+    # Match to stats Campaign IDs like "MLGDF172-001HVT1" by extracting "F172" code
+    
+    def get_conversions_by_campaign_name(row):
+        """Match ad group to stats using Campaign Name fire code extraction."""
+        campaign_name = str(row.get('Campaign', '')).strip() if pd.notna(row.get('Campaign')) else None
+        if not campaign_name:
+            return None
+        
+        # Extract fire code from campaign name (e.g., "Fire 172" -> "F172")
+        import re
+        fire_match = re.search(r'Fire\s+(\d+)', campaign_name, re.IGNORECASE)
+        if not fire_match:
+            return None
+        
+        fire_code = f"F{fire_match.group(1)}"  # "172" -> "F172"
+        
+        # Detect office from campaign name
+        office = detect_office(campaign_name)
+        
+        # Extract domain if available in ad group report
+        domain = None
+        if 'Final URL' in row:
+            final_url = str(row.get('Final URL', '')).strip() if pd.notna(row.get('Final URL')) else None
+            if final_url and final_url != 'nan':
+                match = re.search(r'https?://(?:www\.)?([^/?]+)', final_url)
+                if match:
+                    domain = match.group(1).lower()
+        
+        # Match using fire code in stats Campaign IDs
+        # Look for campaigns that contain the fire code (e.g., MLGDF172, MLBDF172)
+        matched_conversion = None
+        
+        for key, data in campaign_map.items():
+            # Unpack key based on structure
+            if isinstance(key, tuple):
+                if len(key) == 3:  # (domain, campaign_prefix, office)
+                    stats_domain, stats_prefix, stats_office = key
+                    if domain and stats_domain == domain and fire_code in stats_prefix and stats_office == office:
+                        matched_conversion = data['conversions']
+                        break
+                elif len(key) == 2:  # (domain, campaign_prefix) or (campaign_prefix, office)
+                    if has_domain:
+                        stats_domain, stats_prefix = key
+                        if domain and stats_domain == domain and fire_code in stats_prefix:
+                            matched_conversion = data['conversions']
+                            break
+                    else:
+                        stats_prefix, stats_office = key
+                        if fire_code in stats_prefix and stats_office == office:
+                            matched_conversion = data['conversions']
+                            break
+            else:  # Single campaign_prefix
+                if fire_code in key:
+                    matched_conversion = data['conversions']
+                    break
+        
+        return matched_conversion
+    
+    ads_df['Campaign Conversions'] = ads_df.apply(get_conversions_by_campaign_name, axis=1)
+    return ads_df
+    
+    # First: Process URL report if available (for debug info)
     if url_report_df is not None and not url_report_df.empty:
         # Store debug info in session state
         if 'debug_info' not in st.session_state:
@@ -592,20 +662,52 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                 tracking_id = url_data['tracking_id']
                 campaign_name = url_data.get('campaign_name', '')
                 
+                # Extract campaign prefix (MLGDF172-001R -> MLGDF172)
+                campaign_prefix = tracking_id.split('-')[0] if '-' in tracking_id else tracking_id
+                
+                # Extract domain from Final URL for this ad group
+                # We need to go back to url_report_df to get the Final URL
+                domain = None
+                for _, url_row in url_report_df.iterrows():
+                    url_ad_group = None
+                    for col in ['Ad group', 'Ad group name', 'Adgroup']:
+                        if col in url_row and pd.notna(url_row[col]):
+                            url_ad_group = str(url_row[col]).strip()
+                            break
+                    
+                    if url_ad_group == ad_group:
+                        # Found matching ad group - extract domain from Final URL
+                        final_url = str(url_row.get(final_url_col, '')).strip() if pd.notna(url_row.get(final_url_col)) else None
+                        if final_url and final_url != 'nan':
+                            import re
+                            match = re.search(r'https?://(?:www\.)?([^/?]+)', final_url)
+                            if match:
+                                domain = match.group(1).lower()
+                                break
+                
                 # Detect office from campaign name (always returns Legacy or MOA)
                 office = detect_office(campaign_name)
                 
-                # Use office-specific match if stats have office column
-                if has_office:
-                    lookup_key = (tracking_id, office)
-                    if lookup_key in campaign_map:
-                        return campaign_map[lookup_key]['conversions']
-                else:
-                    # No office in stats - direct match
-                    if tracking_id in campaign_map:
-                        return campaign_map[tracking_id]['conversions']
+                # Match using Domain + Campaign Prefix + Office
+                matched_conversion = None
                 
-                return None
+                if has_domain and has_office and domain:
+                    lookup_key = (domain, campaign_prefix, office)
+                    if lookup_key in campaign_map:
+                        matched_conversion = campaign_map[lookup_key]['conversions']
+                elif has_domain and domain:
+                    lookup_key = (domain, campaign_prefix)
+                    if lookup_key in campaign_map:
+                        matched_conversion = campaign_map[lookup_key]['conversions']
+                elif has_office:
+                    lookup_key = (campaign_prefix, office)
+                    if lookup_key in campaign_map:
+                        matched_conversion = campaign_map[lookup_key]['conversions']
+                else:
+                    if campaign_prefix in campaign_map:
+                        matched_conversion = campaign_map[campaign_prefix]['conversions']
+                
+                return matched_conversion
             
             ads_df['Campaign Conversions'] = ads_df.apply(get_conversions_via_url_report, axis=1)
             return ads_df
@@ -3351,8 +3453,32 @@ with main_tab1:
                     
                     # Only aggregate if we have at least one conversion column
                     if agg_dict:
-                        # Group by BOTH campaign and agency to preserve office information
-                        campaign_stats = df_in.groupby([campaign_col, 'agency']).agg(agg_dict).fillna(0)
+                        # Clean Campaign IDs: Remove MD5 hash prefix (32 hex chars at start)
+                        # Example: "149084BF90E9D889F9C32F2478957BE5MLQSHM" -> "MLQSHM"
+                        import re
+                        def clean_campaign_id(campaign_id):
+                            """Remove MD5 hash prefix from campaign ID if present."""
+                            if pd.isna(campaign_id):
+                                return campaign_id
+                            campaign_str = str(campaign_id).strip()
+                            # Check if starts with 32 hex characters (MD5 hash)
+                            match = re.match(r'^[0-9A-Fa-f]{32}(.+)$', campaign_str)
+                            if match:
+                                return match.group(1)  # Return everything after the hash
+                            return campaign_str  # Return as-is if no hash found
+                        
+                        # Create a cleaned campaign ID column for grouping
+                        df_in['_cleaned_campaign_id'] = df_in[campaign_col].apply(clean_campaign_id)
+                        
+                        # Check if Domain column exists (for URL matching)
+                        domain_col = get_col(df_in, ["domain"])
+                        
+                        # Group by cleaned campaign ID, domain (if available), and agency to preserve office information
+                        group_cols = ['_cleaned_campaign_id', 'agency']
+                        if domain_col:
+                            group_cols.insert(1, domain_col)  # Add domain between campaign and agency
+                        
+                        campaign_stats = df_in.groupby(group_cols).agg(agg_dict).fillna(0)
                         
                         # Calculate total conversions based on what user included
                         campaign_stats['Total Conversions'] = 0
@@ -3368,9 +3494,11 @@ with main_tab1:
                         
                         # Rename columns to standard names
                         rename_map = {
-                            campaign_col: 'Campaign',
+                            '_cleaned_campaign_id': 'Campaign',
                             'agency': 'Office'  # Rename agency to Office for clarity
                         }
+                        if domain_col:
+                            rename_map[domain_col] = 'Domain'
                         if qs_col:
                             rename_map[qs_col] = 'Quote Starts'
                         if phone_col:
