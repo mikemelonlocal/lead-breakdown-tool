@@ -3485,6 +3485,9 @@ with main_tab1:
                 mapping_df['_clean_utm'] = mapping_df['UTM'].fillna('')
                 
                 # Create a function to match Campaign IDs to Products via platform + campaign number
+                # Debug tracking
+                match_attempts = []
+                
                 def match_product(campaign_id):
                     """
                     Match Campaign ID to Product via platform + campaign number extraction.
@@ -3542,8 +3545,25 @@ with main_tab1:
                             ]
                             
                             if len(matching_utms) > 0:
-                                # Return the first matching product
-                                return matching_utms.iloc[0]['Product']
+                                # Track successful match for debugging
+                                product = matching_utms.iloc[0]['Product']
+                                if len(match_attempts) < 20:  # Limit to first 20 for performance
+                                    match_attempts.append({
+                                        'Campaign ID': campaign_str,
+                                        'Pattern': pattern,
+                                        'Product': product,
+                                        'Matched': 'YES'
+                                    })
+                                return product
+                        
+                        # Track failed match
+                        if len(match_attempts) < 20:
+                            match_attempts.append({
+                                'Campaign ID': campaign_str,
+                                'Pattern': ', '.join(search_patterns),
+                                'Product': None,
+                                'Matched': 'NO'
+                            })
                     
                     return None
                 
@@ -3555,8 +3575,34 @@ with main_tab1:
                 
                 if enriched_count > 0:
                     st.success(f"✅ Enriched {enriched_count}/{total_with_campaign} campaigns with Product from mapping")
+                    
+                    # Debug: Show sample mappings and matching attempts
+                    with st.expander("🔍 Product Mapping Debug", expanded=False):
+                        if match_attempts:
+                            st.write("**Matching Attempts (first 20):**")
+                            st.dataframe(pd.DataFrame(match_attempts), hide_index=True)
+                        
+                        debug_sample = df_in[df_in['Product'].notna()][['_cleaned_campaign_id', 'Product']].drop_duplicates().head(10)
+                        st.write("**Sample Matched Campaign IDs:**")
+                        st.dataframe(debug_sample, hide_index=True)
+                        
+                        # Show product distribution from mapping
+                        product_counts = df_in['Product'].value_counts()
+                        st.write("**Product Distribution (from mapping):**")
+                        st.dataframe(product_counts.reset_index().rename(columns={'index': 'Product', 'Product': 'Count'}), hide_index=True)
                 else:
                     st.warning(f"⚠️ No Campaign IDs matched to Products. Campaign numbers may not exist in mapping.")
+                    
+                    # Debug: Show what campaign IDs we're trying to match
+                    with st.expander("🔍 Matching Debug - No Matches Found", expanded=True):
+                        st.write("**Campaign IDs in data (first 10):**")
+                        sample_ids = df_in['_cleaned_campaign_id'].dropna().unique()[:10]
+                        for cid in sample_ids:
+                            st.code(cid)
+                        
+                        if match_attempts:
+                            st.write("**Matching Attempts:**")
+                            st.dataframe(pd.DataFrame(match_attempts), hide_index=True)
                 
                 # Clean up temporary column
                 df_in = df_in.drop(columns=['_cleaned_campaign_id'])
