@@ -7169,6 +7169,51 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             )
         else:
             st.success("✅ No zero-impression ad groups to clean up.")
+    
+    # ---- Tab 1 Debug Section ----
+    if 'debug_info' in st.session_state and st.session_state.debug_info:
+        debug = st.session_state.debug_info
+        st.markdown("---")
+        with st.expander("🔍 **Tab 1 Processing Debug** - Click to expand", expanded=False):
+            debug_text = "=== TAB 1 PROCESSING DEBUG ===\n\n"
+            
+            # Campaign Stats Processing
+            if 'tab1_campaign_col_detected' in debug:
+                st.markdown("### 📊 Campaign Stats Processing")
+                st.write(f"**Campaign Column Detected:** `{debug['tab1_campaign_col_detected']}`")
+                debug_text += f"Campaign Column Detected: {debug['tab1_campaign_col_detected']}\n"
+                
+                if 'tab1_campaigns_processed' in debug:
+                    st.write(f"**Total Campaigns Processed:** {debug['tab1_campaigns_processed']}")
+                    debug_text += f"Total Campaigns Processed: {debug['tab1_campaigns_processed']}\n\n"
+                
+                if 'tab1_sample_campaigns' in debug and debug['tab1_sample_campaigns']:
+                    st.write("**Sample Campaign IDs (after MD5 hash removal):**")
+                    debug_text += "Sample Campaign IDs (after MD5 hash removal):\n"
+                    for camp_id in debug['tab1_sample_campaigns'][:10]:
+                        st.code(camp_id, language=None)
+                        debug_text += f"  - {camp_id}\n"
+                
+                if 'tab1_domain_detected' in debug and debug['tab1_domain_detected']:
+                    st.write(f"**Agent Domain Detected:** `{debug['tab1_domain_detected']}`")
+                    debug_text += f"\nAgent Domain Detected: {debug['tab1_domain_detected']}\n"
+            
+            # Download/Copy buttons
+            st.markdown("---")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.download_button(
+                    label="📥 Download Tab 1 Debug",
+                    data=debug_text,
+                    file_name="tab1_processing_debug.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+            
+            with col2:
+                st.markdown("**📋 Copy Debug Text:**")
+                st.code(debug_text, language=None)
 
 
 # ========== TAB 2: ADS ACCOUNT HEALTH ==========
