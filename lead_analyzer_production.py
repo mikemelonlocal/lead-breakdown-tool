@@ -1317,6 +1317,51 @@ def _norm(s: str) -> str:
     return re.sub(r'[^a-z0-9]+', '_', str(s).strip().lower())
 
 
+def load_campaign_mapping():
+    """
+    Load the campaign/ad group to Product/UTM mapping file.
+    This is a static mapping used for enriching both Tab 1 and Tab 2 data.
+    
+    Returns:
+        pd.DataFrame with columns: Campaign, Ad group, Product, UTM
+    """
+    mapping_path = pathlib.Path(__file__).parent / 'complete_utm_mapping.csv'
+    
+    # Fallback for different deployment scenarios
+    if not mapping_path.exists():
+        mapping_path = pathlib.Path('complete_utm_mapping.csv')
+    
+    if not mapping_path.exists():
+        st.warning("⚠️ Campaign mapping file not found. Product/UTM enrichment will be unavailable.")
+        return None
+    
+    try:
+        mapping_df = pd.read_csv(mapping_path)
+        
+        # Validate required columns
+        if 'Campaign' not in mapping_df.columns or 'Ad group' not in mapping_df.columns:
+            st.error("❌ Mapping file missing required columns: Campaign, Ad group")
+            return None
+        
+        return mapping_df
+    except Exception as e:
+        st.error(f"❌ Error loading campaign mapping: {e}")
+        return None
+
+
+# Initialize campaign mapping in session state
+if 'campaign_mapping_loaded' not in st.session_state:
+    mapping_df = load_campaign_mapping()
+    if mapping_df is not None:
+        st.session_state.campaign_mapping = mapping_df
+        st.session_state.tab1_mapping = mapping_df  # For Tab 1
+        st.session_state.campaign_mapping_loaded = True
+    else:
+        st.session_state.campaign_mapping = None
+        st.session_state.tab1_mapping = None
+        st.session_state.campaign_mapping_loaded = False
+
+
 def get_col(df: pd.DataFrame, aliases: List[str], default: Optional[str] = None) -> Optional[str]:
     """
     Find column in dataframe using list of aliases.
@@ -2705,7 +2750,16 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
     # Classify platform and product
     df["platform"] = df.apply(lambda r: classify_platform(r[col_campaign], r[col_traffic]), axis=1)
     df["domain"] = df[col_domain].astype(str)
-    df["product"] = df.apply(lambda r: classify_product(r[col_campaign], r[col_landing], r["platform"]), axis=1)
+    
+    # Use mapped Product if available (from mapping enrichment), otherwise use heuristic classification
+    if 'Product' in df.columns:
+        # Mapping enrichment already ran - use those values, fill missing with heuristic
+        df["product"] = df["Product"].fillna(
+            df.apply(lambda r: classify_product(r[col_campaign], r[col_landing], r["platform"]), axis=1)
+        )
+    else:
+        # No mapping - use heuristic classification
+        df["product"] = df.apply(lambda r: classify_product(r[col_campaign], r[col_landing], r["platform"]), axis=1)
     
     # Classify device based on campaign ID patterns
     df["device"] = df.apply(lambda r: classify_device(r[col_campaign], r["platform"]), axis=1)
@@ -3321,34 +3375,16 @@ with main_tab1:
     with c2:
         up_moa = st.file_uploader("Upload MOA file (CSV or Excel)", type=["csv", "xlsx", "xls"], key="upload_moa")
     
-    # Mapping file upload
-    with st.expander("📋 Campaign/Ad Group Mapping (Optional - for Product/UTM enrichment)", expanded=False):
-        st.markdown("""
-        Upload a CSV with: **Campaign, Ad group, Product, UTM**
-        
-        This enriches your stats with Product and UTM data for better analysis.
-        """)
-        mapping_upload = st.file_uploader(
-            "Upload Mapping CSV",
-            type=['csv'],
-            key='tab1_mapping_upload',
-            help="CSV with columns: Campaign, Ad group, Product, UTM"
-        )
-        
-        if mapping_upload:
-            try:
-                tab1_mapping_df = pd.read_csv(mapping_upload)
-                if 'Campaign' in tab1_mapping_df.columns and 'Ad group' in tab1_mapping_df.columns:
-                    st.session_state.tab1_mapping = tab1_mapping_df
-                    st.success(f"✅ Loaded {len(tab1_mapping_df)} mappings")
-                    
-                    optional_cols = [col for col in ['Product', 'UTM'] if col in tab1_mapping_df.columns]
-                    if optional_cols:
-                        st.info(f"📊 Enrichment columns: {', '.join(optional_cols)}")
-                else:
-                    st.error("❌ Mapping file must have 'Campaign' and 'Ad group' columns")
-            except Exception as e:
-                st.error(f"❌ Error loading mapping: {e}")
+    # Campaign/Ad Group Mapping (Auto-loaded)
+    if 'tab1_mapping' in st.session_state and st.session_state.tab1_mapping is not None:
+        with st.expander("📋 Product/UTM Mapping Info", expanded=False):
+            mapping_df = st.session_state.tab1_mapping
+            st.success(f"✅ {len(mapping_df):,} campaign/ad group mappings loaded")
+            
+            # Show sample mappings
+            st.markdown("**Sample Mappings:**")
+            sample = mapping_df[mapping_df['UTM'].notna() & (mapping_df['UTM'] != '')].head(5)
+            st.dataframe(sample[['Campaign', 'Ad group', 'Product', 'UTM']], hide_index=True)
     
     # Show file status
     if up_legacy or up_moa:
@@ -3445,19 +3481,82 @@ with main_tab1:
                 df_in['_cleaned_campaign_id'] = df_in[campaign_col_raw].apply(clean_campaign_id)
                 
                 # Create mapping dict: UTM -> Product
-                # Filter out empty UTMs
-                mapping_dict = mapping_df[mapping_df['UTM'].notna() & (mapping_df['UTM'] != '')].set_index('UTM')['Product'].to_dict()
+                # Clean UTM values in mapping
+                mapping_df['_clean_utm'] = mapping_df['UTM'].fillna('')
                 
-                # Match Campaign IDs to UTMs
-                df_in['Product'] = df_in['_cleaned_campaign_id'].map(mapping_dict)
+                # Create a function to match Campaign IDs to Products via platform + campaign number
+                def match_product(campaign_id):
+                    """
+                    Match Campaign ID to Product via platform + campaign number extraction.
+                    Examples:
+                      MLGDF172-001HVT1 -> Google + 172 -> match GD172 or MLGD172 -> Renters
+                      MLBDF172-001RE2 -> Microsoft + 172 -> match BD172 or MLBD172 -> Renters
+                      MLQSAM -> Melon Max Auto -> match MLQS...AM
+                    """
+                    if pd.isna(campaign_id):
+                        return None
+                    
+                    campaign_str = str(campaign_id).strip()
+                    
+                    # Detect platform from prefix
+                    platform_prefix = ''
+                    if 'MLG' in campaign_str or campaign_str.startswith('G'):
+                        platform_prefix = 'G'  # Google
+                    elif 'MLB' in campaign_str or campaign_str.startswith('B'):
+                        platform_prefix = 'B'  # Microsoft Bing
+                    elif 'MLQS' in campaign_str or 'QS' in campaign_str:
+                        platform_prefix = 'QS'  # Melon Max
+                    
+                    # Extract device (D=Desktop, M=Mobile, S=Search)
+                    device_code = ''
+                    if 'D' in campaign_str and platform_prefix:
+                        device_code = 'D'
+                    elif 'M' in campaign_str and platform_prefix:
+                        device_code = 'M'
+                    elif 'S' in campaign_str and platform_prefix:
+                        device_code = 'S'
+                    
+                    # Extract campaign number (e.g., 172, 001, etc.)
+                    num_match = re.search(r'[A-Z]*[DF]?(\d+)', campaign_str)
+                    if num_match:
+                        campaign_num = num_match.group(1)
+                        
+                        # Build search patterns
+                        # For Google Desktop 172: GD172, MLGD172
+                        # For Microsoft Desktop 172: BD172, MLBD172
+                        search_patterns = []
+                        
+                        if platform_prefix and device_code:
+                            # Platform + Device + Number (e.g., GD172, BD172)
+                            search_patterns.append(f"{platform_prefix}{device_code}{campaign_num}")
+                            # ML + Platform + Device + Number (e.g., MLGD172, MLBD172)
+                            search_patterns.append(f"ML{platform_prefix}{device_code}{campaign_num}")
+                        
+                        # Also try just the number for fallback
+                        search_patterns.append(campaign_num)
+                        
+                        # Try each pattern
+                        for pattern in search_patterns:
+                            matching_utms = mapping_df[
+                                mapping_df['_clean_utm'].str.contains(pattern, case=False, na=False, regex=False)
+                            ]
+                            
+                            if len(matching_utms) > 0:
+                                # Return the first matching product
+                                return matching_utms.iloc[0]['Product']
+                    
+                    return None
+                
+                # Apply matching function
+                df_in['Product'] = df_in['_cleaned_campaign_id'].apply(match_product)
                 
                 enriched_count = df_in['Product'].notna().sum()
                 total_with_campaign = df_in['_cleaned_campaign_id'].notna().sum()
                 
                 if enriched_count > 0:
-                    st.success(f"✅ Enriched {enriched_count}/{total_with_campaign} campaigns with Product from mapping (matched on UTM)")
+                    st.success(f"✅ Enriched {enriched_count}/{total_with_campaign} campaigns with Product from mapping")
                 else:
-                    st.warning(f"⚠️ No Campaign IDs matched UTMs in mapping. Check that Campaign IDs match UTM values.")
+                    st.warning(f"⚠️ No Campaign IDs matched to Products. Campaign numbers may not exist in mapping.")
                 
                 # Clean up temporary column
                 df_in = df_in.drop(columns=['_cleaned_campaign_id'])
@@ -7410,38 +7509,21 @@ with main_tab2:
         else:
             st.warning("⚠️ No campaign stats found - upload stats in Tab 1 to enable conversion matching")
         
-        # Campaign/Ad Group Mapping Upload (Optional)
-        with st.expander("📋 Campaign/Ad Group Mapping (Optional)", expanded=False):
-            st.markdown("""
-            Upload a CSV mapping file with columns: **Campaign, Ad group, Product, UTM**
-            
-            This will enrich your ad group data with Product and UTM information.
-            """)
-            
-            mapping_file = st.file_uploader(
-                "Upload Mapping CSV",
-                type=['csv'],
-                key='mapping_upload',
-                help="CSV with columns: Campaign, Ad group, Product, UTM"
-            )
-            
-            if mapping_file:
-                try:
-                    mapping_df = pd.read_csv(mapping_file)
-                    required_cols = ['Campaign', 'Ad group']
-                    
-                    if all(col in mapping_df.columns for col in required_cols):
-                        st.session_state.campaign_mapping = mapping_df
-                        st.success(f"✅ Loaded {len(mapping_df)} campaign/ad group mappings")
-                        
-                        # Show what columns are available
-                        optional_cols = [col for col in ['Product', 'UTM'] if col in mapping_df.columns]
-                        if optional_cols:
-                            st.info(f"📊 Available enrichment columns: {', '.join(optional_cols)}")
-                    else:
-                        st.error(f"❌ Mapping file must have columns: {', '.join(required_cols)}")
-                except Exception as e:
-                    st.error(f"❌ Error loading mapping file: {e}")
+        # Campaign/Ad Group Mapping (Auto-loaded)
+        if 'campaign_mapping' in st.session_state and st.session_state.campaign_mapping is not None:
+            with st.expander("📋 Product/UTM Mapping Info", expanded=False):
+                mapping_df = st.session_state.campaign_mapping
+                st.success(f"✅ {len(mapping_df):,} campaign/ad group mappings auto-loaded")
+                
+                # Show available columns
+                optional_cols = [col for col in ['Product', 'UTM'] if col in mapping_df.columns]
+                if optional_cols:
+                    st.info(f"📊 Enrichment columns: {', '.join(optional_cols)}")
+                
+                # Show sample
+                st.markdown("**Sample Mappings:**")
+                sample = mapping_df.head(5)
+                st.dataframe(sample[['Campaign', 'Ad group', 'Product']], hide_index=True)
         
         st.markdown("""
         Upload your Google Ads **Ad Group Report** to get bid optimization recommendations 
