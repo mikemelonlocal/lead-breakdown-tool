@@ -6543,6 +6543,22 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
         
         ads_df = enrich_ads_with_campaign_stats(ads_df, st.session_state.campaign_stats, url_report_df)
         
+        # Enrich with Product and UTM from mapping file if available
+        if 'campaign_mapping' in st.session_state and st.session_state.campaign_mapping is not None:
+            mapping_df = st.session_state.campaign_mapping
+            
+            # Merge on Campaign + Ad group
+            ads_df = ads_df.merge(
+                mapping_df[['Campaign', 'Ad group', 'Product', 'UTM']],
+                on=['Campaign', 'Ad group'],
+                how='left',
+                suffixes=('', '_map')
+            )
+            
+            # Show enrichment summary
+            enriched_count = ads_df['Product'].notna().sum() if 'Product' in ads_df.columns else 0
+            st.info(f"📊 Enriched {enriched_count}/{len(ads_df)} ad groups with Product/UTM data from mapping")
+        
         # Show matching summary only if the column was added
         if 'Campaign Conversions' in ads_df.columns:
             matched_campaigns = ads_df['Campaign Conversions'].notna().sum()
@@ -7323,6 +7339,39 @@ with main_tab2:
             st.success(f"✅ Campaign stats available: {len(st.session_state.campaign_stats)} campaigns from Tab 1")
         else:
             st.warning("⚠️ No campaign stats found - upload stats in Tab 1 to enable conversion matching")
+        
+        # Campaign/Ad Group Mapping Upload (Optional)
+        with st.expander("📋 Campaign/Ad Group Mapping (Optional)", expanded=False):
+            st.markdown("""
+            Upload a CSV mapping file with columns: **Campaign, Ad group, Product, UTM**
+            
+            This will enrich your ad group data with Product and UTM information.
+            """)
+            
+            mapping_file = st.file_uploader(
+                "Upload Mapping CSV",
+                type=['csv'],
+                key='mapping_upload',
+                help="CSV with columns: Campaign, Ad group, Product, UTM"
+            )
+            
+            if mapping_file:
+                try:
+                    mapping_df = pd.read_csv(mapping_file)
+                    required_cols = ['Campaign', 'Ad group']
+                    
+                    if all(col in mapping_df.columns for col in required_cols):
+                        st.session_state.campaign_mapping = mapping_df
+                        st.success(f"✅ Loaded {len(mapping_df)} campaign/ad group mappings")
+                        
+                        # Show what columns are available
+                        optional_cols = [col for col in ['Product', 'UTM'] if col in mapping_df.columns]
+                        if optional_cols:
+                            st.info(f"📊 Available enrichment columns: {', '.join(optional_cols)}")
+                    else:
+                        st.error(f"❌ Mapping file must have columns: {', '.join(required_cols)}")
+                except Exception as e:
+                    st.error(f"❌ Error loading mapping file: {e}")
         
         st.markdown("""
         Upload your Google Ads **Ad Group Report** to get bid optimization recommendations 
