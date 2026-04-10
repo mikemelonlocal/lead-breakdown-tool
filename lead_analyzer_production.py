@@ -3573,10 +3573,9 @@ with main_tab1:
                 enriched_count = df_in['Product'].notna().sum()
                 total_with_campaign = df_in['_cleaned_campaign_id'].notna().sum()
                 
-                if enriched_count > 0:
-                    st.success(f"✅ Enriched {enriched_count}/{total_with_campaign} campaigns with Product from mapping")
-                else:
-                    st.warning(f"⚠️ No Campaign IDs matched to Products. Campaign numbers may not exist in mapping.")
+                # Store Product enrichment results for debug table
+                st.session_state.product_enrichment_count = enriched_count
+                st.session_state.product_enrichment_total = total_with_campaign
                 
                 # Store matching attempts for consolidated debug report
                 st.session_state.product_matching_debug = match_attempts
@@ -3584,13 +3583,12 @@ with main_tab1:
                 # Clean up temporary column
                 df_in = df_in.drop(columns=['_cleaned_campaign_id'])
         
-        # DEBUG INFO - Remove after testing
-        st.info(f"📊 Debug Info: Loaded {len(dfs)} file(s). Total rows: {len(df_in)}")
+        # Store file loading info for debug table
+        st.session_state.files_loaded = len(dfs)
+        st.session_state.total_rows = len(df_in)
         if "agency" in df_in.columns:
             agency_counts = df_in["agency"].value_counts()
-            st.info(f"Agency distribution: {agency_counts.to_dict()}")
-        else:
-            st.error("❌ 'agency' column is missing!")
+            st.session_state.agency_distribution = agency_counts.to_dict()
     
     
         # Sidebar Filters
@@ -3830,16 +3828,8 @@ with main_tab1:
                         st.session_state.debug_info['tab1_sample_campaigns'] = campaign_stats_reset['Campaign'].head(10).tolist() if 'Campaign' in campaign_stats_reset.columns else []
                         st.session_state.debug_info['tab1_domain_detected'] = agent_domain
                         
-                        # Show confirmation that data is ready for Tab 2
-                        st.success(f"✅ Campaign stats stored for Tab 2: {len(campaign_stats_reset)} campaigns with conversion data")
-                        
-                        # Show sample cleaned campaign IDs for debugging
-                        if 'Campaign' in campaign_stats_reset.columns:
-                            sample_campaigns = campaign_stats_reset['Campaign'].head(5).tolist()
-                            st.info(f"📋 Sample Campaign IDs (cleaned): {', '.join(str(c) for c in sample_campaigns)}")
-                        
-                        if agent_domain:
-                            st.info(f"🔗 Detected domain: {agent_domain} (will auto-filter in Tab 2)")
+                        # Store for consolidated debug table
+                        st.session_state.campaign_stats_count = len(campaign_stats_reset)
 
             
             status_text.text("📈 Aggregating results...")
@@ -7463,6 +7453,45 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
         with st.expander("🔍 **Tab 1 Processing Debug** - Click to expand", expanded=False):
             debug_text = "=== TAB 1 PROCESSING DEBUG ===\n\n"
             
+            # === SUMMARY STATUS ===
+            st.markdown("### 📊 Processing Summary")
+            summary_data = []
+            
+            # File loading
+            if 'files_loaded' in st.session_state:
+                summary_data.append(["Files Loaded", st.session_state.files_loaded])
+                debug_text += f"Files Loaded: {st.session_state.files_loaded}\n"
+            
+            if 'total_rows' in st.session_state:
+                summary_data.append(["Total Rows", st.session_state.total_rows])
+                debug_text += f"Total Rows: {st.session_state.total_rows}\n"
+            
+            # Agency distribution
+            if 'agency_distribution' in st.session_state:
+                for agency, count in st.session_state.agency_distribution.items():
+                    summary_data.append([f"{agency} Rows", count])
+                    debug_text += f"{agency} Rows: {count}\n"
+            
+            # Product enrichment
+            if 'product_enrichment_count' in st.session_state:
+                enriched = st.session_state.product_enrichment_count
+                total = st.session_state.product_enrichment_total
+                pct = (100 * enriched / total) if total > 0 else 0
+                summary_data.append(["Product Enrichment", f"{enriched}/{total} ({pct:.1f}%)"])
+                debug_text += f"Product Enrichment: {enriched}/{total} ({pct:.1f}%)\n"
+            
+            # Campaign stats for Tab 2
+            if 'campaign_stats_count' in st.session_state:
+                summary_data.append(["Campaign Stats for Tab 2", st.session_state.campaign_stats_count])
+                debug_text += f"Campaign Stats for Tab 2: {st.session_state.campaign_stats_count}\n"
+            
+            if summary_data:
+                summary_df = pd.DataFrame(summary_data, columns=["Metric", "Value"])
+                st.dataframe(summary_df, hide_index=True, use_container_width=True)
+                debug_text += "\n"
+            
+            st.markdown("---")
+            
             # Campaign Stats Processing
             if 'tab1_campaign_col_detected' in debug:
                 st.markdown("### 📊 Campaign Stats Processing")
@@ -7549,27 +7578,17 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
 with main_tab2:
         st.markdown("### Ads Account Health Checker")
         
-        # DEBUG: Check if campaign_stats exists
+        # Store Tab 2 status for debug table
         if 'campaign_stats' in st.session_state:
-            st.success(f"✅ Campaign stats available: {len(st.session_state.campaign_stats)} campaigns from Tab 1")
+            st.session_state.tab2_campaign_stats_available = len(st.session_state.campaign_stats)
         else:
-            st.warning("⚠️ No campaign stats found - upload stats in Tab 1 to enable conversion matching")
+            st.session_state.tab2_campaign_stats_available = 0
         
-        # Campaign/Ad Group Mapping (Auto-loaded)
+        # Store mapping info for debug table
         if 'campaign_mapping' in st.session_state and st.session_state.campaign_mapping is not None:
-            with st.expander("📋 Product/UTM Mapping Info", expanded=False):
-                mapping_df = st.session_state.campaign_mapping
-                st.success(f"✅ {len(mapping_df):,} campaign/ad group mappings auto-loaded")
-                
-                # Show available columns
-                optional_cols = [col for col in ['Product', 'UTM'] if col in mapping_df.columns]
-                if optional_cols:
-                    st.info(f"📊 Enrichment columns: {', '.join(optional_cols)}")
-                
-                # Show sample
-                st.markdown("**Sample Mappings:**")
-                sample = mapping_df.head(5)
-                st.dataframe(sample[['Campaign', 'Ad group', 'Product']], hide_index=True)
+            st.session_state.tab2_mapping_loaded = len(st.session_state.campaign_mapping)
+        else:
+            st.session_state.tab2_mapping_loaded = 0
         
         st.markdown("""
         Upload your Google Ads **Ad Group Report** to get bid optimization recommendations 
@@ -8087,6 +8106,50 @@ if 'debug_info' in st.session_state and st.session_state.debug_info:
         with col2:
             st.markdown("**📋 Copy Debug Text:**")
             st.code(debug_text, language=None)
+
+        # ========== TAB 2 DEBUG TABLE ==========
+        st.markdown("---")
+        with st.expander("🔍 **Tab 2 Processing Debug** - Click to expand", expanded=False):
+            tab2_debug_text = "=== TAB 2 PROCESSING DEBUG ===\n\n"
+            
+            # === SUMMARY STATUS ===
+            st.markdown("### 📊 Processing Summary")
+            tab2_summary_data = []
+            
+            # Campaign stats from Tab 1
+            if 'tab2_campaign_stats_available' in st.session_state:
+                count = st.session_state.tab2_campaign_stats_available
+                status = "✅ Available" if count > 0 else "❌ Not Available"
+                tab2_summary_data.append(["Campaign Stats from Tab 1", f"{status} ({count} campaigns)"])
+                tab2_debug_text += f"Campaign Stats from Tab 1: {status} ({count} campaigns)\n"
+            
+            # Mapping loaded
+            if 'tab2_mapping_loaded' in st.session_state:
+                count = st.session_state.tab2_mapping_loaded
+                status = "✅ Loaded" if count > 0 else "❌ Not Loaded"
+                tab2_summary_data.append(["Product/UTM Mapping", f"{status} ({count:,} mappings)"])
+                tab2_debug_text += f"Product/UTM Mapping: {status} ({count:,} mappings)\n"
+            
+            if tab2_summary_data:
+                tab2_summary_df = pd.DataFrame(tab2_summary_data, columns=["Metric", "Status"])
+                st.dataframe(tab2_summary_df, hide_index=True, use_container_width=True)
+            
+            # Download/Copy buttons
+            st.markdown("---")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.download_button(
+                    label="📥 Download Tab 2 Debug",
+                    data=tab2_debug_text,
+                    file_name="tab2_processing_debug.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+            
+            with col2:
+                st.markdown("**📋 Copy Debug Text:**")
+                st.code(tab2_debug_text, language=None)
 
 # ---- Footer ----
 st.markdown("<hr/>", unsafe_allow_html=True)
