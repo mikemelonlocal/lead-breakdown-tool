@@ -3321,6 +3321,35 @@ with main_tab1:
     with c2:
         up_moa = st.file_uploader("Upload MOA file (CSV or Excel)", type=["csv", "xlsx", "xls"], key="upload_moa")
     
+    # Mapping file upload
+    with st.expander("📋 Campaign/Ad Group Mapping (Optional - for Product/UTM enrichment)", expanded=False):
+        st.markdown("""
+        Upload a CSV with: **Campaign, Ad group, Product, UTM**
+        
+        This enriches your stats with Product and UTM data for better analysis.
+        """)
+        mapping_upload = st.file_uploader(
+            "Upload Mapping CSV",
+            type=['csv'],
+            key='tab1_mapping_upload',
+            help="CSV with columns: Campaign, Ad group, Product, UTM"
+        )
+        
+        if mapping_upload:
+            try:
+                tab1_mapping_df = pd.read_csv(mapping_upload)
+                if 'Campaign' in tab1_mapping_df.columns and 'Ad group' in tab1_mapping_df.columns:
+                    st.session_state.tab1_mapping = tab1_mapping_df
+                    st.success(f"✅ Loaded {len(tab1_mapping_df)} mappings")
+                    
+                    optional_cols = [col for col in ['Product', 'UTM'] if col in tab1_mapping_df.columns]
+                    if optional_cols:
+                        st.info(f"📊 Enrichment columns: {', '.join(optional_cols)}")
+                else:
+                    st.error("❌ Mapping file must have 'Campaign' and 'Ad group' columns")
+            except Exception as e:
+                st.error(f"❌ Error loading mapping: {e}")
+    
     # Show file status
     if up_legacy or up_moa:
         st.markdown("**Files Uploaded:**")
@@ -3391,6 +3420,47 @@ with main_tab1:
         st.info("Upload at least one file (Legacy or MOA) to begin.")
     else:
         df_in = pd.concat(dfs, ignore_index=True)
+        
+        # Enrich with Product/UTM from mapping if available
+        if 'tab1_mapping' in st.session_state and st.session_state.tab1_mapping is not None:
+            mapping_df = st.session_state.tab1_mapping
+            
+            # The mapping has Campaign, Ad group, Product, and UTM columns
+            # UTM column contains tracking codes like MLGD172-1R that match Campaign IDs in stats
+            campaign_col_raw = get_col(df_in, ["campaign_ids", "campaign ids", "campaign_id", "campaign id", "campaign"])
+            
+            if campaign_col_raw and 'UTM' in mapping_df.columns:
+                import re
+                
+                # Clean MD5 hashes from Campaign IDs
+                def clean_campaign_id(campaign_id):
+                    if pd.isna(campaign_id):
+                        return None
+                    campaign_str = str(campaign_id).strip()
+                    match = re.match(r'^[0-9A-Fa-f]{32}(.+)$', campaign_str)
+                    if match:
+                        return match.group(1)
+                    return campaign_str
+                
+                df_in['_cleaned_campaign_id'] = df_in[campaign_col_raw].apply(clean_campaign_id)
+                
+                # Create mapping dict: UTM -> Product
+                # Filter out empty UTMs
+                mapping_dict = mapping_df[mapping_df['UTM'].notna() & (mapping_df['UTM'] != '')].set_index('UTM')['Product'].to_dict()
+                
+                # Match Campaign IDs to UTMs
+                df_in['Product'] = df_in['_cleaned_campaign_id'].map(mapping_dict)
+                
+                enriched_count = df_in['Product'].notna().sum()
+                total_with_campaign = df_in['_cleaned_campaign_id'].notna().sum()
+                
+                if enriched_count > 0:
+                    st.success(f"✅ Enriched {enriched_count}/{total_with_campaign} campaigns with Product from mapping (matched on UTM)")
+                else:
+                    st.warning(f"⚠️ No Campaign IDs matched UTMs in mapping. Check that Campaign IDs match UTM values.")
+                
+                # Clean up temporary column
+                df_in = df_in.drop(columns=['_cleaned_campaign_id'])
         
         # DEBUG INFO - Remove after testing
         st.info(f"📊 Debug Info: Loaded {len(dfs)} file(s). Total rows: {len(df_in)}")
