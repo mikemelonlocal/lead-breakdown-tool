@@ -7450,128 +7450,72 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
     if 'debug_info' in st.session_state and st.session_state.debug_info:
         debug = st.session_state.debug_info
         st.markdown("---")
-        with st.expander("🔍 **Tab 1 Processing Debug** - Click to expand", expanded=False):
-            debug_text = "=== TAB 1 PROCESSING DEBUG ===\n\n"
-            
-            # === SUMMARY STATUS ===
-            st.markdown("### 📊 Processing Summary")
-            summary_data = []
-            
-            # File loading
-            if 'files_loaded' in st.session_state:
-                summary_data.append(["Files Loaded", st.session_state.files_loaded])
-                debug_text += f"Files Loaded: {st.session_state.files_loaded}\n"
-            
-            if 'total_rows' in st.session_state:
-                summary_data.append(["Total Rows", st.session_state.total_rows])
-                debug_text += f"Total Rows: {st.session_state.total_rows}\n"
-            
-            # Agency distribution
-            if 'agency_distribution' in st.session_state:
-                for agency, count in st.session_state.agency_distribution.items():
-                    summary_data.append([f"{agency} Rows", count])
-                    debug_text += f"{agency} Rows: {count}\n"
-            
-            # Product enrichment
-            if 'product_enrichment_count' in st.session_state:
-                enriched = st.session_state.product_enrichment_count
-                total = st.session_state.product_enrichment_total
-                pct = (100 * enriched / total) if total > 0 else 0
-                summary_data.append(["Product Enrichment", f"{enriched}/{total} ({pct:.1f}%)"])
-                debug_text += f"Product Enrichment: {enriched}/{total} ({pct:.1f}%)\n"
-            
-            # Campaign stats for Tab 2
-            if 'campaign_stats_count' in st.session_state:
-                summary_data.append(["Campaign Stats for Tab 2", st.session_state.campaign_stats_count])
-                debug_text += f"Campaign Stats for Tab 2: {st.session_state.campaign_stats_count}\n"
-            
-            if summary_data:
-                summary_df = pd.DataFrame(summary_data, columns=["Metric", "Value"])
-                st.dataframe(summary_df, hide_index=True, use_container_width=True)
-                debug_text += "\n"
-            
-            st.markdown("---")
-            
-            # Campaign Stats Processing
-            if 'tab1_campaign_col_detected' in debug:
-                st.markdown("### 📊 Campaign Stats Processing")
-                st.write(f"**Campaign Column Detected:** `{debug['tab1_campaign_col_detected']}`")
-                debug_text += f"Campaign Column Detected: {debug['tab1_campaign_col_detected']}\n"
-                
-                if 'tab1_campaigns_processed' in debug:
-                    st.write(f"**Total Campaigns Processed:** {debug['tab1_campaigns_processed']}")
-                    debug_text += f"Total Campaigns Processed: {debug['tab1_campaigns_processed']}\n\n"
-                
-                if 'tab1_sample_campaigns' in debug and debug['tab1_sample_campaigns']:
-                    st.write("**Sample Campaign IDs (after MD5 hash removal):**")
-                    debug_text += "Sample Campaign IDs (after MD5 hash removal):\n"
-                    for camp_id in debug['tab1_sample_campaigns'][:10]:
-                        st.code(camp_id, language=None)
-                        debug_text += f"  - {camp_id}\n"
-                
-                # Show office breakdown
-                if 'campaign_stats' in st.session_state and st.session_state.campaign_stats is not None:
-                    stats_df = st.session_state.campaign_stats
-                    if 'Office' in stats_df.columns and 'Campaign' in stats_df.columns:
-                        st.write("**Campaign IDs by Office:**")
-                        debug_text += "\nCampaign IDs by Office:\n"
-                        
-                        for office in ['Legacy', 'MOA']:
-                            office_campaigns = stats_df[stats_df['Office'] == office]['Campaign'].tolist()
-                            if office_campaigns:
-                                st.write(f"  **{office}** ({len(office_campaigns)} campaigns):")
-                                debug_text += f"  {office} ({len(office_campaigns)} campaigns):\n"
-                                # Show first 10 for each office
-                                for camp_id in office_campaigns[:10]:
-                                    st.code(camp_id, language=None)
-                                    debug_text += f"    - {camp_id}\n"
-                                if len(office_campaigns) > 10:
-                                    st.caption(f"    ... and {len(office_campaigns) - 10} more")
-                                    debug_text += f"    ... and {len(office_campaigns) - 10} more\n"
-                
-                if 'tab1_domain_detected' in debug and debug['tab1_domain_detected']:
-                    st.write(f"**Agent Domain Detected:** `{debug['tab1_domain_detected']}`")
-                    debug_text += f"\nAgent Domain Detected: {debug['tab1_domain_detected']}\n"
-            
-            # Product Matching Debug
-            if 'product_matching_debug' in st.session_state and st.session_state.product_matching_debug:
-                st.markdown("### 🎯 Product Matching Debug")
-                st.write("**Matching Attempts (first 20 Campaign IDs):**")
-                debug_text += "\n=== PRODUCT MATCHING DEBUG ===\n\n"
-                
-                matching_df = pd.DataFrame(st.session_state.product_matching_debug)
-                st.dataframe(matching_df, hide_index=True, use_container_width=True)
-                
-                # Add to text export
-                debug_text += "Matching Attempts:\n"
-                for idx, row in matching_df.iterrows():
-                    debug_text += f"  Campaign ID: {row['Campaign ID']}\n"
-                    debug_text += f"  Patterns: {row['Pattern']}\n"
-                    debug_text += f"  Product: {row['Product']}\n"
-                    debug_text += f"  Matched: {row['Matched']}\n\n"
-                
-                # Show summary stats
-                matched_count = matching_df[matching_df['Matched'] == 'YES'].shape[0]
-                total_count = matching_df.shape[0]
-                st.write(f"**Match Rate (in sample):** {matched_count}/{total_count} ({100*matched_count/total_count:.1f}%)")
-                debug_text += f"\nMatch Rate (in sample): {matched_count}/{total_count} ({100*matched_count/total_count:.1f}%)\n"
-            
-            # Download/Copy buttons
-            st.markdown("---")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.download_button(
-                    label="📥 Download Tab 1 Debug",
-                    data=debug_text,
-                    file_name="tab1_processing_debug.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-            
-            with col2:
-                st.markdown("**📋 Copy Debug Text:**")
-                st.code(debug_text, language=None)
+        # ========== CONSOLIDATED DEBUG & STATUS TABLE ==========
+        st.markdown("---")
+        st.markdown("### 🔍 Debug & Status Report")
+        
+        # Build comprehensive single table with all debug data
+        all_debug_data = []
+        
+        # Get debug dict
+        debug = st.session_state.get('debug_info', {})
+        
+        # === PROCESSING STATUS ===
+        if 'files_loaded' in st.session_state:
+            all_debug_data.append(["Files Loaded", st.session_state.files_loaded, "✅"])
+        
+        if 'total_rows' in st.session_state:
+            all_debug_data.append(["Total Rows", st.session_state.total_rows, "✅"])
+        
+        if 'agency_distribution' in st.session_state:
+            for agency, count in st.session_state.agency_distribution.items():
+                all_debug_data.append([f"{agency} Rows", count, "✅"])
+        
+        # === CAMPAIGN PROCESSING ===
+        if 'tab1_campaign_col_detected' in debug:
+            all_debug_data.append(["Campaign Column Detected", debug['tab1_campaign_col_detected'], "✅"])
+        
+        if 'tab1_campaigns_processed' in debug:
+            all_debug_data.append(["Campaigns Processed", debug['tab1_campaigns_processed'], "✅"])
+        
+        if 'tab1_domain_detected' in debug and debug['tab1_domain_detected']:
+            all_debug_data.append(["Domain Detected", debug['tab1_domain_detected'], "✅"])
+        
+        # === PRODUCT ENRICHMENT ===
+        if 'product_enrichment_count' in st.session_state:
+            enriched = st.session_state.product_enrichment_count
+            total = st.session_state.product_enrichment_total
+            pct = (100 * enriched / total) if total > 0 else 0
+            status = "✅" if enriched > 0 else "⚠️"
+            all_debug_data.append(["Product Enrichment", f"{enriched}/{total} ({pct:.1f}%)", status])
+        
+        if 'product_matching_debug' in st.session_state and st.session_state.product_matching_debug:
+            matching_df = pd.DataFrame(st.session_state.product_matching_debug)
+            matched_count = matching_df[matching_df['Matched'] == 'YES'].shape[0]
+            total_count = matching_df.shape[0]
+            match_rate = (100 * matched_count / total_count) if total_count > 0 else 0
+            status = "✅" if matched_count > 0 else "⚠️"
+            all_debug_data.append(["Product Match Rate", f"{matched_count}/{total_count} ({match_rate:.1f}%)", status])
+        
+        # === TAB 2 DATA ===
+        if 'campaign_stats_count' in st.session_state:
+            all_debug_data.append(["Campaign Stats for Tab 2", st.session_state.campaign_stats_count, "✅"])
+        
+        # Display single consolidated table
+        if all_debug_data:
+            consolidated_df = pd.DataFrame(all_debug_data, columns=["Metric", "Value", "Status"])
+            st.dataframe(consolidated_df, hide_index=True, use_container_width=True)
+        
+        # Product Matching Details Table (if available)
+        if 'product_matching_debug' in st.session_state and st.session_state.product_matching_debug:
+            st.markdown("**Product Matching Details:**")
+            matching_detail_df = pd.DataFrame(st.session_state.product_matching_debug)
+            st.dataframe(matching_detail_df, hide_index=True, use_container_width=True)
+        
+        # Sample Campaign IDs
+        if 'tab1_sample_campaigns' in debug and debug['tab1_sample_campaigns']:
+            sample_text = ", ".join(str(c) for c in debug['tab1_sample_campaigns'][:10])
+            st.markdown(f"**Sample Campaign IDs:** `{sample_text}`")
 
 
 # ========== TAB 2: ADS ACCOUNT HEALTH ==========
@@ -8107,49 +8051,28 @@ if 'debug_info' in st.session_state and st.session_state.debug_info:
             st.markdown("**📋 Copy Debug Text:**")
             st.code(debug_text, language=None)
 
-        # ========== TAB 2 DEBUG TABLE ==========
+        # ========== TAB 2 DEBUG & STATUS TABLE ==========
         st.markdown("---")
-        with st.expander("🔍 **Tab 2 Processing Debug** - Click to expand", expanded=False):
-            tab2_debug_text = "=== TAB 2 PROCESSING DEBUG ===\n\n"
-            
-            # === SUMMARY STATUS ===
-            st.markdown("### 📊 Processing Summary")
-            tab2_summary_data = []
-            
-            # Campaign stats from Tab 1
-            if 'tab2_campaign_stats_available' in st.session_state:
-                count = st.session_state.tab2_campaign_stats_available
-                status = "✅ Available" if count > 0 else "❌ Not Available"
-                tab2_summary_data.append(["Campaign Stats from Tab 1", f"{status} ({count} campaigns)"])
-                tab2_debug_text += f"Campaign Stats from Tab 1: {status} ({count} campaigns)\n"
-            
-            # Mapping loaded
-            if 'tab2_mapping_loaded' in st.session_state:
-                count = st.session_state.tab2_mapping_loaded
-                status = "✅ Loaded" if count > 0 else "❌ Not Loaded"
-                tab2_summary_data.append(["Product/UTM Mapping", f"{status} ({count:,} mappings)"])
-                tab2_debug_text += f"Product/UTM Mapping: {status} ({count:,} mappings)\n"
-            
-            if tab2_summary_data:
-                tab2_summary_df = pd.DataFrame(tab2_summary_data, columns=["Metric", "Status"])
-                st.dataframe(tab2_summary_df, hide_index=True, use_container_width=True)
-            
-            # Download/Copy buttons
-            st.markdown("---")
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.download_button(
-                    label="📥 Download Tab 2 Debug",
-                    data=tab2_debug_text,
-                    file_name="tab2_processing_debug.txt",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-            
-            with col2:
-                st.markdown("**📋 Copy Debug Text:**")
-                st.code(tab2_debug_text, language=None)
+        st.markdown("### 🔍 Debug & Status Report")
+        
+        # Build comprehensive Tab 2 debug data
+        tab2_debug_data = []
+        
+        # Campaign stats from Tab 1
+        if 'tab2_campaign_stats_available' in st.session_state:
+            count = st.session_state.tab2_campaign_stats_available
+            status = "✅" if count > 0 else "⚠️"
+            tab2_debug_data.append(["Campaign Stats from Tab 1", f"{count} campaigns", status])
+        
+        # Mapping loaded
+        if 'tab2_mapping_loaded' in st.session_state:
+            count = st.session_state.tab2_mapping_loaded
+            status = "✅" if count > 0 else "⚠️"
+            tab2_debug_data.append(["Product/UTM Mapping", f"{count:,} mappings", status])
+        
+        if tab2_debug_data:
+            tab2_df = pd.DataFrame(tab2_debug_data, columns=["Metric", "Value", "Status"])
+            st.dataframe(tab2_df, hide_index=True, use_container_width=True)
 
 # ---- Footer ----
 st.markdown("<hr/>", unsafe_allow_html=True)
