@@ -3551,6 +3551,15 @@ with main_tab1:
                         st.session_state.stats_agent_domain = agent_domain  # Store the domain
                         st.session_state.stats_file_uploaded = stats_file_name  # Track which file this is from
                         
+                        # Store Tab 1 processing info for debug report
+                        if 'debug_info' not in st.session_state:
+                            st.session_state.debug_info = {}
+                        
+                        st.session_state.debug_info['tab1_campaign_col_detected'] = campaign_col
+                        st.session_state.debug_info['tab1_campaigns_processed'] = len(campaign_stats_reset)
+                        st.session_state.debug_info['tab1_sample_campaigns'] = campaign_stats_reset['Campaign'].head(10).tolist() if 'Campaign' in campaign_stats_reset.columns else []
+                        st.session_state.debug_info['tab1_domain_detected'] = agent_domain
+                        
                         # Show confirmation that data is ready for Tab 2
                         st.success(f"✅ Campaign stats stored for Tab 2: {len(campaign_stats_reset)} campaigns with conversion data")
                         
@@ -7584,6 +7593,28 @@ if 'debug_info' in st.session_state and st.session_state.debug_info:
             st.markdown("### 📊 Campaign Stats (from Tab 1)")
             debug_text += "\nCAMPAIGN STATS (from Tab 1)\n"
             
+            # Add Tab 1 processing info
+            if 'tab1_campaign_col_detected' in debug:
+                st.write(f"**Campaign Column Detected:** {debug['tab1_campaign_col_detected']}")
+                debug_text += f"Campaign Column Detected: {debug['tab1_campaign_col_detected']}\n"
+            
+            if 'tab1_campaigns_processed' in debug:
+                st.write(f"**Campaigns Processed:** {debug['tab1_campaigns_processed']}")
+                debug_text += f"Campaigns Processed: {debug['tab1_campaigns_processed']}\n"
+            
+            if 'tab1_sample_campaigns' in debug and debug['tab1_sample_campaigns']:
+                st.write("**Sample Campaign IDs (after cleaning):**")
+                debug_text += "Sample Campaign IDs (after cleaning):\n"
+                for camp_id in debug['tab1_sample_campaigns']:
+                    st.write(f"  - {camp_id}")
+                    debug_text += f"  - {camp_id}\n"
+            
+            if 'tab1_domain_detected' in debug and debug['tab1_domain_detected']:
+                st.write(f"**Domain Detected:** {debug['tab1_domain_detected']}")
+                debug_text += f"Domain Detected: {debug['tab1_domain_detected']}\n"
+            
+            debug_text += "\n"
+            
             stats_df = st.session_state.campaign_stats
             st.write(f"**Shape:** {stats_df.shape}")
             st.write(f"**Columns:** {', '.join(stats_df.columns.tolist())}")
@@ -7595,10 +7626,11 @@ if 'debug_info' in st.session_state and st.session_state.debug_info:
                 st.write(f"**Office Distribution:** {office_dist}")
                 debug_text += f"Office Distribution: {office_dist}\n"
             
-            # Sample campaigns
+            # Sample campaigns from dataframe (for comparison)
             if 'Campaign' in stats_df.columns and 'Total Conversions' in stats_df.columns:
                 sample = stats_df[['Campaign', 'Total Conversions']].head(5)
-                st.write("**Sample campaigns with conversions:**")
+                st.write("**Sample campaigns in DataFrame:**")
+                debug_text += "Sample campaigns in DataFrame:\n"
                 for idx, row in sample.iterrows():
                     st.write(f"  - {row['Campaign']}: {row['Total Conversions']} conversions")
                     debug_text += f"  - {row['Campaign']}: {row['Total Conversions']} conversions\n"
