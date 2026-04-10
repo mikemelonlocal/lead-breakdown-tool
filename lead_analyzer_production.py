@@ -7471,6 +7471,41 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
         if 'tab1_sample_campaigns' in debug and debug['tab1_sample_campaigns']:
             sample_text = ", ".join(str(c) for c in debug['tab1_sample_campaigns'][:10])
             st.markdown(f"**Sample Campaign IDs:** `{sample_text}`")
+        
+        # Build text export
+        debug_text = "=== TAB 1 DEBUG & STATUS REPORT ===\n\n"
+        if all_debug_data:
+            for row in all_debug_data:
+                debug_text += f"{row[0]}: {row[1]} {row[2]}\n"
+            debug_text += "\n"
+        
+        if 'product_matching_debug' in st.session_state and st.session_state.product_matching_debug:
+            debug_text += "PRODUCT MATCHING DETAILS:\n"
+            for idx, row in matching_detail_df.iterrows():
+                debug_text += f"  Campaign ID: {row['Campaign ID']}\n"
+                debug_text += f"  Pattern: {row['Pattern']}\n"
+                debug_text += f"  Product: {row.get('Product', 'N/A')}\n"
+                debug_text += f"  Matched: {row['Matched']}\n\n"
+        
+        if 'tab1_sample_campaigns' in debug and debug['tab1_sample_campaigns']:
+            debug_text += f"Sample Campaign IDs: {sample_text}\n"
+        
+        # Download and copy buttons
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.download_button(
+                label="📥 Download Tab 1 Debug Report",
+                data=debug_text,
+                file_name="tab1_debug_report.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+        
+        with col2:
+            if st.button("📋 Copy to Clipboard", key="copy_tab1_debug", use_container_width=True):
+                st.code(debug_text, language=None)
 
 
 # ========== TAB 2: ADS ACCOUNT HEALTH ==========
@@ -7869,6 +7904,29 @@ if 'debug_info' in st.session_state and st.session_state.debug_info:
         if tab2_debug_data:
             tab2_df = pd.DataFrame(tab2_debug_data, columns=["Metric", "Value", "Status"])
             st.dataframe(tab2_df, hide_index=True, use_container_width=True)
+        
+        # Build text export
+        tab2_debug_text = "=== TAB 2 DEBUG & STATUS REPORT ===\n\n"
+        if tab2_debug_data:
+            for row in tab2_debug_data:
+                tab2_debug_text += f"{row[0]}: {row[1]} {row[2]}\n"
+        
+        # Download and copy buttons
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.download_button(
+                label="📥 Download Tab 2 Debug Report",
+                data=tab2_debug_text,
+                file_name="tab2_debug_report.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+        
+        with col2:
+            if st.button("📋 Copy to Clipboard", key="copy_tab2_debug", use_container_width=True):
+                st.code(tab2_debug_text, language=None)
 
 # ---- Footer ----
 st.markdown("<hr/>", unsafe_allow_html=True)
