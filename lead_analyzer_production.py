@@ -3553,6 +3553,12 @@ with main_tab1:
                         
                         # Show confirmation that data is ready for Tab 2
                         st.success(f"✅ Campaign stats stored for Tab 2: {len(campaign_stats_reset)} campaigns with conversion data")
+                        
+                        # Show sample cleaned campaign IDs for debugging
+                        if 'Campaign' in campaign_stats_reset.columns:
+                            sample_campaigns = campaign_stats_reset['Campaign'].head(5).tolist()
+                            st.info(f"📋 Sample Campaign IDs (cleaned): {', '.join(str(c) for c in sample_campaigns)}")
+                        
                         if agent_domain:
                             st.info(f"🔗 Detected domain: {agent_domain} (will auto-filter in Tab 2)")
 
