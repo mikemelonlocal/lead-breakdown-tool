@@ -149,8 +149,6 @@ MELON_COLORS = {
 # ============================================================================
 # ADS ACCOUNT HEALTH - CONSTANTS
 # ============================================================================
-# Add this section after the MELON_COLORS definition (around line 147)
-
 # Ads Account Health Thresholds
 ADS_THRESHOLDS = {
     'target_top_is_min': 0.60,           # 60% minimum for top positions
@@ -210,8 +208,6 @@ PRODUCT_KEYWORDS = {
 # ============================================================================
 # ADS ACCOUNT HEALTH - HELPER FUNCTIONS
 # ============================================================================
-# Add this section after the existing helper functions (around line 187, before main app)
-
 def clean_numeric_ads(series):
     """Clean numeric columns from Google Ads export (handles commas, dashes, <, >, %)"""
     return pd.to_numeric(
@@ -233,7 +229,6 @@ def parse_bid_value(bid_str):
     if bid_str == '' or bid_str == '--' or bid_str == 'nan':
         return None
     # Extract just the number before any parentheses or text
-    import re
     match = re.search(r'(\d+\.?\d*)', bid_str)
     if match:
         return float(match.group(1))
@@ -408,9 +403,7 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         
         if not campaign_name or not ad_group_name:
             return None
-        
-        import re
-        
+
         # Extract campaign number from campaign name
         # Remove office prefix first (Legacy/MOA)
         clean_campaign = re.sub(r'^(Legacy|MOA)\s*-\s*', '', campaign_name, flags=re.IGNORECASE).strip()
@@ -654,8 +647,6 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         
         # If URL report has Final URL column, extract tracking Campaign IDs
         if final_url_col:
-            import re
-            
             # Sample URLs for debug
             sample_urls = url_report_df[final_url_col].dropna().head(5).tolist()
             st.session_state.debug_info['sample_urls'] = sample_urls
@@ -757,7 +748,6 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                         # Found matching ad group - extract domain from Final URL
                         final_url = str(url_row.get(final_url_col, '')).strip() if pd.notna(url_row.get(final_url_col)) else None
                         if final_url and final_url != 'nan':
-                            import re
                             match = re.search(r'https?://(?:www\.)?([^/?]+)', final_url)
                             if match:
                                 domain = match.group(1).lower()
@@ -933,7 +923,7 @@ def load_ads_export(file):
                     st.caption("📊 Detected Google Ads format (CSV)")
                     
                 df = pd.read_csv(io.StringIO(csv_content), sep='\t')
-            except:
+            except Exception:
                 # Fall back to UTF-8
                 file.seek(0)
                 if is_microsoft_filename:
@@ -1312,11 +1302,6 @@ def validate_numeric(value: float, min_val: float = 0, max_val: Optional[float] 
         return min_val
 
 
-def _norm(s: str) -> str:
-    """Normalize string for column name matching."""
-    return re.sub(r'[^a-z0-9]+', '_', str(s).strip().lower())
-
-
 def load_campaign_mapping():
     """
     Load the campaign/ad group to Product/UTM mapping file.
@@ -1360,187 +1345,6 @@ if 'campaign_mapping_loaded' not in st.session_state:
         st.session_state.campaign_mapping = None
         st.session_state.tab1_mapping = None
         st.session_state.campaign_mapping_loaded = False
-
-
-def get_col(df: pd.DataFrame, aliases: List[str], default: Optional[str] = None) -> Optional[str]:
-    """
-    Find column in dataframe using list of aliases.
-    
-    Args:
-        df: DataFrame to search
-        aliases: List of possible column names
-        default: Default value if not found
-        
-    Returns:
-        Actual column name or default
-    """
-    cols = {_norm(c): c for c in df.columns}
-    for a in aliases:
-        key = _norm(a)
-        if key in cols:
-            return cols[key]
-        for k, v in cols.items():
-            if key == k or key in k:
-                return v
-    return default
-
-
-def detect_traffic_source_col(df: pd.DataFrame) -> Optional[str]:
-    """Detect traffic source column from various possible names."""
-    return get_col(df, [
-        "traffic_source", "traffic source", "utm_source", "utm source",
-        "network", "ad network", "publisher", "source", "channel"
-    ])
-
-
-def classify_platform(campaign_id: str, traffic_source: str) -> str:
-    """
-    Classify advertising platform based on campaign ID and traffic source.
-    
-    Platform Classification Rules:
-    1. QS* → Melon Max
-    2. MLB/MLSB → Microsoft
-    3. MLG/MLSG → Google
-    4. BD/BM + Bing/Yahoo → Microsoft
-    5. GD/GM + Google → Google
-    6. MLLIST → Listings
-    7. Fallback to traffic source or "Unknown"
-    
-    Args:
-        campaign_id: Campaign identifier string
-        traffic_source: Traffic source (Google/Bing/Yahoo/etc)
-        
-    Returns:
-        Platform name (Google, Microsoft, Melon Max, Listings, or Unknown)
-    """
-    cid = str(campaign_id).strip().upper()
-    src = str(traffic_source).strip().lower()
-    
-    # Melon Max: Campaigns starting with QS
-    if cid.startswith(PLATFORM_RULES['melon_max_prefix']):
-        return "Melon Max"
-    
-    # Listings
-    if cid.startswith(PLATFORM_RULES['listings_campaign']):
-        return "Listings"
-    
-    # Microsoft campaigns
-    for prefix in PLATFORM_RULES['microsoft_campaigns']:
-        if cid.startswith(prefix):
-            return "Microsoft"
-    
-    # Google campaigns
-    for prefix in PLATFORM_RULES['google_campaigns']:
-        if cid.startswith(prefix):
-            return "Google"
-    
-    # Broad Display + Microsoft traffic
-    if cid.startswith(('BD', 'BM')):
-        for traffic in PLATFORM_RULES['microsoft_traffic']:
-            if traffic.lower() in src:
-                return "Microsoft"
-    
-    # Broad Display + Google traffic
-    if cid.startswith(('GD', 'GM')):
-        if 'google' in src:
-            return "Google"
-    
-    # Fallback to traffic source
-    if 'google' in src:
-        return "Google"
-    for traffic in PLATFORM_RULES['microsoft_traffic']:
-        if traffic.lower() in src:
-            return "Microsoft"
-    
-    return "Unknown"
-
-
-
-def classify_device(device_str: str) -> str:
-    """
-    Classify device type from device string.
-    
-    Args:
-        device_str: Device identifier string
-        
-    Returns:
-        Device type (Mobile, Tablet, Desktop, or Unknown)
-    """
-    d = str(device_str).strip().lower()
-    
-    if not d or d == 'nan':
-        return "Unknown"
-    
-    # Mobile detection
-    if any(x in d for x in ['mobile', 'phone', 'smartphone', 'iphone', 'android']):
-        return "Mobile"
-    
-    # Tablet detection
-    if any(x in d for x in ['tablet', 'ipad']):
-        return "Tablet"
-    
-    # Desktop detection
-    if any(x in d for x in ['desktop', 'computer', 'pc', 'mac']):
-        return "Desktop"
-    
-    return "Unknown"
-
-
-
-def extract_utm_from_campaign_id(campaign_id: str) -> str:
-    """
-    Extract UTM code from campaign ID.
-    
-    Args:
-        campaign_id: Campaign identifier string
-        
-    Returns:
-        Extracted UTM code or empty string if not found
-    """
-    cid = str(campaign_id).strip().upper()
-    
-    # Check fixed tokens first
-    for token in UTM_TOKENS_FIXED:
-        if token in cid:
-            # Simplify Melon Max device codes
-            if token in ["AM", "AT", "AD"]:
-                return "Auto"
-            if token in ["HM", "HT", "HD"]:
-                return "Home"
-            return token
-    
-    # Extract numeric patterns (3+ digits)
-    matches = re.findall(r'\d{3,}', cid)
-    if matches:
-        return matches[0]
-    
-    return ""
-
-
-def format_currency(value: float) -> str:
-    """Format numeric value as currency string."""
-    try:
-        return f"${float(value):,.2f}"
-    except (ValueError, TypeError):
-        return "—"
-
-
-def format_percentage(value: float) -> str:
-    """Format numeric value as percentage string."""
-    try:
-        return f"{float(value):.1f}%"
-    except (ValueError, TypeError):
-        return "—"
-
-
-def fmt_currency_series(series: pd.Series) -> pd.Series:
-    """Format pandas Series as currency strings."""
-    return series.apply(lambda x: format_currency(x) if pd.notna(x) and x > 0 else "—")
-
-
-def fmt_pct_series(series: pd.Series) -> pd.Series:
-    """Format pandas Series as percentage strings."""
-    return series.apply(lambda x: format_percentage(x * 100) if pd.notna(x) else "—")
 
 
 # ========== 5. CUSTOM CSS ==========
@@ -2143,7 +1947,7 @@ def pretty_headers(df: pd.DataFrame) -> pd.DataFrame:
 def drop_effective_cost_basis(df: pd.DataFrame) -> pd.DataFrame:
     """Remove effective_cost_basis column if present."""
     cols = [c for c in df.columns if _norm(c) != "effective_cost_basis"]
-    return df[cols].copy()
+    return df[cols]
 
 
 def is_currency_col(name: str) -> bool:
@@ -2183,7 +1987,7 @@ def hide_index_styler(df_png: pd.DataFrame):
 
 def prepare_df_for_png(df: pd.DataFrame) -> pd.DataFrame:
     """Prepare dataframe for PNG export with formatting and 1-based index."""
-    d = pretty_headers(df.copy())
+    d = pretty_headers(df)
     
     for col in d.columns:
         col_l = str(col).lower()
@@ -3421,8 +3225,6 @@ with main_tab1:
             campaign_col_raw = get_col(df_in, ["campaign_ids", "campaign ids", "campaign_id", "campaign id", "campaign"])
             
             if campaign_col_raw and 'UTM' in mapping_df.columns:
-                import re
-                
                 # Clean MD5 hashes from Campaign IDs
                 def clean_campaign_id(campaign_id):
                     if pd.isna(campaign_id):
@@ -3678,7 +3480,6 @@ with main_tab1:
                     if agg_dict:
                         # Clean Campaign IDs: Remove MD5 hash prefix (32 hex chars at start)
                         # Example: "149084BF90E9D889F9C32F2478957BE5MLQSHM" -> "MLQSHM"
-                        import re
                         def clean_campaign_id(campaign_id):
                             """Remove MD5 hash prefix from campaign ID if present."""
                             if pd.isna(campaign_id):
@@ -3744,7 +3545,6 @@ with main_tab1:
                         
                         # Try to extract domain from stats data to identify the agent
                         # Look for URL columns in the stats report
-                        import re
                         agent_domain = None
                         url_cols = [col for col in df_in.columns if 'url' in col.lower() or 'link' in col.lower() or 'landing' in col.lower()]
                         
@@ -4009,7 +3809,7 @@ with main_tab1:
                     
                     if DFI_AVAILABLE:
                         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                            df_png = prepare_df_for_png(plat.copy())
+                            df_png = prepare_df_for_png(plat)
                             style = hide_index_styler(df_png)
                             dfi.export(style, tmp.name)
                             with open(tmp.name, "rb") as f:
@@ -4124,7 +3924,7 @@ with main_tab1:
                         
                         if DFI_AVAILABLE:
                             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                                df_png = prepare_df_for_png(utm_over.copy())
+                                df_png = prepare_df_for_png(utm_over)
                                 style = hide_index_styler(df_png)
                                 dfi.export(style, tmp.name)
                                 with open(tmp.name, "rb") as f:
@@ -4243,7 +4043,7 @@ with main_tab1:
                     
                     if DFI_AVAILABLE:
                         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                            df_png = prepare_df_for_png(single["by_product_total"].copy())
+                            df_png = prepare_df_for_png(single["by_product_total"])
                             style = hide_index_styler(df_png)
                             dfi.export(style, tmp.name)
                             with open(tmp.name, "rb") as f:
@@ -4448,7 +4248,7 @@ with main_tab1:
                     
                     if DFI_AVAILABLE:
                         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                            df_png = prepare_df_for_png(bpp_display.copy())
+                            df_png = prepare_df_for_png(bpp_display)
                             style = hide_index_styler(df_png)
                             dfi.export(style, tmp.name)
                             with open(tmp.name, "rb") as f:
@@ -4546,7 +4346,7 @@ with main_tab1:
                     
                     if DFI_AVAILABLE:
                         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                            df_png = prepare_df_for_png(single["by_source"].copy())
+                            df_png = prepare_df_for_png(single["by_source"])
                             style = hide_index_styler(df_png)
                             dfi.export(style, tmp.name)
                             with open(tmp.name, "rb") as f:
@@ -4705,7 +4505,7 @@ with main_tab1:
             
             if DFI_AVAILABLE:
                 with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                    df_png = prepare_df_for_png(results["platform_overview"].copy())
+                    df_png = prepare_df_for_png(results["platform_overview"])
                     style = hide_index_styler(df_png)
                     dfi.export(style, tmp.name)
                     with open(tmp.name, "rb") as f:
@@ -4784,7 +4584,7 @@ with main_tab1:
             
             if DFI_AVAILABLE:
                 with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                    df_png = prepare_df_for_png(results["agency_overview"].copy())
+                    df_png = prepare_df_for_png(results["agency_overview"])
                     style = hide_index_styler(df_png)
                     dfi.export(style, tmp.name)
                     with open(tmp.name, "rb") as f:
@@ -4804,7 +4604,7 @@ with main_tab1:
                 
                 if DFI_AVAILABLE:
                     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                        df_png = prepare_df_for_png(utm_over.copy())
+                        df_png = prepare_df_for_png(utm_over)
                         style = hide_index_styler(df_png)
                         dfi.export(style, tmp.name)
                         with open(tmp.name, "rb") as f:
@@ -4863,7 +4663,7 @@ with main_tab1:
             
             if DFI_AVAILABLE:
                 with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                    df_png = prepare_df_for_png(bpp_display.copy())
+                    df_png = prepare_df_for_png(bpp_display)
                     style = hide_index_styler(df_png)
                     dfi.export(style, tmp.name)
                     with open(tmp.name, "rb") as f:
@@ -4938,7 +4738,7 @@ with main_tab1:
             
             if DFI_AVAILABLE:
                 with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                    df_png = prepare_df_for_png(results["by_product_total"].copy())
+                    df_png = prepare_df_for_png(results["by_product_total"])
                     style = hide_index_styler(df_png)
                     dfi.export(style, tmp.name)
                     with open(tmp.name, "rb") as f:
@@ -5017,7 +4817,7 @@ with main_tab1:
             
             if DFI_AVAILABLE:
                 with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                    df_png = prepare_df_for_png(results["by_source"].copy())
+                    df_png = prepare_df_for_png(results["by_source"])
                     style = hide_index_styler(df_png)
                     dfi.export(style, tmp.name)
                     with open(tmp.name, "rb") as f:
@@ -5660,8 +5460,7 @@ with main_tab1:
                             # Platform breakdown
                             st.markdown("**Platform Overview**")
                             legacy_platform = results["platform_agency"][
-                                (results["platform_agency"]["agency"] == "Legacy") | 
-                                (results["platform_agency"]["platform"] == "TOTAL")
+                                results["platform_agency"]["agency"] == "Legacy"
                             ].copy()
                             
                             if "device" in legacy_platform.columns:
@@ -5681,9 +5480,18 @@ with main_tab1:
                             # Remove agency column for cleaner display
                             if "agency" in legacy_platform.columns:
                                 legacy_platform = legacy_platform.drop(columns=["agency"])
-                            
+
+                            # Add TOTAL row
+                            totals_row = {"platform": "TOTAL"}
+                            for c in ["leads", "spend", "quote_starts", "phone_clicks", "sms_clicks"]:
+                                if c in legacy_platform.columns:
+                                    totals_row[c] = legacy_platform[c].sum()
+                            if "cpl_platform" in legacy_platform.columns:
+                                totals_row["cpl_platform"] = (totals_row.get("spend", 0) / totals_row["leads"]) if totals_row.get("leads", 0) > 0 else np.nan
+                            legacy_platform = pd.concat([legacy_platform, pd.DataFrame([totals_row])], ignore_index=True)
+
                             display_table_with_total(legacy_platform, "platform", "TOTAL")
-                            
+
                             # Product breakdown
                             st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
                             st.markdown("**Product Breakdown**")
@@ -5699,11 +5507,18 @@ with main_tab1:
                                         "phone_clicks": "sum",
                                         "sms_clicks": "sum"
                                     })
-                                
+
                                 # Remove agency column
                                 if "agency" in legacy_product.columns:
                                     legacy_product = legacy_product.drop(columns=["agency"])
-                                
+
+                                # Add TOTAL row
+                                totals_row = {"product": "TOTAL"}
+                                for c in ["leads", "quote_starts", "phone_clicks", "sms_clicks"]:
+                                    if c in legacy_product.columns:
+                                        totals_row[c] = legacy_product[c].sum()
+                                legacy_product = pd.concat([legacy_product, pd.DataFrame([totals_row])], ignore_index=True)
+
                                 display_table_with_total(legacy_product, "product", "TOTAL")
                             
                             # Source breakdown (Top 5)
@@ -5738,8 +5553,7 @@ with main_tab1:
                             # Platform breakdown
                             st.markdown("**Platform Overview**")
                             moa_platform = results["platform_agency"][
-                                (results["platform_agency"]["agency"] == "MOA") | 
-                                (results["platform_agency"]["platform"] == "TOTAL")
+                                results["platform_agency"]["agency"] == "MOA"
                             ].copy()
                             
                             if "device" in moa_platform.columns:
@@ -5759,9 +5573,18 @@ with main_tab1:
                             # Remove agency column for cleaner display
                             if "agency" in moa_platform.columns:
                                 moa_platform = moa_platform.drop(columns=["agency"])
-                            
+
+                            # Add TOTAL row
+                            totals_row = {"platform": "TOTAL"}
+                            for c in ["leads", "spend", "quote_starts", "phone_clicks", "sms_clicks"]:
+                                if c in moa_platform.columns:
+                                    totals_row[c] = moa_platform[c].sum()
+                            if "cpl_platform" in moa_platform.columns:
+                                totals_row["cpl_platform"] = (totals_row.get("spend", 0) / totals_row["leads"]) if totals_row.get("leads", 0) > 0 else np.nan
+                            moa_platform = pd.concat([moa_platform, pd.DataFrame([totals_row])], ignore_index=True)
+
                             display_table_with_total(moa_platform, "platform", "TOTAL")
-                            
+
                             # Product breakdown
                             st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
                             st.markdown("**Product Breakdown**")
@@ -5777,11 +5600,18 @@ with main_tab1:
                                         "phone_clicks": "sum",
                                         "sms_clicks": "sum"
                                     })
-                                
+
                                 # Remove agency column
                                 if "agency" in moa_product.columns:
                                     moa_product = moa_product.drop(columns=["agency"])
-                                
+
+                                # Add TOTAL row
+                                totals_row = {"product": "TOTAL"}
+                                for c in ["leads", "quote_starts", "phone_clicks", "sms_clicks"]:
+                                    if c in moa_product.columns:
+                                        totals_row[c] = moa_product[c].sum()
+                                moa_product = pd.concat([moa_product, pd.DataFrame([totals_row])], ignore_index=True)
+
                                 display_table_with_total(moa_product, "product", "TOTAL")
                             
                             # Source breakdown (Top 5)
@@ -5811,65 +5641,73 @@ with main_tab1:
                     if PLOTLY_AVAILABLE:
                         st.markdown('<div class="space-md"></div>', unsafe_allow_html=True)
                         st.markdown("### 📈 Individual Agency Charts")
-                        
+
+                        # Build a consistent product-to-color map so both agencies use the same colors
+                        all_products = sorted(
+                            results["product_agency"]["product"].unique().tolist()
+                        ) if "product" in results["product_agency"].columns else []
+                        all_products = [p for p in all_products if p != "TOTAL"]
+                        product_color_map = {
+                            p: MELON_COLORS['primary'][i % len(MELON_COLORS['primary'])]
+                            for i, p in enumerate(all_products)
+                        }
+
                         chart_col1, chart_col2 = st.columns(2)
-                        
+
                         with chart_col1:
                             st.markdown("**Legacy - Platform Performance**")
                             if not legacy_data.empty:
                                 legacy_plat_chart = results["platform_agency"][
                                     results["platform_agency"]["agency"] == "Legacy"
                                 ].copy()
-                                
+
                                 if "device" in legacy_plat_chart.columns:
                                     legacy_plat_chart = legacy_plat_chart.groupby("platform", as_index=False)["leads"].sum()
-                                
+
                                 legacy_plat_chart = legacy_plat_chart[legacy_plat_chart["platform"] != "TOTAL"]
-                                
+
                                 if not legacy_plat_chart.empty:
                                     fig_legacy = px.bar(
                                         legacy_plat_chart,
                                         x="platform",
                                         y="leads",
                                         title="Legacy Leads by Platform",
-                                        color_discrete_sequence=["#114e38"]  # Official Pine color
+                                        color_discrete_sequence=["#114e38"]
                                     )
                                     fig_legacy.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
                                     fig_legacy.update_layout(height=350, showlegend=False)
                                     st.plotly_chart(fig_legacy, use_container_width=True)
-                            
+
                             st.markdown("**Legacy - Product Distribution**")
                             if not legacy_data.empty:
-                                # Use product_agency which has agency column, NOT by_product_total
                                 legacy_prod_chart = results["product_agency"].copy()
-                                
-                                # Filter by Legacy agency FIRST
+
                                 if "agency" in legacy_prod_chart.columns:
                                     legacy_prod_chart = legacy_prod_chart[legacy_prod_chart["agency"] == "Legacy"].copy()
-                                
-                                # Then aggregate by product (if device column exists)
+
                                 if "device" in legacy_prod_chart.columns:
                                     legacy_prod_chart = legacy_prod_chart.groupby("product", as_index=False)["leads"].sum()
-                                
-                                # Remove TOTAL row if present
+
                                 legacy_prod_chart = legacy_prod_chart[legacy_prod_chart["product"] != "TOTAL"]
-                                
+                                legacy_prod_chart = legacy_prod_chart[legacy_prod_chart["leads"] > 0]
+
                                 if not legacy_prod_chart.empty:
                                     fig_legacy_prod = px.pie(
                                         legacy_prod_chart,
                                         values="leads",
                                         names="product",
                                         title="Legacy Product Distribution",
-                                        color_discrete_sequence=MELON_COLORS['primary']  # Use same colors as MOA
+                                        color="product",
+                                        color_discrete_map=product_color_map
                                     )
                                     fig_legacy_prod.update_traces(
-                                        textposition='auto',  # Auto: inside for large slices, outside for small
+                                        textposition='auto',
                                         textinfo='label+percent',
                                         insidetextorientation='radial'
                                     )
                                     fig_legacy_prod.update_layout(
                                         height=400,
-                                        showlegend=True,  # Keep legend for small slices that may be outside
+                                        showlegend=True,
                                         legend=dict(
                                             orientation="h",
                                             yanchor="bottom",
@@ -5879,19 +5717,19 @@ with main_tab1:
                                         )
                                     )
                                     st.plotly_chart(fig_legacy_prod, use_container_width=True)
-                        
+
                         with chart_col2:
                             st.markdown("**MOA - Platform Performance**")
                             if not moa_data.empty:
                                 moa_plat_chart = results["platform_agency"][
                                     results["platform_agency"]["agency"] == "MOA"
                                 ].copy()
-                                
+
                                 if "device" in moa_plat_chart.columns:
                                     moa_plat_chart = moa_plat_chart.groupby("platform", as_index=False)["leads"].sum()
-                                
+
                                 moa_plat_chart = moa_plat_chart[moa_plat_chart["platform"] != "TOTAL"]
-                                
+
                                 if not moa_plat_chart.empty:
                                     fig_moa = px.bar(
                                         moa_plat_chart,
@@ -5903,39 +5741,37 @@ with main_tab1:
                                     fig_moa.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
                                     fig_moa.update_layout(height=350, showlegend=False)
                                     st.plotly_chart(fig_moa, use_container_width=True)
-                            
+
                             st.markdown("**MOA - Product Distribution**")
                             if not moa_data.empty:
-                                # Use product_agency which has agency column, NOT by_product_total
                                 moa_prod_chart = results["product_agency"].copy()
-                                
-                                # Filter by MOA agency FIRST
+
                                 if "agency" in moa_prod_chart.columns:
                                     moa_prod_chart = moa_prod_chart[moa_prod_chart["agency"] == "MOA"].copy()
-                                
-                                # Then aggregate by product (if device column exists)
+
                                 if "device" in moa_prod_chart.columns:
                                     moa_prod_chart = moa_prod_chart.groupby("product", as_index=False)["leads"].sum()
-                                
-                                # Remove TOTAL row if present
+
                                 moa_prod_chart = moa_prod_chart[moa_prod_chart["product"] != "TOTAL"]
-                                
+                                moa_prod_chart = moa_prod_chart[moa_prod_chart["leads"] > 0]
+
                                 if not moa_prod_chart.empty:
                                     fig_moa_prod = px.pie(
                                         moa_prod_chart,
                                         values="leads",
                                         names="product",
                                         title="MOA Product Distribution",
-                                        color_discrete_sequence=MELON_COLORS['primary']  # Use same colors as Legacy
+                                        color="product",
+                                        color_discrete_map=product_color_map
                                     )
                                     fig_moa_prod.update_traces(
-                                        textposition='auto',  # Auto: inside for large slices, outside for small
+                                        textposition='auto',
                                         textinfo='label+percent',
                                         insidetextorientation='radial'
                                     )
                                     fig_moa_prod.update_layout(
                                         height=400,
-                                        showlegend=True,  # Keep legend for small slices that may be outside
+                                        showlegend=True,
                                         legend=dict(
                                             orientation="h",
                                             yanchor="bottom",
@@ -6274,18 +6110,18 @@ with main_tab1:
         )
     
         style_flag = "formatted" if st.session_state.get("sb_csv_style") == "With $ and % symbols" else "raw"
-        csv_platform = df_to_csv_bytes(results["platform_overview"].copy(), style=style_flag)
-        csv_ag = df_to_csv_bytes(results["agency_overview"].copy(), style=style_flag)
-        csv_bpp = df_to_csv_bytes(results["by_product_platform"].copy(), style=style_flag)
-        csv_prod = df_to_csv_bytes(results["by_product_total"].copy(), style=style_flag)
-        csv_src = df_to_csv_bytes(results["by_source"].copy(), style=style_flag)
+        csv_platform = df_to_csv_bytes(results["platform_overview"], style=style_flag)
+        csv_ag = df_to_csv_bytes(results["agency_overview"], style=style_flag)
+        csv_bpp = df_to_csv_bytes(results["by_product_platform"], style=style_flag)
+        csv_prod = df_to_csv_bytes(results["by_product_total"], style=style_flag)
+        csv_src = df_to_csv_bytes(results["by_source"], style=style_flag)
         
         # Generate HTML versions
-        html_platform = dataframe_to_html(results["platform_overview"].copy(), "Platform Overview")
-        html_ag = dataframe_to_html(results["agency_overview"].copy(), "Agency Overview")
-        html_bpp = dataframe_to_html(results["by_product_platform"].copy(), "Product × Platform")
-        html_prod = dataframe_to_html(results["by_product_total"].copy(), "Product Overview")
-        html_src = dataframe_to_html(results["by_source"].copy(), "By Source")
+        html_platform = dataframe_to_html(results["platform_overview"], "Platform Overview")
+        html_ag = dataframe_to_html(results["agency_overview"], "Agency Overview")
+        html_bpp = dataframe_to_html(results["by_product_platform"], "Product × Platform")
+        html_prod = dataframe_to_html(results["by_product_total"], "Product Overview")
+        html_src = dataframe_to_html(results["by_source"], "By Source")
     
         st.markdown("### Download Individual Reports")
         
@@ -6608,7 +6444,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                     google_df = pd.read_csv(google_url_file, encoding='utf-16', sep='\t', skiprows=2)
                     url_report_dfs.append(google_df)
                     st.success(f"✅ Loaded Google URL report: {len(google_df):,} rows")
-                except:
+                except Exception:
                     google_url_file.seek(0)
                     try:
                         google_df = pd.read_csv(google_url_file, encoding='utf-8')
@@ -6776,7 +6612,6 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 
                 # Try to match using domain from URL report (if url_report_df exists)
                 if 'url_report_df' in locals() and url_report_df is not None and not url_report_df.empty and 'Ad final URL' in url_report_df.columns and has_domain:
-                    import re
                     stats_domain = st.session_state.stats_agent_domain
                     st.caption(f"🔍 Looking for domain: {stats_domain} in URL report")
                     
@@ -6804,9 +6639,8 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             
             # Try to match using domain from URL report (if url_report_df exists)
             if 'url_report_df' in locals() and url_report_df is not None and not url_report_df.empty and 'Ad final URL' in url_report_df.columns and has_domain:
-                import re
                 stats_domain = st.session_state.stats_agent_domain
-                
+
                 # Find accounts whose URLs contain the stats domain
                 for _, row in url_report_df.iterrows():
                     url = row.get('Ad final URL')
