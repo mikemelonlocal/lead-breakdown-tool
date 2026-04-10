@@ -402,18 +402,39 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
     # Match to stats Campaign IDs like "MLGDF172-001HVT1" by extracting "F172" code
     
     def get_conversions_by_campaign_name(row):
-        """Match ad group to stats using Campaign Name fire code extraction."""
+        """Match ad group to stats using Campaign + Ad Group codes."""
         campaign_name = str(row.get('Campaign', '')).strip() if pd.notna(row.get('Campaign')) else None
-        if not campaign_name:
+        ad_group_name = str(row.get('Ad group', '')).strip() if pd.notna(row.get('Ad group')) else None
+        
+        if not campaign_name or not ad_group_name:
             return None
         
-        # Extract fire code from campaign name (e.g., "Fire 172" -> "F172")
         import re
-        fire_match = re.search(r'Fire\s+(\d+)', campaign_name, re.IGNORECASE)
-        if not fire_match:
+        
+        # Extract campaign number from campaign name
+        # Remove office prefix first (Legacy/MOA)
+        clean_campaign = re.sub(r'^(Legacy|MOA)\s*-\s*', '', campaign_name, flags=re.IGNORECASE).strip()
+        
+        # Extract leading number (e.g., "001 - SF Brand" -> "001", "172 - Fire 172" -> "172")
+        campaign_num_match = re.match(r'^(\d+)', clean_campaign)
+        if not campaign_num_match:
             return None
         
-        fire_code = f"F{fire_match.group(1)}"  # "172" -> "F172"
+        campaign_num = campaign_num_match.group(1)
+        
+        # Extract ad group number from ad group name
+        # Patterns: "F172-001 SF Renters" -> "001", "001-1 SF" -> "001"
+        ad_group_num = None
+        
+        # Try pattern: F###-### or just ###-###
+        ag_match = re.search(r'[A-Z]?\d+-(\d+)', ad_group_name)
+        if ag_match:
+            ad_group_num = ag_match.group(1)
+        else:
+            # Try just leading number
+            ag_num_match = re.match(r'^(\d+)', ad_group_name)
+            if ag_num_match:
+                ad_group_num = ag_num_match.group(1)
         
         # Detect office from campaign name
         office = detect_office(campaign_name)
@@ -427,33 +448,90 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                 if match:
                     domain = match.group(1).lower()
         
-        # Match using fire code in stats Campaign IDs
-        # Look for campaigns that contain the fire code (e.g., MLGDF172, MLBDF172)
+        # Debug: Store matching attempt info
+        matching_attempts = []
+        
+        # Match using campaign + ad group numbers in stats Campaign IDs
+        # Stats IDs like: MLBDF172-001RE2
+        # We need: campaign=172, ad_group=001 → matches "F172" and "001"
         matched_conversion = None
+        matched_campaign_id = None
         
         for key, data in campaign_map.items():
             # Unpack key based on structure
             if isinstance(key, tuple):
                 if len(key) == 3:  # (domain, campaign_prefix, office)
                     stats_domain, stats_prefix, stats_office = key
-                    if domain and stats_domain == domain and fire_code in stats_prefix and stats_office == office:
+                    
+                    # Check if both campaign number AND ad group number are in the stats Campaign ID
+                    has_campaign = campaign_num in stats_prefix
+                    has_ad_group = ad_group_num and ad_group_num in stats_prefix
+                    
+                    if has_campaign and has_ad_group:
+                        matching_attempts.append(f"Checked (domain={stats_domain}, prefix={stats_prefix}, office={stats_office})")
+                    
+                    if domain and stats_domain == domain and has_campaign and has_ad_group and stats_office == office:
                         matched_conversion = data['conversions']
+                        matched_campaign_id = data.get('full_campaign_id', stats_prefix)
+                        matching_attempts.append(f"✅ MATCHED: {stats_prefix} with {data['conversions']} conversions")
                         break
                 elif len(key) == 2:  # (domain, campaign_prefix) or (campaign_prefix, office)
                     if has_domain:
                         stats_domain, stats_prefix = key
-                        if domain and stats_domain == domain and fire_code in stats_prefix:
+                        
+                        has_campaign = campaign_num in stats_prefix
+                        has_ad_group = ad_group_num and ad_group_num in stats_prefix
+                        
+                        if has_campaign and has_ad_group:
+                            matching_attempts.append(f"Checked (domain={stats_domain}, prefix={stats_prefix})")
+                        
+                        if domain and stats_domain == domain and has_campaign and has_ad_group:
                             matched_conversion = data['conversions']
+                            matched_campaign_id = data.get('full_campaign_id', stats_prefix)
+                            matching_attempts.append(f"✅ MATCHED: {stats_prefix} with {data['conversions']} conversions")
                             break
                     else:
                         stats_prefix, stats_office = key
-                        if fire_code in stats_prefix and stats_office == office:
+                        
+                        has_campaign = campaign_num in stats_prefix
+                        has_ad_group = ad_group_num and ad_group_num in stats_prefix
+                        
+                        if has_campaign and has_ad_group:
+                            matching_attempts.append(f"Checked (prefix={stats_prefix}, office={stats_office})")
+                        
+                        if has_campaign and has_ad_group and stats_office == office:
                             matched_conversion = data['conversions']
+                            matched_campaign_id = data.get('full_campaign_id', stats_prefix)
+                            matching_attempts.append(f"✅ MATCHED: {stats_prefix} with {data['conversions']} conversions")
                             break
             else:  # Single campaign_prefix
-                if fire_code in key:
+                has_campaign = campaign_num in key
+                has_ad_group = ad_group_num and ad_group_num in key
+                
+                if has_campaign and has_ad_group:
+                    matching_attempts.append(f"Checked prefix={key}")
                     matched_conversion = data['conversions']
+                    matched_campaign_id = data.get('full_campaign_id', key)
+                    matching_attempts.append(f"✅ MATCHED: {key} with {data['conversions']} conversions")
                     break
+        
+        # Store debug info for first few rows
+        if 'matching_debug' not in st.session_state:
+            st.session_state.matching_debug = []
+        
+        if len(st.session_state.matching_debug) < 10:
+            st.session_state.matching_debug.append({
+                'campaign_name': campaign_name,
+                'ad_group_name': ad_group_name,
+                'campaign_num': campaign_num,
+                'ad_group_num': ad_group_num,
+                'office': office,
+                'domain': domain,
+                'matched': matched_conversion is not None,
+                'conversions': matched_conversion,
+                'matched_campaign_id': matched_campaign_id,
+                'attempts': matching_attempts
+            })
         
         return matched_conversion
     
@@ -7194,6 +7272,26 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                         st.code(camp_id, language=None)
                         debug_text += f"  - {camp_id}\n"
                 
+                # Show office breakdown
+                if 'campaign_stats' in st.session_state and st.session_state.campaign_stats is not None:
+                    stats_df = st.session_state.campaign_stats
+                    if 'Office' in stats_df.columns and 'Campaign' in stats_df.columns:
+                        st.write("**Campaign IDs by Office:**")
+                        debug_text += "\nCampaign IDs by Office:\n"
+                        
+                        for office in ['Legacy', 'MOA']:
+                            office_campaigns = stats_df[stats_df['Office'] == office]['Campaign'].tolist()
+                            if office_campaigns:
+                                st.write(f"  **{office}** ({len(office_campaigns)} campaigns):")
+                                debug_text += f"  {office} ({len(office_campaigns)} campaigns):\n"
+                                # Show first 10 for each office
+                                for camp_id in office_campaigns[:10]:
+                                    st.code(camp_id, language=None)
+                                    debug_text += f"    - {camp_id}\n"
+                                if len(office_campaigns) > 10:
+                                    st.caption(f"    ... and {len(office_campaigns) - 10} more")
+                                    debug_text += f"    ... and {len(office_campaigns) - 10} more\n"
+                
                 if 'tab1_domain_detected' in debug and debug['tab1_domain_detected']:
                     st.write(f"**Agent Domain Detected:** `{debug['tab1_domain_detected']}`")
                     debug_text += f"\nAgent Domain Detected: {debug['tab1_domain_detected']}\n"
@@ -7684,6 +7782,47 @@ if 'debug_info' in st.session_state and st.session_state.debug_info:
         else:
             st.warning("⚠️ No campaign stats found in session state")
             debug_text += "\nWARNING: No campaign stats found - upload stats in Tab 1\n\n"
+        
+        # Add Matching Debug
+        if 'matching_debug' in st.session_state and st.session_state.matching_debug:
+            st.markdown("### 🔗 Campaign Matching Attempts")
+            debug_text += "\nCAMPAIGN MATCHING DEBUG\n"
+            
+            for i, attempt in enumerate(st.session_state.matching_debug, 1):
+                st.write(f"**Attempt {i}:**")
+                st.write(f"  - Campaign: `{attempt['campaign_name']}`")
+                st.write(f"  - Ad Group: `{attempt['ad_group_name']}`")
+                st.write(f"  - Campaign #: `{attempt['campaign_num']}`")
+                st.write(f"  - Ad Group #: `{attempt['ad_group_num']}`")
+                st.write(f"  - Office: `{attempt['office']}`")
+                st.write(f"  - Domain: `{attempt['domain']}`")
+                st.write(f"  - Matched: {'✅ YES' if attempt['matched'] else '❌ NO'}")
+                if attempt['matched']:
+                    st.write(f"  - Conversions: {attempt['conversions']}")
+                    st.write(f"  - Stats Campaign ID: `{attempt['matched_campaign_id']}`")
+                
+                debug_text += f"\nAttempt {i}:\n"
+                debug_text += f"  Campaign: {attempt['campaign_name']}\n"
+                debug_text += f"  Ad Group: {attempt['ad_group_name']}\n"
+                debug_text += f"  Campaign #: {attempt['campaign_num']}\n"
+                debug_text += f"  Ad Group #: {attempt['ad_group_num']}\n"
+                debug_text += f"  Office: {attempt['office']}\n"
+                debug_text += f"  Domain: {attempt['domain']}\n"
+                debug_text += f"  Matched: {'YES' if attempt['matched'] else 'NO'}\n"
+                if attempt['matched']:
+                    debug_text += f"  Conversions: {attempt['conversions']}\n"
+                    debug_text += f"  Stats Campaign ID: {attempt['matched_campaign_id']}\n"
+                
+                if attempt['attempts']:
+                    st.write("  - Matching attempts:")
+                    debug_text += "  Matching attempts:\n"
+                    for att in attempt['attempts']:
+                        st.caption(f"    {att}")
+                        debug_text += f"    {att}\n"
+                
+                st.write("")
+            
+            debug_text += "\n"
         
         # Add download and copy buttons
         st.markdown("---")
