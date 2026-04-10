@@ -3435,7 +3435,7 @@ with main_tab1:
             # Store campaign-level stats in session state for Tab 2
             # Aggregate by campaign to get conversions and CPL
             if not df_in.empty:
-                campaign_col = get_col(df_in, ["campaign_id", "campaign id", "campaign"])
+                campaign_col = get_col(df_in, ["campaign_ids", "campaign ids", "campaign_id", "campaign id", "campaign"])
                 if campaign_col:
                     # Get column names that exist
                     qs_col = get_col(df_in, ["quote_starts", "quote starts", "quote start", "qs"])
