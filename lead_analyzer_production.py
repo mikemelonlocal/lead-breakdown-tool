@@ -1849,25 +1849,51 @@ def classify_platform(campaign_id: str, traffic_source: str) -> str:
 
 
 def classify_product(campaign_id: str, landing_page: str, platform: str) -> str:
-    """Classify insurance product type based on campaign ID and landing page."""
+    """Classify insurance product type based on campaign ID and landing page.
+
+    Product names are aligned with the complete_utm_mapping.csv:
+    Auto, Home, Renters, Condo.
+    """
     s_id = (str(campaign_id) or "").upper()
-    
+
+    # Melon Max: product encoded in campaign ID prefix
     if platform == "Melon Max":
         if "QSA" in s_id:
             return "Auto"
         if "QSH" in s_id:
-            return "Homeowners"
-    
+            return "Home"
+
+    # Campaign ID numeric codes (e.g., F172 = Renters, F170 = Home)
+    # Extract the campaign number and match known product codes
+    num_match = re.search(r'[FfGgBb]?[DdMm]?(\d{3})', s_id)
+    if num_match:
+        campaign_num = num_match.group(1)
+        # Known campaign number -> product mappings
+        product_by_number = {
+            '001': 'Auto', '003': 'Auto', '004': 'Auto', '005': 'Auto',
+            '119': 'Auto', '120': 'Auto',
+            '170': 'Home', '171': 'Home',
+            '172': 'Renters', '173': 'Renters',
+            '205': 'Condo',
+            '271': 'Condo', '273': 'Condo',
+        }
+        if campaign_num in product_by_number:
+            return product_by_number[campaign_num]
+
+    # Landing page fallback — check the URL path, not the domain
     s_lp = (str(landing_page) or "").lower()
-    if "renters" in s_lp:
+    # Strip the domain portion so "insurancequotesouth.com" doesn't false-match "quote"
+    path_part = s_lp.split('/', 3)[-1] if '/' in s_lp else ''
+
+    if "renters" in path_part:
         return "Renters"
-    if "quote" in s_lp or "auto" in s_lp:
-        return "Auto"
-    if "condo" in s_lp:
+    if "condo" in path_part:
         return "Condo"
-    if "homeowners" in s_lp:
-        return "Homeowners"
-    
+    if "homeowners" in path_part or "home-insurance" in path_part:
+        return "Home"
+    if "auto" in path_part or "car-insurance" in path_part:
+        return "Auto"
+
     return "Other"
 
 
@@ -3255,73 +3281,75 @@ with main_tab1:
                     """
                     if pd.isna(campaign_id):
                         return None
-                    
-                    campaign_str = str(campaign_id).strip()
-                    
-                    # Detect platform from prefix
-                    platform_prefix = ''
-                    if 'MLG' in campaign_str or campaign_str.startswith('G'):
-                        platform_prefix = 'G'  # Google
-                    elif 'MLB' in campaign_str or campaign_str.startswith('B'):
-                        platform_prefix = 'B'  # Microsoft Bing
-                    elif 'MLQS' in campaign_str or 'QS' in campaign_str:
-                        platform_prefix = 'QS'  # Melon Max
-                    
-                    # Extract device (D=Desktop, M=Mobile, S=Search)
-                    device_code = ''
-                    if 'D' in campaign_str and platform_prefix:
-                        device_code = 'D'
-                    elif 'M' in campaign_str and platform_prefix:
-                        device_code = 'M'
-                    elif 'S' in campaign_str and platform_prefix:
-                        device_code = 'S'
-                    
-                    # Extract campaign number (e.g., 172, 001, etc.)
-                    num_match = re.search(r'[A-Z]*[DF]?(\d+)', campaign_str)
-                    if num_match:
-                        campaign_num = num_match.group(1)
-                        
-                        # Build search patterns
-                        # For Google Desktop 172: GD172, MLGD172
-                        # For Microsoft Desktop 172: BD172, MLBD172
-                        search_patterns = []
-                        
-                        if platform_prefix and device_code:
-                            # Platform + Device + Number (e.g., GD172, BD172)
-                            search_patterns.append(f"{platform_prefix}{device_code}{campaign_num}")
-                            # ML + Platform + Device + Number (e.g., MLGD172, MLBD172)
-                            search_patterns.append(f"ML{platform_prefix}{device_code}{campaign_num}")
-                        
-                        # Also try just the number for fallback
-                        search_patterns.append(campaign_num)
-                        
-                        # Try each pattern
-                        for pattern in search_patterns:
-                            matching_utms = mapping_df[
-                                mapping_df['_clean_utm'].str.contains(pattern, case=False, na=False, regex=False)
-                            ]
-                            
-                            if len(matching_utms) > 0:
-                                # Track successful match for debugging
-                                product = matching_utms.iloc[0]['Product']
-                                if len(match_attempts) < 20:  # Limit to first 20 for performance
-                                    match_attempts.append({
-                                        'Campaign ID': campaign_str,
-                                        'Pattern': pattern,
-                                        'Product': product,
-                                        'Matched': 'YES'
-                                    })
-                                return product
-                        
-                        # Track failed match
-                        if len(match_attempts) < 20:
-                            match_attempts.append({
-                                'Campaign ID': campaign_str,
-                                'Pattern': ', '.join(search_patterns),
-                                'Product': None,
-                                'Matched': 'NO'
-                            })
-                    
+
+                    campaign_str = str(campaign_id).strip().upper()
+
+                    # Detect platform + device from known prefixes (most specific first)
+                    # Campaign IDs look like: MLGDF172-001HVT1, MLBM001-1, MLQSAM, GD001, GM001
+                    platform_device = ''
+                    for prefix in ['MLSGD', 'MLSGM', 'MLSBD', 'MLSBM',
+                                   'MLGD', 'MLGM', 'MLBD', 'MLBM',
+                                   'GD', 'GM', 'BD', 'BM']:
+                        if prefix in campaign_str:
+                            # Map to the short UTM prefix form (GD, GM, BD, BM)
+                            platform_device = prefix[-2:]  # Last 2 chars: GD, GM, BD, BM
+                            break
+
+                    # Handle Melon Max separately
+                    if 'MLQS' in campaign_str or campaign_str.startswith('QS'):
+                        if 'AM' in campaign_str or 'AD' in campaign_str or 'AT' in campaign_str:
+                            return 'Auto'
+                        if 'HM' in campaign_str or 'HD' in campaign_str or 'HT' in campaign_str:
+                            return 'Home'
+                        return None
+
+                    # Extract the campaign number (3-digit code like 172, 001, 170)
+                    # Look for the number right after the platform+device prefix
+                    # e.g., MLGDF172 -> 172, MLBM001 -> 001, GD001 -> 001
+                    num_match = re.search(r'(?:MLG|MLB|MLSG|MLSB|[GB])[DM]F?(\d{3})', campaign_str)
+                    if not num_match:
+                        # Fallback: look for a 3-digit number in the ID
+                        num_match = re.search(r'(\d{3})', campaign_str)
+                    if not num_match:
+                        return None
+
+                    campaign_num = num_match.group(1)
+
+                    # Build search patterns in priority order (most specific first)
+                    search_patterns = []
+                    if platform_device:
+                        # e.g., GD172, BD001
+                        search_patterns.append(f"{platform_device}{campaign_num}")
+                    # Also try the other device variant (D<->M) for broader match
+                    if platform_device:
+                        alt_device = platform_device[0] + ('M' if platform_device[1] == 'D' else 'D')
+                        search_patterns.append(f"{alt_device}{campaign_num}")
+
+                    # Try each pattern — use startswith match on UTM, not substring
+                    for pattern in search_patterns:
+                        matching_utms = mapping_df[
+                            mapping_df['_clean_utm'].str.upper().str.startswith(pattern, na=False)
+                        ]
+                        if len(matching_utms) > 0:
+                            product = matching_utms.iloc[0]['Product']
+                            if len(match_attempts) < 20:
+                                match_attempts.append({
+                                    'Campaign ID': campaign_str,
+                                    'Pattern': pattern,
+                                    'Product': product,
+                                    'Matched': 'YES'
+                                })
+                            return product
+
+                    # Track failed match
+                    if len(match_attempts) < 20:
+                        match_attempts.append({
+                            'Campaign ID': campaign_str,
+                            'Pattern': ', '.join(search_patterns) if search_patterns else campaign_num,
+                            'Product': None,
+                            'Matched': 'NO'
+                        })
+
                     return None
                 
                 # Apply matching function
