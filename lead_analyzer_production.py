@@ -1854,7 +1854,15 @@ def classify_product(campaign_id: str, landing_page: str, platform: str) -> str:
     Product names are aligned with the complete_utm_mapping.csv:
     Auto, Home, Renters, Condo.
     """
-    s_id = (str(campaign_id) or "").upper()
+    raw = (str(campaign_id) or "").strip()
+
+    # Strip MD5 hash prefix (32 hex chars) if present
+    # e.g. "149084BF90E9D889F9C32F2478957BE5MLBDF172-001RE2" -> "MLBDF172-001RE2"
+    hash_match = re.match(r'^[0-9A-Fa-f]{32}(.+)$', raw)
+    if hash_match:
+        raw = hash_match.group(1)
+
+    s_id = raw.upper()
 
     # Melon Max: product encoded in campaign ID prefix
     if platform == "Melon Max":
@@ -1863,26 +1871,38 @@ def classify_product(campaign_id: str, landing_page: str, platform: str) -> str:
         if "QSH" in s_id:
             return "Home"
 
-    # Campaign ID numeric codes (e.g., F172 = Renters, F170 = Home)
-    # Extract the campaign number and match known product codes
-    num_match = re.search(r'[FfGgBb]?[DdMm]?(\d{3})', s_id)
+    # Known campaign number -> product mappings
+    PRODUCT_BY_NUMBER = {
+        '001': 'Auto', '003': 'Auto', '004': 'Auto', '005': 'Auto',
+        '0055': 'Auto',
+        '119': 'Auto', '120': 'Auto',
+        '170': 'Home', '171': 'Home',
+        '172': 'Renters', '173': 'Renters',
+        '205': 'Condo',
+        '271': 'Condo', '273': 'Condo',
+    }
+
+    # Extract campaign number anchored to known platform prefixes
+    # Patterns: MLGDF172, MLBM001, GD172, BD001, F172, etc.
+    num_match = re.search(
+        r'(?:MLSG|MLSB|MLG|MLB|[GB])[DM]F?(\d{3,4})', s_id
+    )
+    if not num_match:
+        # Fallback: look for F+digits or standalone 3-4 digit number
+        # after the start of the cleaned ID (no hash)
+        num_match = re.search(r'F(\d{3,4})', s_id)
+    if not num_match:
+        # Last resort: first 3-4 digit number in the cleaned campaign ID
+        num_match = re.search(r'(\d{3,4})', s_id)
+
     if num_match:
         campaign_num = num_match.group(1)
-        # Known campaign number -> product mappings
-        product_by_number = {
-            '001': 'Auto', '003': 'Auto', '004': 'Auto', '005': 'Auto',
-            '119': 'Auto', '120': 'Auto',
-            '170': 'Home', '171': 'Home',
-            '172': 'Renters', '173': 'Renters',
-            '205': 'Condo',
-            '271': 'Condo', '273': 'Condo',
-        }
-        if campaign_num in product_by_number:
-            return product_by_number[campaign_num]
+        if campaign_num in PRODUCT_BY_NUMBER:
+            return PRODUCT_BY_NUMBER[campaign_num]
 
     # Landing page fallback — check the URL path, not the domain
     s_lp = (str(landing_page) or "").lower()
-    # Strip the domain portion so "insurancequotesouth.com" doesn't false-match "quote"
+    # Strip the domain portion so "insurancequotesouth.com" doesn't false-match
     path_part = s_lp.split('/', 3)[-1] if '/' in s_lp else ''
 
     if "renters" in path_part:
@@ -3318,12 +3338,18 @@ with main_tab1:
                     # Build search patterns in priority order (most specific first)
                     search_patterns = []
                     if platform_device:
-                        # e.g., GD172, BD001
+                        # e.g., GD172, BD001 — exact platform+device match
                         search_patterns.append(f"{platform_device}{campaign_num}")
-                    # Also try the other device variant (D<->M) for broader match
-                    if platform_device:
+                        # Try the other device variant (D<->M)
                         alt_device = platform_device[0] + ('M' if platform_device[1] == 'D' else 'D')
                         search_patterns.append(f"{alt_device}{campaign_num}")
+                    # Cross-platform fallback: Microsoft campaigns often share
+                    # the same campaign numbers as Google (e.g., 172 = Renters
+                    # regardless of platform). Try Google UTM patterns too.
+                    if platform_device and platform_device[0] == 'B':
+                        search_patterns.append(f"G{platform_device[1]}{campaign_num}")
+                        alt_gd = 'M' if platform_device[1] == 'D' else 'D'
+                        search_patterns.append(f"G{alt_gd}{campaign_num}")
 
                     # Try each pattern — use startswith match on UTM, not substring
                     for pattern in search_patterns:
