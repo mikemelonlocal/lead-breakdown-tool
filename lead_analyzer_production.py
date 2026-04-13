@@ -2403,36 +2403,27 @@ def dataframe_to_html(df, title="Table"):
 def extract_utm_from_campaign_id(campaign_id, tokens=UTM_TOKENS_FIXED):
     """
     Extract UTM token from campaign ID.
-    
-    For Melon Max campaigns:
-    - AT, AM, AD (Auto + device) → "Auto"
-    - HT, HM, HD (Home + device) → "Home"
-    
-    For other campaigns: returns the matched token as-is
+
+    Returns the actual UTM code (e.g., "AM", "HM", "172"), never a product name.
     """
     s = str(campaign_id or "")
-    low = s.lower()
-    
-    # Check for Melon Max Auto codes (AT, AM, AD)
-    if any(code in s.upper() for code in ["AT", "AM", "AD"]):
-        # Check if this is actually a Melon Max campaign (has QS)
-        if "QS" in s.upper():
-            return "Auto"
-    
-    # Check for Melon Max Home codes (HT, HM, HD)
-    if any(code in s.upper() for code in ["HT", "HM", "HD"]):
-        # Check if this is actually a Melon Max campaign (has QS)
-        if "QS" in s.upper():
-            return "Home"
-    
-    # For all other campaigns, use standard token matching
+    upper = s.upper()
+
+    # Melon Max campaigns — return the device code, not the product name
+    if "QS" in upper:
+        for code in ["AM", "AT", "AD", "HM", "HT", "HD"]:
+            if code in upper:
+                return code
+        return "QS"
+
+    # Standard token matching for all other campaigns
     for t in tokens:
         tt = str(t or "").strip()
         if not tt:
             continue
-        if tt.lower() in low:
+        if tt.lower() in s.lower():
             return tt
-    
+
     return ""
 
 
