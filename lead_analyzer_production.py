@@ -3312,10 +3312,9 @@ main_tab1, main_tab2 = st.tabs(["📊 Lead Performance Analysis", "💰 Ads Acco
 # ========== TAB 1: LEAD PERFORMANCE ==========
 with main_tab1:
     st.markdown("### Lead Performance Analysis")
-    
-    # ---------- Sidebar Configuration ----------
+
+    # ---------- Sidebar (filters only) ----------
     with st.sidebar:
-        # Melon Local logo text
         st.markdown("""
         <div style='text-align:center;padding:1rem 0;margin-bottom:1rem;'>
             <div style='font-size:2em;'>🍈</div>
@@ -3323,47 +3322,10 @@ with main_tab1:
             <div style='font-size:0.9em;opacity:0.8;'>Lead Analyzer</div>
         </div>
         """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        st.header("💰 Budget Inputs")
-        
-        st.markdown("**Legacy**")
-        legacy_google = st.number_input("Legacy — Google Spend", value=0.0, min_value=0.0, step=100.0, format="%.2f", key="legacy_spend_google", help="Monthly ad spend for Legacy agency on Google Ads")
-        legacy_ms = st.number_input("Legacy — Microsoft Spend", value=0.0, min_value=0.0, step=100.0, format="%.2f", key="legacy_spend_ms", help="Monthly ad spend for Legacy agency on Microsoft Ads")
-        legacy_mm = st.number_input("Legacy — Melon Max Spend", value=0.0, min_value=0.0, step=100.0, format="%.2f", key="legacy_spend_mm", help="Monthly ad spend for Legacy agency on Melon Max")
-        
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
-        
-        st.markdown("**MOA**")
-        moa_google = st.number_input("MOA — Google Spend", value=0.0, min_value=0.0, step=100.0, format="%.2f", key="moa_spend_google", help="Monthly ad spend for MOA agency on Google Ads")
-        moa_ms = st.number_input("MOA — Microsoft Spend", value=0.0, min_value=0.0, step=100.0, format="%.2f", key="moa_spend_ms", help="Monthly ad spend for MOA agency on Microsoft Ads")
-        moa_mm = st.number_input("MOA — Melon Max Spend", value=0.0, min_value=0.0, step=100.0, format="%.2f", key="moa_spend_mm", help="Monthly ad spend for MOA agency on Melon Max")
-    
-        st.markdown("---")
-        spend_col = st.text_input("Optional spend column name (in uploads)", placeholder="e.g., Spend, Cost", key="sb_spend_col")
-        csv_style = st.radio("CSV number style", options=["Raw numbers", "With $ and % symbols"], index=0, key="sb_csv_style")
-        
-        st.markdown("---")
-        st.subheader("📊 Lead Types to Include")
-        st.markdown("**Select which lead types to include in analysis:**")
-        include_quote_starts = st.checkbox("Include Quote Starts", value=True, key="include_qs", help="Include quote start leads in totals and calculations")
-        include_phone_clicks = st.checkbox("Include Phone Clicks", value=True, key="include_phone", help="Include phone click leads in totals and calculations")
-        include_sms_clicks = st.checkbox("Include SMS Clicks", value=True, key="include_sms", help="Include SMS click leads in totals and calculations")
-        
-        # Show warning if all are unchecked
-        if not (include_quote_starts or include_phone_clicks or include_sms_clicks):
-            st.warning("⚠️ At least one lead type must be selected!")
-        
-        st.markdown("---")
-        hide_unknown = st.checkbox("Hide 'Unknown' platform", False, key="gf_hide_unknown")
-        exclude_listings_from_totals = st.checkbox(
-            "Exclude 'Listings' from TOTAL rows",
-            False,
-            key="exclude_listings_totals",
-            help="When enabled, Listings will still appear in tables but won't be included in TOTAL row calculations"
-        )
-    
-    
+
+    # ---------- Data Sources ----------
+    st.markdown("### Data Sources")
+
     # ---------- File Upload ----------
     c1, c2 = st.columns(2)
     with c1:
@@ -3382,6 +3344,43 @@ with main_tab1:
         st.markdown(" • ".join(file_status))
         st.caption("💡 Analysis will update automatically when files change")
     
+    # ---------- Configuration (collapsible) ----------
+    with st.expander("⚙️ Configuration", expanded=False):
+        cfg_col1, cfg_col2 = st.columns(2)
+
+        with cfg_col1:
+            st.markdown("**Legacy Budget**")
+            legacy_google = st.number_input("Google Spend", value=0.0, min_value=0.0, step=100.0, format="%.2f", key="legacy_spend_google", help="Monthly ad spend for Legacy agency on Google Ads")
+            legacy_ms = st.number_input("Microsoft Spend", value=0.0, min_value=0.0, step=100.0, format="%.2f", key="legacy_spend_ms", help="Monthly ad spend for Legacy agency on Microsoft Ads")
+            legacy_mm = st.number_input("Melon Max Spend", value=0.0, min_value=0.0, step=100.0, format="%.2f", key="legacy_spend_mm", help="Monthly ad spend for Legacy agency on Melon Max")
+
+        with cfg_col2:
+            st.markdown("**MOA Budget**")
+            moa_google = st.number_input("Google Spend", value=0.0, min_value=0.0, step=100.0, format="%.2f", key="moa_spend_google", help="Monthly ad spend for MOA agency on Google Ads")
+            moa_ms = st.number_input("Microsoft Spend", value=0.0, min_value=0.0, step=100.0, format="%.2f", key="moa_spend_ms", help="Monthly ad spend for MOA agency on Microsoft Ads")
+            moa_mm = st.number_input("Melon Max Spend", value=0.0, min_value=0.0, step=100.0, format="%.2f", key="moa_spend_mm", help="Monthly ad spend for MOA agency on Melon Max")
+
+        st.markdown("---")
+        cfg_col3, cfg_col4, cfg_col5 = st.columns(3)
+
+        with cfg_col3:
+            st.markdown("**Lead Types**")
+            include_quote_starts = st.checkbox("Include Quote Starts", value=True, key="include_qs")
+            include_phone_clicks = st.checkbox("Include Phone Clicks", value=True, key="include_phone")
+            include_sms_clicks = st.checkbox("Include SMS Clicks", value=True, key="include_sms")
+            if not (include_quote_starts or include_phone_clicks or include_sms_clicks):
+                st.warning("At least one lead type must be selected!")
+
+        with cfg_col4:
+            st.markdown("**Display Options**")
+            hide_unknown = st.checkbox("Hide 'Unknown' platform", False, key="gf_hide_unknown")
+            exclude_listings_from_totals = st.checkbox("Exclude 'Listings' from TOTAL rows", False, key="exclude_listings_totals")
+
+        with cfg_col5:
+            st.markdown("**Export Options**")
+            spend_col = st.text_input("Spend column name", placeholder="e.g., Spend, Cost", key="sb_spend_col")
+            csv_style = st.radio("CSV number style", options=["Raw numbers", "With $ and % symbols"], index=0, key="sb_csv_style")
+
     # Track file changes to force rerun on change
     current_files = {
         'legacy': up_legacy.name if up_legacy else None,
@@ -3838,1477 +3837,793 @@ with main_tab1:
         # ---------- AGENCY-SPECIFIC SECTIONS ----------
         has_legacy_file = up_legacy is not None
         has_moa_file = up_moa is not None
-    
-        for agency_name in ["Legacy", "MOA"]:
+
+        def render_agency_detail(agency_name):
+            """Render the full detail view for a single agency inside a sub-tab."""
             ag_mask = df_in["agency"] == agency_name
-            ag_has_rows = ag_mask.any()
-            # Determine default expansion: expand if this agency file was uploaded
-            default_expanded = has_legacy_file if agency_name == "Legacy" else has_moa_file
-    
-            with st.expander(f"{agency_name} — Overview", expanded=bool(default_expanded)):
-                if not ag_has_rows:
-                    st.info(f"No data uploaded for {agency_name}.")
-                    continue
-    
-                sub_df = df_in[ag_mask].copy()
-                sub_spends = {agency_name: spends[agency_name]}
-                single = analyze(sub_df, sub_spends, spend_column=spend_col.strip() or None, hide_unknown=hide_unknown, add_device_column=add_device_column, exclude_listings_from_totals=exclude_listings_from_totals, include_qs=include_quote_starts, include_phone=include_phone_clicks, include_sms=include_sms_clicks)
+            if not ag_mask.any():
+                st.info(f"No data uploaded for {agency_name}.")
+                return
+
+            sub_df = df_in[ag_mask].copy()
+            sub_spends = {agency_name: spends[agency_name]}
+            single = analyze(sub_df, sub_spends, spend_column=spend_col.strip() or None, hide_unknown=hide_unknown, add_device_column=add_device_column, exclude_listings_from_totals=exclude_listings_from_totals, include_qs=include_quote_starts, include_phone=include_phone_clicks, include_sms=include_sms_clicks)
                 
-                # Platform Overview
-                with st.expander(f"{agency_name}: Platform Overview (Platform CPL + TOTAL)", expanded=True):
-                    # Tracking disclaimer
-                    st.info("ℹ️ **Note:** \"Unknown\" or \"Other\" classifications represent leads that MySFDomain's tracking software was unable to categorize. While the majority of leads are tracked correctly, MySFDomain's platform has some limitations in lead categorization that affect a small percentage of data.")
+            # Platform Overview
+            with st.expander(f"{agency_name}: Platform Overview (Platform CPL + TOTAL)", expanded=True):
+                # Tracking disclaimer
+                st.info("ℹ️ **Note:** \"Unknown\" or \"Other\" classifications represent leads that MySFDomain's tracking software was unable to categorize. While the majority of leads are tracked correctly, MySFDomain's platform has some limitations in lead categorization that affect a small percentage of data.")
+                
+                plat = single["platform_overview"].copy()
+                
+                # Add charts
+                if PLOTLY_AVAILABLE:
+                    plat_chart = plat[plat["platform"] != "TOTAL"].copy()
                     
-                    plat = single["platform_overview"].copy()
-                    
-                    # Add charts
-                    if PLOTLY_AVAILABLE:
-                        plat_chart = plat[plat["platform"] != "TOTAL"].copy()
-                        
-                        if not plat_chart.empty:
-                            # Chart controls
-                            chart_col1, chart_col2, chart_col3 = st.columns([2, 2, 2])
-                            
-                            with chart_col1:
-                                chart_type = st.selectbox(
-                                    "Chart Type:",
-                                    options=["Bar", "Line", "Area"],
-                                    key=f"{agency_name}_plat_chart_type"
-                                )
-                            
-                            with chart_col2:
-                                metric_to_show = st.selectbox(
-                                    "Metric:",
-                                    options=["Leads (Total)", "Quote Starts", "Phone Clicks", "SMS Clicks", "CPL"],
-                                    key=f"{agency_name}_plat_metric"
-                                )
-                            
-                            with chart_col3:
-                                show_values = st.checkbox(
-                                    "Show Values",
-                                    value=True,
-                                    key=f"{agency_name}_plat_show_values"
-                                )
-                            
-                            # Map metric selection to column name
-                            metric_map = {
-                                "Leads (Total)": "leads",
-                                "Quote Starts": "quote_starts",
-                                "Phone Clicks": "phone_clicks",
-                                "SMS Clicks": "sms_clicks",
-                                "CPL": "cpl_platform"
-                            }
-                            
-                            metric_col = metric_map[metric_to_show]
-                            
-                            # Device breakdown chart (when device column exists)
-                            if "device" in plat_chart.columns:
-                                # Prepare data
-                                chart_data = plat_chart.copy()
-                                if metric_col == "cpl_platform":
-                                    chart_data[metric_col] = pd.to_numeric(chart_data[metric_col], errors="coerce")
-                                    chart_data = chart_data[chart_data[metric_col] > 0]
-                                
-                                # Create chart based on type
-                                if chart_type == "Bar":
-                                    fig = px.bar(
-                                        chart_data,
-                                        x="platform",
-                                        y=metric_col,
-                                        color="device",
-                                        title=f"{agency_name}: {metric_to_show} by Platform & Device",
-                                        labels={"platform": "Platform", metric_col: metric_to_show, "device": "Device"},
-                                        color_discrete_map={
-                                            "Mobile": "#47B74F",
-                                            "Desktop": "#0f5340",
-                                            "Tablet": "#efd568",
-                                            "Unknown": "#cccccc"
-                                        },
-                                        text=metric_col if show_values else None,
-                                        barmode="group"
-                                    )
-                                elif chart_type == "Line":
-                                    fig = px.line(
-                                        chart_data,
-                                        x="platform",
-                                        y=metric_col,
-                                        color="device",
-                                        title=f"{agency_name}: {metric_to_show} by Platform & Device",
-                                        labels={"platform": "Platform", metric_col: metric_to_show, "device": "Device"},
-                                        color_discrete_map={
-                                            "Mobile": "#47B74F",
-                                            "Desktop": "#0f5340",
-                                            "Tablet": "#efd568",
-                                            "Unknown": "#cccccc"
-                                        },
-                                        markers=True
-                                    )
-                                else:  # Area
-                                    fig = px.area(
-                                        chart_data,
-                                        x="platform",
-                                        y=metric_col,
-                                        color="device",
-                                        title=f"{agency_name}: {metric_to_show} by Platform & Device",
-                                        labels={"platform": "Platform", metric_col: metric_to_show, "device": "Device"},
-                                        color_discrete_map={
-                                            "Mobile": "#47B74F",
-                                            "Desktop": "#0f5340",
-                                            "Tablet": "#efd568",
-                                            "Unknown": "#cccccc"
-                                        }
-                                    )
-                                
-                                if show_values and chart_type == "Bar":
-                                    if metric_col == "cpl_platform":
-                                        fig.update_traces(texttemplate='$%{text:.2f}', textposition='outside')
-                                    else:
-                                        fig.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
-                                
-                                fig.update_layout(
-                                    height=400,
-                                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                                )
-                                st.plotly_chart(fig, use_container_width=True)
-                                st.markdown("---")
-                            else:
-                                # Regular platform charts (when device breakdown is OFF)
-                                plat_agg = plat_chart.copy()
-                                
-                                # Prepare data based on metric
-                                if metric_col == "cpl_platform":
-                                    plat_agg[metric_col] = pd.to_numeric(plat_agg[metric_col], errors="coerce")
-                                    plat_agg = plat_agg[plat_agg[metric_col] > 0]
-                                
-                                # Create chart based on type
-                                if chart_type == "Bar":
-                                    fig = px.bar(
-                                        plat_agg,
-                                        x="platform",
-                                        y=metric_col,
-                                        title=f"{agency_name}: {metric_to_show} by Platform",
-                                        labels={"platform": "Platform", metric_col: metric_to_show},
-                                        color=metric_col,
-                                        color_continuous_scale=["#eef7ef", "#47B74F"] if metric_col != "cpl_platform" else ["#47B74F", "#efd568", "#f28c82"],
-                                        text=metric_col if show_values else None
-                                    )
-                                elif chart_type == "Line":
-                                    fig = px.line(
-                                        plat_agg,
-                                        x="platform",
-                                        y=metric_col,
-                                        title=f"{agency_name}: {metric_to_show} by Platform",
-                                        labels={"platform": "Platform", metric_col: metric_to_show},
-                                        markers=True,
-                                        color_discrete_sequence=["#47B74F"]
-                                    )
-                                else:  # Area
-                                    fig = px.area(
-                                        plat_agg,
-                                        x="platform",
-                                        y=metric_col,
-                                        title=f"{agency_name}: {metric_to_show} by Platform",
-                                        labels={"platform": "Platform", metric_col: metric_to_show},
-                                        color_discrete_sequence=["#47B74F"]
-                                    )
-                                
-                                if show_values and chart_type == "Bar":
-                                    if metric_col == "cpl_platform":
-                                        fig.update_traces(texttemplate='$%{text:.2f}', textposition='outside')
-                                    else:
-                                        fig.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
-                                
-                                fig.update_layout(
-                                    showlegend=False,
-                                    height=400,
-                                    margin=dict(l=20, r=20, t=40, b=20)
-                                )
-                                st.plotly_chart(fig, use_container_width=True)
-                                st.markdown("---")
-                    
-                    # Currency formatting is now handled by display_table_with_total
-                    # (removed redundant formatting here to avoid double-formatting)
-                    
-                    # Build filters - add device if column exists
-                    filters = {"platform": f"{agency_name}_plat_platform"}
-                    if "device" in plat.columns:
-                        filters["device"] = f"{agency_name}_plat_device"
-                    
-                    display_table_with_total(
-                        plat, 
-                        "platform", 
-                        "TOTAL",
-                        filters=filters
-                    )
-                    
-                    if DFI_AVAILABLE:
-                        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                            df_png = prepare_df_for_png(plat)
-                            style = hide_index_styler(df_png)
-                            dfi.export(style, tmp.name)
-                            with open(tmp.name, "rb") as f:
-                                st.download_button(
-                                    f"⬇️ Download {agency_name} Platform Overview (PNG)", 
-                                    f.read(), 
-                                    file_name=f"{agency_name.lower()}_platform_overview.png", 
-                                    mime="image/png", 
-                                    use_container_width=True
-                                )
-    
-                # UTM Overview
-                with st.expander(f"{agency_name}: UTM Overview (Platform × UTM + TOTAL)", expanded=False):
-                    # Use the original filtered dataframe before analyze() processing
-                    # The sub_df might have modified columns from analyze()
-                    utm_source_df = df_in[ag_mask].copy()
-                    
-                    camp_col = get_col(utm_source_df, ["campaign_id", "campaign"])
-                    
-                    if camp_col is None:
-                        st.info("No Campaign ID column found for UTM overview.")
-                    else:
-                        # Get the original column names from the raw data
-                        qs_col = get_col(utm_source_df, ["quote_starts", "qs", "quote_start", "quotes", "quote starts"])
-                        ph_col = get_col(utm_source_df, ["phone_clicks", "phone clicks", "phone", "calls"])
-                        sms_col = get_col(utm_source_df, ["sms_clicks", "sms clicks", "sms", "text clicks"])
-                        
-                        # Convert to numeric first
-                        to_num = lambda s: pd.to_numeric(s, errors="coerce").fillna(0.0)
-                        
-                        if qs_col:
-                            utm_source_df["_qs"] = to_num(utm_source_df[qs_col])
-                        else:
-                            utm_source_df["_qs"] = 0.0
-                            
-                        if ph_col:
-                            utm_source_df["_phone"] = to_num(utm_source_df[ph_col])
-                        else:
-                            utm_source_df["_phone"] = 0.0
-                            
-                        if sms_col:
-                            utm_source_df["_sms"] = to_num(utm_source_df[sms_col])
-                        else:
-                            utm_source_df["_sms"] = 0.0
-                        
-                        utm_source_df["_leads"] = utm_source_df["_qs"] + utm_source_df["_phone"] + utm_source_df["_sms"]
-                        
-                        # Extract UTM and add platform classification
-                        utm_source_df["utm"] = utm_source_df[camp_col].apply(extract_utm_from_campaign_id)
-                        utm_source_df["utm"] = utm_source_df["utm"].replace("", "Unmatched")
-                        
-                        # Get platform column (should already exist from analyze, but let's be safe)
-                        traffic_col = detect_traffic_source_col(utm_source_df)
-                        if "platform" not in utm_source_df.columns:
-                            utm_source_df["platform"] = utm_source_df.apply(
-                                lambda r: classify_platform(r[camp_col], r[traffic_col] if traffic_col else ""), 
-                                axis=1
-                            )
-                        
-                        # Add device if device breakdown is enabled
-                        if add_device_column:
-                            if "device" not in utm_source_df.columns:
-                                utm_source_df["device"] = utm_source_df.apply(
-                                    lambda r: classify_device(r[camp_col], r["platform"]), 
-                                    axis=1
-                                )
-                            group_cols = ["device", "platform", "utm"]
-                        else:
-                            group_cols = ["platform", "utm"]
-                        
-                        utm_over = utm_source_df.groupby(group_cols, as_index=False).agg(
-                            quote_starts=("_qs", "sum"),
-                            phone_clicks=("_phone", "sum"),
-                            sms_clicks=("_sms", "sum"),
-                            leads=("_leads", "sum")
-                        ).sort_values(["platform", "leads", "utm"], ascending=[True, False, True]).reset_index(drop=True)
-                        
-                        # Filter out rows where all metrics are zero
-                        utm_over = utm_over[
-                            (utm_over["quote_starts"] > 0) | 
-                            (utm_over["phone_clicks"] > 0) | 
-                            (utm_over["sms_clicks"] > 0) | 
-                            (utm_over["leads"] > 0)
-                        ].reset_index(drop=True)
-                        
-                        # Add TOTAL row (calculate before adding)
-                        totals = {
-                            "platform": "",
-                            "utm": "TOTAL",
-                            "quote_starts": utm_over["quote_starts"].sum(),
-                            "phone_clicks": utm_over["phone_clicks"].sum(),
-                            "sms_clicks": utm_over["sms_clicks"].sum(),
-                            "leads": utm_over["leads"].sum()
-                        }
-                        if add_device_column:
-                            totals["device"] = ""
-                        total_row = pd.DataFrame([totals])
-                        
-                        # Concatenate and reset index to ensure TOTAL is always last
-                        utm_over = pd.concat([utm_over, total_row], ignore_index=True)
-                        
-                        # Build filters dict based on available columns
-                        utm_filters = {}
-                        if "device" in utm_over.columns:
-                            utm_filters["device"] = f"{agency_name}_utm_device"
-                        if "platform" in utm_over.columns:
-                            utm_filters["platform"] = f"{agency_name}_utm_platform"
-                        if "utm" in utm_over.columns:
-                            utm_filters["utm"] = f"{agency_name}_utm_source"
-                        
-                        display_table_with_total(utm_over, "utm", "TOTAL", filters=utm_filters if utm_filters else None)
-                        
-                        if DFI_AVAILABLE:
-                            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                                df_png = prepare_df_for_png(utm_over)
-                                style = hide_index_styler(df_png)
-                                dfi.export(style, tmp.name)
-                                with open(tmp.name, "rb") as f:
-                                    st.download_button(
-                                        f"⬇️ Download {agency_name} UTM Overview (PNG)", 
-                                        f.read(), 
-                                        file_name=f"utm_overview_{agency_name.lower()}.png", 
-                                        mime="image/png", 
-                                        use_container_width=True
-                                    )
-    
-                # Platform × Landing Page × UTM
-                with st.expander(f"{agency_name}: Platform × Landing Page × UTM + TOTAL", expanded=False):
-                    lpu = single.get("platform_lp_utm")
-                    if lpu is not None and not lpu.empty:
-                        lpu_filters = {}
-                        if "device" in lpu.columns:
-                            lpu_filters["device"] = f"{agency_name}_lpu_device"
-                        if "platform" in lpu.columns:
-                            lpu_filters["platform"] = f"{agency_name}_lpu_platform"
-                        if "landing_page" in lpu.columns:
-                            lpu_filters["landing_page"] = f"{agency_name}_lpu_lp"
-                        if "utm" in lpu.columns:
-                            lpu_filters["utm"] = f"{agency_name}_lpu_utm"
-                        display_table_with_total(lpu, "utm", "TOTAL", filters=lpu_filters if lpu_filters else None)
-                    else:
-                        st.info("No Campaign ID or Landing Page column found — table unavailable.")
-
-                # Landing Page vs UTM Product Mismatch
-                with st.expander(f"{agency_name}: Landing Page vs UTM Product Mismatch", expanded=False):
-                    mm = single.get("product_mismatch")
-                    if mm is not None and not mm.empty:
-                        st.warning(f"⚠️ **{len(mm) - 1} row(s)** where the landing page product differs from the UTM/campaign number product. The landing page is used as the primary classification.")
-                        # Drop agency column if present (redundant in per-agency view)
-                        mm_display = mm.drop(columns=["agency"], errors="ignore")
-                        display_table_with_total(mm_display, "utm_product", "TOTAL")
-                    else:
-                        st.success("No mismatches found — landing page and UTM products agree on all leads.")
-
-                # By Product
-                with st.expander(f"{agency_name}: By Product (All Platforms)", expanded=False):
-                    # Tracking disclaimer
-                    st.info("ℹ️ **Note:** \"Other\" in Product classifications represents leads where MySFDomain's tracking software was unable to identify the insurance product type. While the majority of leads are tracked correctly, MySFDomain's platform has some limitations in product categorization that affect a small percentage of data.")
-
-                    prod_tot = single["by_product_total"].copy()
-                    
-                    # Add chart with controls
-                    if PLOTLY_AVAILABLE:
-                        prod_chart = prod_tot[prod_tot["product"] != "TOTAL"].copy()
-                        
-                        if not prod_chart.empty:
-                            # Chart controls
-                            chart_col1, chart_col2, chart_col3 = st.columns([2, 2, 2])
-                            
-                            with chart_col1:
-                                prod_chart_type = st.selectbox(
-                                    "Chart Type:",
-                                    options=["Pie", "Bar", "Donut"],
-                                    key=f"{agency_name}_prod_chart_type"
-                                )
-                            
-                            with chart_col2:
-                                prod_metric = st.selectbox(
-                                    "Metric:",
-                                    options=["Leads (Total)", "Quote Starts", "Phone Clicks", "SMS Clicks"],
-                                    key=f"{agency_name}_prod_metric"
-                                )
-                            
-                            # Map metric selection
-                            prod_metric_map = {
-                                "Leads (Total)": "leads",
-                                "Quote Starts": "quote_starts",
-                                "Phone Clicks": "phone_clicks",
-                                "SMS Clicks": "sms_clicks"
-                            }
-                            
-                            prod_metric_col = prod_metric_map[prod_metric]
-                            
-                            # If device column exists, aggregate for chart
-                            if "device" in prod_chart.columns:
-                                prod_agg = prod_chart.groupby("product", as_index=False)[prod_metric_col].sum()
-                            else:
-                                prod_agg = prod_chart[["product", prod_metric_col]].copy()
-                            
-                            # Create chart based on type
-                            if prod_chart_type in ["Pie", "Donut"]:
-                                fig_pie = px.pie(
-                                    prod_agg,
-                                    values=prod_metric_col,
-                                    names="product",
-                                    title=f"{agency_name}: {prod_metric} Distribution by Product",
-                                    color_discrete_sequence=MELON_COLORS["primary"],
-                                    hole=0.4 if prod_chart_type == "Donut" else 0
-                                )
-                                fig_pie.update_traces(
-                                    textposition='inside',
-                                    textinfo='percent+label',
-                                    hovertemplate=f'<b>%{{label}}</b><br>{prod_metric}: %{{value:,.0f}}<br>Share: %{{percent}}<extra></extra>'
-                                )
-                                fig_pie.update_layout(
-                                    height=500,
-                                    margin=dict(l=20, r=20, t=60, b=20),
-                                    showlegend=True,
-                                    legend=dict(
-                                        orientation="v",
-                                        yanchor="middle",
-                                        y=0.5,
-                                        xanchor="left",
-                                        x=1.05
-                                    )
-                                )
-                                st.plotly_chart(fig_pie, use_container_width=True)
-                            else:  # Bar
-                                fig_bar = px.bar(
-                                    prod_agg,
-                                    x="product",
-                                    y=prod_metric_col,
-                                    title=f"{agency_name}: {prod_metric} by Product",
-                                    labels={"product": "Product", prod_metric_col: prod_metric},
-                                    color=prod_metric_col,
-                                    color_continuous_scale=["#eef7ef", "#47B74F"],
-                                    text=prod_metric_col
-                                )
-                                fig_bar.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
-                                fig_bar.update_layout(
-                                    showlegend=False,
-                                    height=400
-                                )
-                                st.plotly_chart(fig_bar, use_container_width=True)
-                            
-                            st.markdown("---")
-                    
-                    # Build filters - add device if column exists
-                    filters = {"product": f"{agency_name}_prod_product"}
-                    if "device" in prod_tot.columns:
-                        filters["device"] = f"{agency_name}_prod_device"
-                    
-                    display_table_with_total(
-                        prod_tot, 
-                        "product", 
-                        "TOTAL", 
-                        filters=filters
-                    )
-                    
-                    if DFI_AVAILABLE:
-                        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                            df_png = prepare_df_for_png(single["by_product_total"])
-                            style = hide_index_styler(df_png)
-                            dfi.export(style, tmp.name)
-                            with open(tmp.name, "rb") as f:
-                                st.download_button(
-                                    f"⬇️ Download {agency_name} By Product (PNG)", 
-                                    f.read(), 
-                                    file_name=f"{agency_name.lower()}_by_product_total.png", 
-                                    mime="image/png", 
-                                    use_container_width=True
-                                )
-    
-                # By Product × Platform
-                with st.expander(f"{agency_name}: By Product × Platform (Volumes + % Share)", expanded=False):
-                    bpp = single["by_product_platform"].copy()
-                    bpp["lead_share_pct"] = pd.to_numeric(bpp["lead_share_within_platform"], errors="coerce") * 100.0
-                    
-                    # Add chart with controls
-                    if PLOTLY_AVAILABLE:
-                        bpp_chart = bpp.copy()
-                        
+                    if not plat_chart.empty:
                         # Chart controls
                         chart_col1, chart_col2, chart_col3 = st.columns([2, 2, 2])
                         
                         with chart_col1:
-                            bpp_chart_type = st.selectbox(
+                            chart_type = st.selectbox(
                                 "Chart Type:",
-                                options=["Stacked Bar", "Grouped Bar", "Line", "Area", "Heatmap", "Scatter"],
-                                key=f"{agency_name}_bpp_chart_type"
+                                options=["Bar", "Line", "Area"],
+                                key=f"{agency_name}_plat_chart_type"
                             )
                         
                         with chart_col2:
-                            bpp_metric = st.selectbox(
+                            metric_to_show = st.selectbox(
                                 "Metric:",
-                                options=["Lead Opportunities", "Quote Starts", "Phone Clicks", "SMS Clicks", "Lead Share %"],
-                                key=f"{agency_name}_bpp_metric"
+                                options=["Leads (Total)", "Quote Starts", "Phone Clicks", "SMS Clicks", "CPL"],
+                                key=f"{agency_name}_plat_metric"
                             )
                         
                         with chart_col3:
-                            bpp_show_values = st.checkbox(
+                            show_values = st.checkbox(
                                 "Show Values",
                                 value=True,
-                                key=f"{agency_name}_bpp_show_values"
+                                key=f"{agency_name}_plat_show_values"
                             )
                         
-                        # Map metric selection
-                        bpp_metric_map = {
-                            "Lead Opportunities": "lead_opportunities",
+                        # Map metric selection to column name
+                        metric_map = {
+                            "Leads (Total)": "leads",
                             "Quote Starts": "quote_starts",
                             "Phone Clicks": "phone_clicks",
                             "SMS Clicks": "sms_clicks",
-                            "Lead Share %": "lead_share_pct"
+                            "CPL": "cpl_platform"
                         }
                         
-                        bpp_metric_col = bpp_metric_map[bpp_metric]
+                        metric_col = metric_map[metric_to_show]
                         
-                        # Aggregate if device column exists
-                        if "device" in bpp_chart.columns and bpp_metric_col != "lead_share_pct":
-                            bpp_agg = bpp_chart.groupby(["platform", "product"], as_index=False)[bpp_metric_col].sum()
-                        else:
-                            bpp_agg = bpp_chart[["platform", "product", bpp_metric_col]].copy()
-                        
-                        if not bpp_agg.empty:
+                        # Device breakdown chart (when device column exists)
+                        if "device" in plat_chart.columns:
+                            # Prepare data
+                            chart_data = plat_chart.copy()
+                            if metric_col == "cpl_platform":
+                                chart_data[metric_col] = pd.to_numeric(chart_data[metric_col], errors="coerce")
+                                chart_data = chart_data[chart_data[metric_col] > 0]
+                            
                             # Create chart based on type
-                            if bpp_chart_type == "Stacked Bar":
-                                fig_bpp = px.bar(
-                                    bpp_agg,
+                            if chart_type == "Bar":
+                                fig = px.bar(
+                                    chart_data,
                                     x="platform",
-                                    y=bpp_metric_col,
-                                    color="product",
-                                    title=f"{agency_name}: {bpp_metric} by Platform & Product",
-                                    labels={"platform": "Platform", bpp_metric_col: bpp_metric, "product": "Product"},
-                                    color_discrete_sequence=MELON_COLORS["primary"],
-                                    text=bpp_metric_col if bpp_show_values else None,
-                                    barmode="stack"
-                                )
-                            elif bpp_chart_type == "Grouped Bar":
-                                fig_bpp = px.bar(
-                                    bpp_agg,
-                                    x="platform",
-                                    y=bpp_metric_col,
-                                    color="product",
-                                    title=f"{agency_name}: {bpp_metric} by Platform & Product",
-                                    labels={"platform": "Platform", bpp_metric_col: bpp_metric, "product": "Product"},
-                                    color_discrete_sequence=MELON_COLORS["primary"],
-                                    text=bpp_metric_col if bpp_show_values else None,
+                                    y=metric_col,
+                                    color="device",
+                                    title=f"{agency_name}: {metric_to_show} by Platform & Device",
+                                    labels={"platform": "Platform", metric_col: metric_to_show, "device": "Device"},
+                                    color_discrete_map={
+                                        "Mobile": "#47B74F",
+                                        "Desktop": "#0f5340",
+                                        "Tablet": "#efd568",
+                                        "Unknown": "#cccccc"
+                                    },
+                                    text=metric_col if show_values else None,
                                     barmode="group"
                                 )
-                            elif bpp_chart_type == "Line":
-                                fig_bpp = px.line(
-                                    bpp_agg,
+                            elif chart_type == "Line":
+                                fig = px.line(
+                                    chart_data,
                                     x="platform",
-                                    y=bpp_metric_col,
-                                    color="product",
-                                    title=f"{agency_name}: {bpp_metric} by Platform & Product",
-                                    labels={"platform": "Platform", bpp_metric_col: bpp_metric, "product": "Product"},
-                                    color_discrete_sequence=MELON_COLORS["primary"],
+                                    y=metric_col,
+                                    color="device",
+                                    title=f"{agency_name}: {metric_to_show} by Platform & Device",
+                                    labels={"platform": "Platform", metric_col: metric_to_show, "device": "Device"},
+                                    color_discrete_map={
+                                        "Mobile": "#47B74F",
+                                        "Desktop": "#0f5340",
+                                        "Tablet": "#efd568",
+                                        "Unknown": "#cccccc"
+                                    },
                                     markers=True
                                 )
-                            elif bpp_chart_type == "Area":
-                                fig_bpp = px.area(
-                                    bpp_agg,
+                            else:  # Area
+                                fig = px.area(
+                                    chart_data,
                                     x="platform",
-                                    y=bpp_metric_col,
-                                    color="product",
-                                    title=f"{agency_name}: {bpp_metric} by Platform & Product",
-                                    labels={"platform": "Platform", bpp_metric_col: bpp_metric, "product": "Product"},
-                                    color_discrete_sequence=MELON_COLORS["primary"]
-                                )
-                            elif bpp_chart_type == "Heatmap":
-                                # Pivot for heatmap
-                                heatmap_data = bpp_agg.pivot(index="product", columns="platform", values=bpp_metric_col)
-                                fig_bpp = px.imshow(
-                                    heatmap_data,
-                                    title=f"{agency_name}: {bpp_metric} Heatmap",
-                                    labels=dict(x="Platform", y="Product", color=bpp_metric),
-                                    color_continuous_scale=["#eef7ef", "#efd568", "#47B74F", "#0f5340"],
-                                    text_auto=True if bpp_show_values else False
-                                )
-                            else:  # Scatter
-                                fig_bpp = px.scatter(
-                                    bpp_agg,
-                                    x="platform",
-                                    y=bpp_metric_col,
-                                    color="product",
-                                    size=bpp_metric_col,
-                                    title=f"{agency_name}: {bpp_metric} by Platform & Product",
-                                    labels={"platform": "Platform", bpp_metric_col: bpp_metric, "product": "Product"},
-                                    color_discrete_sequence=MELON_COLORS["primary"]
+                                    y=metric_col,
+                                    color="device",
+                                    title=f"{agency_name}: {metric_to_show} by Platform & Device",
+                                    labels={"platform": "Platform", metric_col: metric_to_show, "device": "Device"},
+                                    color_discrete_map={
+                                        "Mobile": "#47B74F",
+                                        "Desktop": "#0f5340",
+                                        "Tablet": "#efd568",
+                                        "Unknown": "#cccccc"
+                                    }
                                 )
                             
-                            if bpp_show_values and bpp_chart_type in ["Stacked Bar", "Grouped Bar"]:
-                                if bpp_metric_col == "lead_share_pct":
-                                    fig_bpp.update_traces(texttemplate='%{text:.1f}%', textposition='inside')
+                            if show_values and chart_type == "Bar":
+                                if metric_col == "cpl_platform":
+                                    fig.update_traces(texttemplate='$%{text:.2f}', textposition='outside')
                                 else:
-                                    fig_bpp.update_traces(texttemplate='%{text:,.0f}', textposition='inside')
+                                    fig.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
                             
-                            fig_bpp.update_layout(
+                            fig.update_layout(
                                 height=400,
                                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                             )
-                            st.plotly_chart(fig_bpp, use_container_width=True)
-                            
+                            st.plotly_chart(fig, use_container_width=True)
                             st.markdown("---")
-                    
-                    # Determine columns to display
-                    display_cols = ["platform", "product", "quote_starts", "phone_clicks", "sms_clicks", "lead_opportunities", "lead_share_pct"]
-                    if "device" in bpp.columns:
-                        display_cols.insert(0, "device")  # Add device as first column
-                    
-                    bpp_display = bpp[display_cols].copy()
-                    
-                    # Add filters - conditionally add device filter
-                    num_filters = 2 + (1 if "device" in bpp_display.columns else 0)
-                    filter_cols = st.columns(num_filters)
-                    bpp_filtered = bpp_display.copy()
-                    
-                    col_idx = 0
-                    if "device" in bpp_filtered.columns:
-                        with filter_cols[col_idx]:
-                            device_vals = sorted(bpp_filtered["device"].unique())
-                            sel_dev = st.multiselect(
-                                "🔍 Device:",
-                                options=device_vals,
-                                default=device_vals,
-                                key=f"{agency_name}_bpp_device"
+                        else:
+                            # Regular platform charts (when device breakdown is OFF)
+                            plat_agg = plat_chart.copy()
+                            
+                            # Prepare data based on metric
+                            if metric_col == "cpl_platform":
+                                plat_agg[metric_col] = pd.to_numeric(plat_agg[metric_col], errors="coerce")
+                                plat_agg = plat_agg[plat_agg[metric_col] > 0]
+                            
+                            # Create chart based on type
+                            if chart_type == "Bar":
+                                fig = px.bar(
+                                    plat_agg,
+                                    x="platform",
+                                    y=metric_col,
+                                    title=f"{agency_name}: {metric_to_show} by Platform",
+                                    labels={"platform": "Platform", metric_col: metric_to_show},
+                                    color=metric_col,
+                                    color_continuous_scale=["#eef7ef", "#47B74F"] if metric_col != "cpl_platform" else ["#47B74F", "#efd568", "#f28c82"],
+                                    text=metric_col if show_values else None
+                                )
+                            elif chart_type == "Line":
+                                fig = px.line(
+                                    plat_agg,
+                                    x="platform",
+                                    y=metric_col,
+                                    title=f"{agency_name}: {metric_to_show} by Platform",
+                                    labels={"platform": "Platform", metric_col: metric_to_show},
+                                    markers=True,
+                                    color_discrete_sequence=["#47B74F"]
+                                )
+                            else:  # Area
+                                fig = px.area(
+                                    plat_agg,
+                                    x="platform",
+                                    y=metric_col,
+                                    title=f"{agency_name}: {metric_to_show} by Platform",
+                                    labels={"platform": "Platform", metric_col: metric_to_show},
+                                    color_discrete_sequence=["#47B74F"]
+                                )
+                            
+                            if show_values and chart_type == "Bar":
+                                if metric_col == "cpl_platform":
+                                    fig.update_traces(texttemplate='$%{text:.2f}', textposition='outside')
+                                else:
+                                    fig.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
+                            
+                            fig.update_layout(
+                                showlegend=False,
+                                height=400,
+                                margin=dict(l=20, r=20, t=40, b=20)
                             )
-                            if sel_dev:
-                                bpp_filtered = bpp_filtered[bpp_filtered["device"].isin(sel_dev)]
-                        col_idx += 1
-                    
-                    with filter_cols[col_idx]:
-                        if "platform" in bpp_filtered.columns:
-                            plat_vals = sorted(bpp_filtered["platform"].unique())
-                            sel_plat = st.multiselect(
-                                "🔍 Platform:",
-                                options=plat_vals,
-                                default=plat_vals,
-                                key=f"{agency_name}_bpp_platform"
-                            )
-                            if sel_plat:
-                                bpp_filtered = bpp_filtered[bpp_filtered["platform"].isin(sel_plat)]
-                    col_idx += 1
-                    
-                    with filter_cols[col_idx]:
-                        if "product" in bpp_filtered.columns:
-                            prod_vals = sorted(bpp_filtered["product"].unique())
-                            sel_prod = st.multiselect(
-                                "🔍 Product:",
-                                options=prod_vals,
-                                default=prod_vals,
-                                key=f"{agency_name}_bpp_product"
-                            )
-                            if sel_prod:
-                                bpp_filtered = bpp_filtered[bpp_filtered["product"].isin(sel_prod)]
-                    
-                    bpp_filtered["lead_share_pct"] = fmt_percent_series(bpp_filtered["lead_share_pct"], places=1)
-                    
-                    if not bpp_filtered.empty:
-                        st.dataframe(pretty_headers(bpp_filtered), use_container_width=True, hide_index=True)
-                    else:
-                        st.info("No data matches the selected filters.")
-                    
-                    if DFI_AVAILABLE:
-                        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                            df_png = prepare_df_for_png(bpp_display)
-                            style = hide_index_styler(df_png)
-                            dfi.export(style, tmp.name)
-                            with open(tmp.name, "rb") as f:
-                                st.download_button(
-                                    f"⬇️ Download {agency_name} By Product x Platform (PNG)", 
-                                    f.read(), 
-                                    file_name=f"{agency_name.lower()}_by_product_x_platform.png", 
-                                    mime="image/png", 
-                                    use_container_width=True
-                                )
-    
-                # By Source
-                with st.expander(f"{agency_name}: By Source", expanded=False):
-                    src = single["by_source"].copy()
-                    
-                    # Add filters for all available columns - conditionally add device
-                    num_filters = 4 + (1 if "device" in src.columns else 0)
-                    filter_cols = st.columns(num_filters)
-                    src_filtered = src.copy()
-                    
-                    col_idx = 0
-                    if "device" in src_filtered.columns:
-                        with filter_cols[col_idx]:
-                            device_vals = sorted(src_filtered["device"].dropna().unique())
-                            if device_vals:
-                                sel_dev = st.multiselect(
-                                    "🔍 Device:",
-                                    options=device_vals,
-                                    default=device_vals,
-                                    key=f"{agency_name}_src_device_filter"
-                                )
-                                if sel_dev:
-                                    src_filtered = src_filtered[src_filtered["device"].isin(sel_dev)]
-                        col_idx += 1
-                    
-                    with filter_cols[col_idx]:
-                        if "source" in src_filtered.columns:
-                            source_vals = sorted(src_filtered["source"].dropna().unique())
-                            if source_vals:
-                                sel_source = st.multiselect(
-                                    "🔍 Source:",
-                                    options=source_vals,
-                                    default=source_vals,
-                                    key=f"{agency_name}_source_filter"
-                                )
-                                if sel_source:
-                                    src_filtered = src_filtered[src_filtered["source"].isin(sel_source)]
-                    col_idx += 1
-                    
-                    with filter_cols[col_idx]:
-                        if "domain" in src_filtered.columns:
-                            domain_vals = sorted(src_filtered["domain"].dropna().unique())
-                            if domain_vals:
-                                sel_domain = st.multiselect(
-                                    "🔍 Domain:",
-                                    options=domain_vals,
-                                    default=domain_vals,
-                                    key=f"{agency_name}_src_domain_filter"
-                                )
-                                if sel_domain:
-                                    src_filtered = src_filtered[src_filtered["domain"].isin(sel_domain)]
-                    col_idx += 1
-                    
-                    with filter_cols[col_idx]:
-                        if "platform" in src_filtered.columns:
-                            platform_vals = sorted(src_filtered["platform"].dropna().unique())
-                            if platform_vals:
-                                sel_platform = st.multiselect(
-                                    "🔍 Platform:",
-                                    options=platform_vals,
-                                    default=platform_vals,
-                                    key=f"{agency_name}_src_platform_filter"
-                                )
-                                if sel_platform:
-                                    src_filtered = src_filtered[src_filtered["platform"].isin(sel_platform)]
-                    col_idx += 1
-                    
-                    with filter_cols[col_idx]:
-                        if "agency" in src_filtered.columns:
-                            agency_vals = sorted(src_filtered["agency"].dropna().unique())
-                            if agency_vals:
-                                sel_agency = st.multiselect(
-                                    "🔍 Agency:",
-                                    options=agency_vals,
-                                    default=agency_vals,
-                                    key=f"{agency_name}_src_agency_filter"
-                                )
-                                if sel_agency:
-                                    src_filtered = src_filtered[src_filtered["agency"].isin(sel_agency)]
-                    
-                    if not src_filtered.empty:
-                        st.dataframe(pretty_headers(src_filtered), use_container_width=True, hide_index=True)
-                    else:
-                        st.info("No data matches the selected filters.")
-                    
-                    if DFI_AVAILABLE:
-                        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                            df_png = prepare_df_for_png(single["by_source"])
-                            style = hide_index_styler(df_png)
-                            dfi.export(style, tmp.name)
-                            with open(tmp.name, "rb") as f:
-                                st.download_button(
-                                    f"⬇️ Download {agency_name} By Source (PNG)", 
-                                    f.read(), 
-                                    file_name=f"{agency_name.lower()}_by_source.png", 
-                                    mime="image/png", 
-                                    use_container_width=True
-                                )
-    
-        # ---------- COMBINED SECTIONS (collapsed) ----------
-        # 1) Platform totals only (Platform + TOTAL) — aggregated across agencies
-        with st.expander("Combined — Platform (Totals)", expanded=False):
-            plat = results["platform_overview"].copy()
-            
-            # Add visualizations if plotly is available
-            if PLOTLY_AVAILABLE:
-                plat_chart = plat[plat["platform"] != "TOTAL"].copy()
+                            st.plotly_chart(fig, use_container_width=True)
+                            st.markdown("---")
                 
-                if not plat_chart.empty:
+                # Currency formatting is now handled by display_table_with_total
+                # (removed redundant formatting here to avoid double-formatting)
+                
+                # Build filters - add device if column exists
+                filters = {"platform": f"{agency_name}_plat_platform"}
+                if "device" in plat.columns:
+                    filters["device"] = f"{agency_name}_plat_device"
+                
+                display_table_with_total(
+                    plat, 
+                    "platform", 
+                    "TOTAL",
+                    filters=filters
+                )
+                
+            # UTM Overview
+            with st.expander(f"{agency_name}: UTM Overview (Platform × UTM + TOTAL)", expanded=False):
+                # Use the original filtered dataframe before analyze() processing
+                # The sub_df might have modified columns from analyze()
+                utm_source_df = df_in[ag_mask].copy()
+                
+                camp_col = get_col(utm_source_df, ["campaign_id", "campaign"])
+                
+                if camp_col is None:
+                    st.info("No Campaign ID column found for UTM overview.")
+                else:
+                    # Get the original column names from the raw data
+                    qs_col = get_col(utm_source_df, ["quote_starts", "qs", "quote_start", "quotes", "quote starts"])
+                    ph_col = get_col(utm_source_df, ["phone_clicks", "phone clicks", "phone", "calls"])
+                    sms_col = get_col(utm_source_df, ["sms_clicks", "sms clicks", "sms", "text clicks"])
+                    
+                    # Convert to numeric first
+                    to_num = lambda s: pd.to_numeric(s, errors="coerce").fillna(0.0)
+                    
+                    if qs_col:
+                        utm_source_df["_qs"] = to_num(utm_source_df[qs_col])
+                    else:
+                        utm_source_df["_qs"] = 0.0
+                        
+                    if ph_col:
+                        utm_source_df["_phone"] = to_num(utm_source_df[ph_col])
+                    else:
+                        utm_source_df["_phone"] = 0.0
+                        
+                    if sms_col:
+                        utm_source_df["_sms"] = to_num(utm_source_df[sms_col])
+                    else:
+                        utm_source_df["_sms"] = 0.0
+                    
+                    utm_source_df["_leads"] = utm_source_df["_qs"] + utm_source_df["_phone"] + utm_source_df["_sms"]
+                    
+                    # Extract UTM and add platform classification
+                    utm_source_df["utm"] = utm_source_df[camp_col].apply(extract_utm_from_campaign_id)
+                    utm_source_df["utm"] = utm_source_df["utm"].replace("", "Unmatched")
+                    
+                    # Get platform column (should already exist from analyze, but let's be safe)
+                    traffic_col = detect_traffic_source_col(utm_source_df)
+                    if "platform" not in utm_source_df.columns:
+                        utm_source_df["platform"] = utm_source_df.apply(
+                            lambda r: classify_platform(r[camp_col], r[traffic_col] if traffic_col else ""), 
+                            axis=1
+                        )
+                    
+                    # Add device if device breakdown is enabled
+                    if add_device_column:
+                        if "device" not in utm_source_df.columns:
+                            utm_source_df["device"] = utm_source_df.apply(
+                                lambda r: classify_device(r[camp_col], r["platform"]), 
+                                axis=1
+                            )
+                        group_cols = ["device", "platform", "utm"]
+                    else:
+                        group_cols = ["platform", "utm"]
+                    
+                    utm_over = utm_source_df.groupby(group_cols, as_index=False).agg(
+                        quote_starts=("_qs", "sum"),
+                        phone_clicks=("_phone", "sum"),
+                        sms_clicks=("_sms", "sum"),
+                        leads=("_leads", "sum")
+                    ).sort_values(["platform", "leads", "utm"], ascending=[True, False, True]).reset_index(drop=True)
+                    
+                    # Filter out rows where all metrics are zero
+                    utm_over = utm_over[
+                        (utm_over["quote_starts"] > 0) | 
+                        (utm_over["phone_clicks"] > 0) | 
+                        (utm_over["sms_clicks"] > 0) | 
+                        (utm_over["leads"] > 0)
+                    ].reset_index(drop=True)
+                    
+                    # Add TOTAL row (calculate before adding)
+                    totals = {
+                        "platform": "",
+                        "utm": "TOTAL",
+                        "quote_starts": utm_over["quote_starts"].sum(),
+                        "phone_clicks": utm_over["phone_clicks"].sum(),
+                        "sms_clicks": utm_over["sms_clicks"].sum(),
+                        "leads": utm_over["leads"].sum()
+                    }
+                    if add_device_column:
+                        totals["device"] = ""
+                    total_row = pd.DataFrame([totals])
+                    
+                    # Concatenate and reset index to ensure TOTAL is always last
+                    utm_over = pd.concat([utm_over, total_row], ignore_index=True)
+                    
+                    # Build filters dict based on available columns
+                    utm_filters = {}
+                    if "device" in utm_over.columns:
+                        utm_filters["device"] = f"{agency_name}_utm_device"
+                    if "platform" in utm_over.columns:
+                        utm_filters["platform"] = f"{agency_name}_utm_platform"
+                    if "utm" in utm_over.columns:
+                        utm_filters["utm"] = f"{agency_name}_utm_source"
+                    
+                    display_table_with_total(utm_over, "utm", "TOTAL", filters=utm_filters if utm_filters else None)
+                    
+            # Platform × Landing Page × UTM
+            with st.expander(f"{agency_name}: Platform × Landing Page × UTM + TOTAL", expanded=False):
+                lpu = single.get("platform_lp_utm")
+                if lpu is not None and not lpu.empty:
+                    lpu_filters = {}
+                    if "device" in lpu.columns:
+                        lpu_filters["device"] = f"{agency_name}_lpu_device"
+                    if "platform" in lpu.columns:
+                        lpu_filters["platform"] = f"{agency_name}_lpu_platform"
+                    if "landing_page" in lpu.columns:
+                        lpu_filters["landing_page"] = f"{agency_name}_lpu_lp"
+                    if "utm" in lpu.columns:
+                        lpu_filters["utm"] = f"{agency_name}_lpu_utm"
+                    display_table_with_total(lpu, "utm", "TOTAL", filters=lpu_filters if lpu_filters else None)
+                else:
+                    st.info("No Campaign ID or Landing Page column found — table unavailable.")
+
+            # Landing Page vs UTM Product Mismatch
+            with st.expander(f"{agency_name}: Landing Page vs UTM Product Mismatch", expanded=False):
+                mm = single.get("product_mismatch")
+                if mm is not None and not mm.empty:
+                    st.warning(f"⚠️ **{len(mm) - 1} row(s)** where the landing page product differs from the UTM/campaign number product. The landing page is used as the primary classification.")
+                    # Drop agency column if present (redundant in per-agency view)
+                    mm_display = mm.drop(columns=["agency"], errors="ignore")
+                    display_table_with_total(mm_display, "utm_product", "TOTAL")
+                else:
+                    st.success("No mismatches found — landing page and UTM products agree on all leads.")
+
+            # By Product
+            with st.expander(f"{agency_name}: By Product (All Platforms)", expanded=False):
+                # Tracking disclaimer
+                st.info("ℹ️ **Note:** \"Other\" in Product classifications represents leads where MySFDomain's tracking software was unable to identify the insurance product type. While the majority of leads are tracked correctly, MySFDomain's platform has some limitations in product categorization that affect a small percentage of data.")
+
+                prod_tot = single["by_product_total"].copy()
+                
+                # Add chart with controls
+                if PLOTLY_AVAILABLE:
+                    prod_chart = prod_tot[prod_tot["product"] != "TOTAL"].copy()
+                    
+                    if not prod_chart.empty:
+                        # Chart controls
+                        chart_col1, chart_col2, chart_col3 = st.columns([2, 2, 2])
+                        
+                        with chart_col1:
+                            prod_chart_type = st.selectbox(
+                                "Chart Type:",
+                                options=["Pie", "Bar", "Donut"],
+                                key=f"{agency_name}_prod_chart_type"
+                            )
+                        
+                        with chart_col2:
+                            prod_metric = st.selectbox(
+                                "Metric:",
+                                options=["Leads (Total)", "Quote Starts", "Phone Clicks", "SMS Clicks"],
+                                key=f"{agency_name}_prod_metric"
+                            )
+                        
+                        # Map metric selection
+                        prod_metric_map = {
+                            "Leads (Total)": "leads",
+                            "Quote Starts": "quote_starts",
+                            "Phone Clicks": "phone_clicks",
+                            "SMS Clicks": "sms_clicks"
+                        }
+                        
+                        prod_metric_col = prod_metric_map[prod_metric]
+                        
+                        # If device column exists, aggregate for chart
+                        if "device" in prod_chart.columns:
+                            prod_agg = prod_chart.groupby("product", as_index=False)[prod_metric_col].sum()
+                        else:
+                            prod_agg = prod_chart[["product", prod_metric_col]].copy()
+                        
+                        # Create chart based on type
+                        if prod_chart_type in ["Pie", "Donut"]:
+                            fig_pie = px.pie(
+                                prod_agg,
+                                values=prod_metric_col,
+                                names="product",
+                                title=f"{agency_name}: {prod_metric} Distribution by Product",
+                                color_discrete_sequence=MELON_COLORS["primary"],
+                                hole=0.4 if prod_chart_type == "Donut" else 0
+                            )
+                            fig_pie.update_traces(
+                                textposition='inside',
+                                textinfo='percent+label',
+                                hovertemplate=f'<b>%{{label}}</b><br>{prod_metric}: %{{value:,.0f}}<br>Share: %{{percent}}<extra></extra>'
+                            )
+                            fig_pie.update_layout(
+                                height=500,
+                                margin=dict(l=20, r=20, t=60, b=20),
+                                showlegend=True,
+                                legend=dict(
+                                    orientation="v",
+                                    yanchor="middle",
+                                    y=0.5,
+                                    xanchor="left",
+                                    x=1.05
+                                )
+                            )
+                            st.plotly_chart(fig_pie, use_container_width=True)
+                        else:  # Bar
+                            fig_bar = px.bar(
+                                prod_agg,
+                                x="product",
+                                y=prod_metric_col,
+                                title=f"{agency_name}: {prod_metric} by Product",
+                                labels={"product": "Product", prod_metric_col: prod_metric},
+                                color=prod_metric_col,
+                                color_continuous_scale=["#eef7ef", "#47B74F"],
+                                text=prod_metric_col
+                            )
+                            fig_bar.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
+                            fig_bar.update_layout(
+                                showlegend=False,
+                                height=400
+                            )
+                            st.plotly_chart(fig_bar, use_container_width=True)
+                        
+                        st.markdown("---")
+                
+                # Build filters - add device if column exists
+                filters = {"product": f"{agency_name}_prod_product"}
+                if "device" in prod_tot.columns:
+                    filters["device"] = f"{agency_name}_prod_device"
+                
+                display_table_with_total(
+                    prod_tot, 
+                    "product", 
+                    "TOTAL", 
+                    filters=filters
+                )
+                
+            # By Product × Platform
+            with st.expander(f"{agency_name}: By Product × Platform (Volumes + % Share)", expanded=False):
+                bpp = single["by_product_platform"].copy()
+                bpp["lead_share_pct"] = pd.to_numeric(bpp["lead_share_within_platform"], errors="coerce") * 100.0
+                
+                # Add chart with controls
+                if PLOTLY_AVAILABLE:
+                    bpp_chart = bpp.copy()
+                    
                     # Chart controls
                     chart_col1, chart_col2, chart_col3 = st.columns([2, 2, 2])
                     
                     with chart_col1:
-                        combined_chart_type = st.selectbox(
+                        bpp_chart_type = st.selectbox(
                             "Chart Type:",
-                            options=["Bar", "Line", "Area", "Pie", "Scatter"],
-                            key="combined_plat_chart_type"
+                            options=["Stacked Bar", "Grouped Bar", "Line", "Area", "Heatmap", "Scatter"],
+                            key=f"{agency_name}_bpp_chart_type"
                         )
                     
                     with chart_col2:
-                        combined_metric = st.selectbox(
+                        bpp_metric = st.selectbox(
                             "Metric:",
-                            options=["Leads (Total)", "Quote Starts", "Phone Clicks", "SMS Clicks", "Spend", "CPL"],
-                            key="combined_plat_metric"
+                            options=["Lead Opportunities", "Quote Starts", "Phone Clicks", "SMS Clicks", "Lead Share %"],
+                            key=f"{agency_name}_bpp_metric"
                         )
                     
                     with chart_col3:
-                        combined_show_values = st.checkbox(
+                        bpp_show_values = st.checkbox(
                             "Show Values",
                             value=True,
-                            key="combined_plat_show_values"
+                            key=f"{agency_name}_bpp_show_values"
                         )
                     
                     # Map metric selection
-                    combined_metric_map = {
-                        "Leads (Total)": "leads",
+                    bpp_metric_map = {
+                        "Lead Opportunities": "lead_opportunities",
                         "Quote Starts": "quote_starts",
                         "Phone Clicks": "phone_clicks",
                         "SMS Clicks": "sms_clicks",
-                        "Spend": "spend",
-                        "CPL": "cpl_platform"
+                        "Lead Share %": "lead_share_pct"
                     }
                     
-                    combined_metric_col = combined_metric_map[combined_metric]
+                    bpp_metric_col = bpp_metric_map[bpp_metric]
                     
-                    # Convert to numeric and aggregate if needed
-                    plat_chart["spend"] = pd.to_numeric(plat_chart["spend"], errors="coerce").fillna(0)
-                    plat_chart["cpl_platform"] = pd.to_numeric(plat_chart["cpl_platform"], errors="coerce")
-                    plat_chart["leads"] = pd.to_numeric(plat_chart["leads"], errors="coerce").fillna(0)
-                    
-                    # If device column exists, aggregate for charts
-                    if "device" in plat_chart.columns:
-                        plat_agg = plat_chart.groupby("platform", as_index=False).agg({
-                            "leads": "sum",
-                            "spend": "sum",
-                            "quote_starts": "sum",
-                            "phone_clicks": "sum",
-                            "sms_clicks": "sum"
-                        })
-                        plat_agg["cpl_platform"] = plat_agg.apply(
-                            lambda r: r["spend"] / r["leads"] if r["leads"] > 0 else np.nan,
-                            axis=1
-                        )
+                    # Aggregate if device column exists
+                    if "device" in bpp_chart.columns and bpp_metric_col != "lead_share_pct":
+                        bpp_agg = bpp_chart.groupby(["platform", "product"], as_index=False)[bpp_metric_col].sum()
                     else:
-                        plat_agg = plat_chart.copy()
+                        bpp_agg = bpp_chart[["platform", "product", bpp_metric_col]].copy()
                     
-                    # Filter out invalid data for CPL
-                    if combined_metric_col == "cpl_platform":
-                        plat_agg = plat_agg[plat_agg["cpl_platform"] > 0]
-                    
-                    # Create chart based on type
-                    if combined_chart_type == "Bar":
-                        fig = px.bar(
-                            plat_agg,
-                            x="platform",
-                            y=combined_metric_col,
-                            title=f"Combined: {combined_metric} by Platform",
-                            labels={"platform": "Platform", combined_metric_col: combined_metric},
-                            color=combined_metric_col,
-                            color_continuous_scale=["#eef7ef", "#47B74F"] if combined_metric_col != "cpl_platform" else ["#47B74F", "#efd568", "#f28c82"],
-                            text=combined_metric_col if combined_show_values else None
-                        )
-                    elif combined_chart_type == "Line":
-                        fig = px.line(
-                            plat_agg,
-                            x="platform",
-                            y=combined_metric_col,
-                            title=f"Combined: {combined_metric} by Platform",
-                            labels={"platform": "Platform", combined_metric_col: combined_metric},
-                            markers=True,
-                            color_discrete_sequence=["#47B74F"]
-                        )
-                    elif combined_chart_type == "Area":
-                        fig = px.area(
-                            plat_agg,
-                            x="platform",
-                            y=combined_metric_col,
-                            title=f"Combined: {combined_metric} by Platform",
-                            labels={"platform": "Platform", combined_metric_col: combined_metric},
-                            color_discrete_sequence=["#47B74F"]
-                        )
-                    elif combined_chart_type == "Pie":
-                        fig = px.pie(
-                            plat_agg,
-                            values=combined_metric_col,
-                            names="platform",
-                            title=f"Combined: {combined_metric} Distribution",
-                            color_discrete_sequence=MELON_COLORS['primary']
-                        )
-                        fig.update_traces(textposition='inside', textinfo='percent+label')
-                    else:  # Scatter
-                        fig = px.scatter(
-                            plat_agg,
-                            x="platform",
-                            y=combined_metric_col,
-                            size=combined_metric_col,
-                            title=f"Combined: {combined_metric} by Platform",
-                            labels={"platform": "Platform", combined_metric_col: combined_metric},
-                            color_discrete_sequence=["#47B74F"]
-                        )
-                    
-                    if combined_show_values and combined_chart_type == "Bar":
-                        if combined_metric_col in ["spend", "cpl_platform"]:
-                            fig.update_traces(texttemplate='$%{text:,.2f}', textposition='outside')
-                        else:
-                            fig.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
-                    
-                    fig.update_layout(
-                        showlegend=False if combined_chart_type != "Pie" else True,
-                        height=450,
-                        margin=dict(l=20, r=20, t=40, b=20)
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    st.markdown("---")
-            
-            # Table (currency formatting handled by display_table_with_total)
-            display_table_with_total(
-                plat, 
-                "platform", 
-                "TOTAL",
-                filters={"platform": "combined_plat_platform"}
-            )
-            
-            if DFI_AVAILABLE:
-                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                    df_png = prepare_df_for_png(results["platform_overview"])
-                    style = hide_index_styler(df_png)
-                    dfi.export(style, tmp.name)
-                    with open(tmp.name, "rb") as f:
-                        st.download_button(
-                            "⬇️ Download Combined Platform (PNG)", 
-                            f.read(), 
-                            file_name="combined_platform_totals.png", 
-                            mime="image/png", 
-                            use_container_width=True
-                        )
-    
-        # 2) Agency overview
-        with st.expander("Combined — Agency Overview (Volumes + TOTAL)", expanded=False):
-            ag = results["agency_overview"].copy()
-            
-            # Add stacked bar chart visualization
-            if PLOTLY_AVAILABLE:
-                ag_chart = ag[ag["agency"] != "TOTAL"].copy()
-                
-                if not ag_chart.empty:
-                    # If device column exists, aggregate for chart
-                    if "device" in ag_chart.columns:
-                        ag_agg = ag_chart.groupby("agency", as_index=False).agg({
-                            "quote_starts": "sum",
-                            "phone_clicks": "sum",
-                            "sms_clicks": "sum",
-                            "leads": "sum"
-                        })
-                    else:
-                        ag_agg = ag_chart.copy()
-                    
-                    # Reshape for stacked bar chart
-                    ag_melted = ag_agg.melt(
-                        id_vars=["agency"],
-                        value_vars=["quote_starts", "phone_clicks", "sms_clicks"],
-                        var_name="Lead Type",
-                        value_name="Count"
-                    )
-                    ag_melted["Lead Type"] = ag_melted["Lead Type"].map({
-                        "quote_starts": "Quote Starts",
-                        "phone_clicks": "Phone Clicks",
-                        "sms_clicks": "SMS Clicks"
-                    })
-                    
-                    fig_agency = px.bar(
-                        ag_melted,
-                        x="agency",
-                        y="Count",
-                        color="Lead Type",
-                        title="Lead Breakdown by Agency",
-                        labels={"agency": "Agency", "Count": "Total"},
-                        color_discrete_map={
-                            "Quote Starts": "#47B74F",
-                            "Phone Clicks": "#0f5340",
-                            "SMS Clicks": "#efd568"
-                        },
-                        text="Count"
-                    )
-                    fig_agency.update_traces(texttemplate='%{text:,.0f}', textposition='inside')
-                    fig_agency.update_layout(
-                        barmode='stack',
-                        height=400,
-                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                    )
-                    st.plotly_chart(fig_agency, use_container_width=True)
-                    
-                    st.markdown("---")
-            
-            # Table
-            display_table_with_total(
-                ag, 
-                "agency", 
-                "TOTAL",
-                filters={"agency": "combined_agency_filter"}
-            )
-            
-            if DFI_AVAILABLE:
-                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                    df_png = prepare_df_for_png(results["agency_overview"])
-                    style = hide_index_styler(df_png)
-                    dfi.export(style, tmp.name)
-                    with open(tmp.name, "rb") as f:
-                        st.download_button(
-                            "⬇️ Download Combined Agency Overview (PNG)", 
-                            f.read(), 
-                            file_name="combined_agency_overview.png", 
-                            mime="image/png", 
-                            use_container_width=True
-                        )
-    
-        # 2b) Combined UTM Overview (Platform × UTM + TOTAL)
-        with st.expander("Combined — UTM Overview (Platform × UTM + TOTAL)", expanded=False):
-            if results["utm_overview"] is not None and not results["utm_overview"].empty:
-                utm_over = results["utm_overview"].copy()
-                display_table_with_total(utm_over, "utm", "TOTAL")
-                
-                if DFI_AVAILABLE:
-                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                        df_png = prepare_df_for_png(utm_over)
-                        style = hide_index_styler(df_png)
-                        dfi.export(style, tmp.name)
-                        with open(tmp.name, "rb") as f:
-                            st.download_button(
-                                "⬇️ Download Combined UTM Overview (PNG)", 
-                                f.read(), 
-                                file_name="combined_utm_overview.png", 
-                                mime="image/png", 
-                                use_container_width=True
+                    if not bpp_agg.empty:
+                        # Create chart based on type
+                        if bpp_chart_type == "Stacked Bar":
+                            fig_bpp = px.bar(
+                                bpp_agg,
+                                x="platform",
+                                y=bpp_metric_col,
+                                color="product",
+                                title=f"{agency_name}: {bpp_metric} by Platform & Product",
+                                labels={"platform": "Platform", bpp_metric_col: bpp_metric, "product": "Product"},
+                                color_discrete_sequence=MELON_COLORS["primary"],
+                                text=bpp_metric_col if bpp_show_values else None,
+                                barmode="stack"
                             )
-            else:
-                st.info("No Campaign ID column found - UTM overview unavailable.")
-    
-        # 2c) Combined Platform × Landing Page × UTM + TOTAL
-        with st.expander("Combined — Platform × Landing Page × UTM + TOTAL", expanded=False):
-            lpu_combined = results.get("platform_lp_utm")
-            if lpu_combined is not None and not lpu_combined.empty:
-                lpu_filters = {}
-                if "device" in lpu_combined.columns:
-                    lpu_filters["device"] = "combined_lpu_device"
-                if "platform" in lpu_combined.columns:
-                    lpu_filters["platform"] = "combined_lpu_platform"
-                if "landing_page" in lpu_combined.columns:
-                    lpu_filters["landing_page"] = "combined_lpu_lp"
-                if "utm" in lpu_combined.columns:
-                    lpu_filters["utm"] = "combined_lpu_utm"
-                display_table_with_total(lpu_combined, "utm", "TOTAL", filters=lpu_filters if lpu_filters else None)
-            else:
-                st.info("No Campaign ID or Landing Page column found — table unavailable.")
-
-        # 2d) Combined Landing Page vs UTM Product Mismatch
-        with st.expander("Combined — Landing Page vs UTM Product Mismatch", expanded=False):
-            mm_combined = results.get("product_mismatch")
-            if mm_combined is not None and not mm_combined.empty:
-                st.warning(f"⚠️ **{len(mm_combined) - 1} row(s)** where the landing page product differs from the UTM/campaign number product. The landing page is used as the primary classification.")
-                display_table_with_total(mm_combined, "utm_product", "TOTAL")
-            else:
-                st.success("No mismatches found — landing page and UTM products agree on all leads.")
-
-        # 3) Product × Platform totals (no agency split)
-        with st.expander("Combined — Product × Platform (Totals + % Share)", expanded=False):
-            st.info("ℹ️ **Note:** \"Other\" or \"Unknown\" classifications represent leads that MySFDomain's tracking software was unable to categorize. While the majority of leads are tracked correctly, MySFDomain's platform has some limitations in lead categorization that affect a small percentage of data.")
-            
-            bpp = results["by_product_platform"].copy()
-            bpp["lead_share_pct"] = pd.to_numeric(bpp["lead_share_within_platform"], errors="coerce") * 100.0
-            bpp_display = bpp[["platform", "product", "quote_starts", "phone_clicks", "sms_clicks", "lead_opportunities", "lead_share_pct"]].copy()
-            
-            # Add filters
-            filter_cols = st.columns(2)
-            bpp_filtered = bpp_display.copy()
-            
-            with filter_cols[0]:
-                if "platform" in bpp_filtered.columns:
-                    plat_vals = sorted(bpp_filtered["platform"].unique())
-                    sel_plat = st.multiselect(
-                        "🔍 Platform:",
-                        options=plat_vals,
-                        default=plat_vals,
-                        key="combined_bpp_platform"
-                    )
-                    if sel_plat:
-                        bpp_filtered = bpp_filtered[bpp_filtered["platform"].isin(sel_plat)]
-            
-            with filter_cols[1]:
-                if "product" in bpp_filtered.columns:
-                    prod_vals = sorted(bpp_filtered["product"].unique())
-                    sel_prod = st.multiselect(
-                        "🔍 Product:",
-                        options=prod_vals,
-                        default=prod_vals,
-                        key="combined_bpp_product"
-                    )
-                    if sel_prod:
-                        bpp_filtered = bpp_filtered[bpp_filtered["product"].isin(sel_prod)]
-            
-            bpp_filtered["lead_share_pct"] = fmt_percent_series(bpp_filtered["lead_share_pct"], places=1)
-            
-            if not bpp_filtered.empty:
-                st.dataframe(pretty_headers(bpp_filtered), use_container_width=True, hide_index=True)
-            else:
-                st.info("No data matches the selected filters.")
-            
-            if DFI_AVAILABLE:
-                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                    df_png = prepare_df_for_png(bpp_display)
-                    style = hide_index_styler(df_png)
-                    dfi.export(style, tmp.name)
-                    with open(tmp.name, "rb") as f:
-                        st.download_button(
-                            "⬇️ Download Combined Product x Platform (PNG)", 
-                            f.read(), 
-                            file_name="combined_product_x_platform.png", 
-                            mime="image/png", 
-                            use_container_width=True
-                        )
-    
-        # 4) Product totals only (no agency / no platform)
-        with st.expander("Combined — Product (Totals)", expanded=False):
-            st.info("ℹ️ **Note:** \"Other\" in Product classifications represents leads where MySFDomain's tracking software was unable to identify the insurance product type. While the majority of leads are tracked correctly, MySFDomain's platform has some limitations in product categorization that affect a small percentage of data.")
-            
-            prod_tot = results["by_product_total"].copy()
-            
-            # Add pie chart visualization
-            if PLOTLY_AVAILABLE:
-                prod_chart = prod_tot[prod_tot["product"] != "TOTAL"].copy()
-                
-                if not prod_chart.empty:
-                    # Convert to numeric
-                    prod_chart["leads"] = pd.to_numeric(prod_chart["leads"], errors="coerce").fillna(0)
-                    
-                    # If device column exists, aggregate for chart
-                    if "device" in prod_chart.columns:
-                        prod_agg = prod_chart.groupby("product", as_index=False)["leads"].sum()
-                    else:
-                        prod_agg = prod_chart[["product", "leads"]].copy()
-                    
-                    # Filter out zero leads
-                    prod_agg = prod_agg[prod_agg["leads"] > 0]
-                    
-                    if not prod_agg.empty:
-                        # Create pie chart
-                        fig_pie = px.pie(
-                            prod_agg,
-                            values="leads",
-                            names="product",
-                            title="Lead Distribution by Product",
-                            color_discrete_sequence=MELON_COLORS['primary']
-                        )
-                        fig_pie.update_traces(
-                            textposition='inside',
-                            textinfo='percent+label',
-                            hovertemplate='<b>%{label}</b><br>Leads: %{value:,.0f}<br>Share: %{percent}<extra></extra>'
-                        )
-                        fig_pie.update_layout(
-                            height=500,
-                            margin=dict(l=20, r=20, t=60, b=20),
-                            showlegend=True,
-                            legend=dict(
-                                orientation="v",
-                                yanchor="middle",
-                                y=0.5,
-                                xanchor="left",
-                                x=1.05
+                        elif bpp_chart_type == "Grouped Bar":
+                            fig_bpp = px.bar(
+                                bpp_agg,
+                                x="platform",
+                                y=bpp_metric_col,
+                                color="product",
+                                title=f"{agency_name}: {bpp_metric} by Platform & Product",
+                                labels={"platform": "Platform", bpp_metric_col: bpp_metric, "product": "Product"},
+                                color_discrete_sequence=MELON_COLORS["primary"],
+                                text=bpp_metric_col if bpp_show_values else None,
+                                barmode="group"
                             )
+                        elif bpp_chart_type == "Line":
+                            fig_bpp = px.line(
+                                bpp_agg,
+                                x="platform",
+                                y=bpp_metric_col,
+                                color="product",
+                                title=f"{agency_name}: {bpp_metric} by Platform & Product",
+                                labels={"platform": "Platform", bpp_metric_col: bpp_metric, "product": "Product"},
+                                color_discrete_sequence=MELON_COLORS["primary"],
+                                markers=True
+                            )
+                        elif bpp_chart_type == "Area":
+                            fig_bpp = px.area(
+                                bpp_agg,
+                                x="platform",
+                                y=bpp_metric_col,
+                                color="product",
+                                title=f"{agency_name}: {bpp_metric} by Platform & Product",
+                                labels={"platform": "Platform", bpp_metric_col: bpp_metric, "product": "Product"},
+                                color_discrete_sequence=MELON_COLORS["primary"]
+                            )
+                        elif bpp_chart_type == "Heatmap":
+                            # Pivot for heatmap
+                            heatmap_data = bpp_agg.pivot(index="product", columns="platform", values=bpp_metric_col)
+                            fig_bpp = px.imshow(
+                                heatmap_data,
+                                title=f"{agency_name}: {bpp_metric} Heatmap",
+                                labels=dict(x="Platform", y="Product", color=bpp_metric),
+                                color_continuous_scale=["#eef7ef", "#efd568", "#47B74F", "#0f5340"],
+                                text_auto=True if bpp_show_values else False
+                            )
+                        else:  # Scatter
+                            fig_bpp = px.scatter(
+                                bpp_agg,
+                                x="platform",
+                                y=bpp_metric_col,
+                                color="product",
+                                size=bpp_metric_col,
+                                title=f"{agency_name}: {bpp_metric} by Platform & Product",
+                                labels={"platform": "Platform", bpp_metric_col: bpp_metric, "product": "Product"},
+                                color_discrete_sequence=MELON_COLORS["primary"]
+                            )
+                        
+                        if bpp_show_values and bpp_chart_type in ["Stacked Bar", "Grouped Bar"]:
+                            if bpp_metric_col == "lead_share_pct":
+                                fig_bpp.update_traces(texttemplate='%{text:.1f}%', textposition='inside')
+                            else:
+                                fig_bpp.update_traces(texttemplate='%{text:,.0f}', textposition='inside')
+                        
+                        fig_bpp.update_layout(
+                            height=400,
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                         )
-                        st.plotly_chart(fig_pie, use_container_width=True)
+                        st.plotly_chart(fig_bpp, use_container_width=True)
                         
                         st.markdown("---")
-            
-            # Table
-            display_table_with_total(
-                prod_tot, 
-                "product", 
-                "TOTAL", 
-                filters={"product": "combined_product_filter"}
-            )
-            
-            if DFI_AVAILABLE:
-                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                    df_png = prepare_df_for_png(results["by_product_total"])
-                    style = hide_index_styler(df_png)
-                    dfi.export(style, tmp.name)
-                    with open(tmp.name, "rb") as f:
-                        st.download_button(
-                            "⬇️ Download Combined Product (PNG)", 
-                            f.read(), 
-                            file_name="combined_product_totals.png", 
-                            mime="image/png", 
-                            use_container_width=True
+                
+                # Determine columns to display
+                display_cols = ["platform", "product", "quote_starts", "phone_clicks", "sms_clicks", "lead_opportunities", "lead_share_pct"]
+                if "device" in bpp.columns:
+                    display_cols.insert(0, "device")  # Add device as first column
+                
+                bpp_display = bpp[display_cols].copy()
+                
+                # Add filters - conditionally add device filter
+                num_filters = 2 + (1 if "device" in bpp_display.columns else 0)
+                filter_cols = st.columns(num_filters)
+                bpp_filtered = bpp_display.copy()
+                
+                col_idx = 0
+                if "device" in bpp_filtered.columns:
+                    with filter_cols[col_idx]:
+                        device_vals = sorted(bpp_filtered["device"].unique())
+                        sel_dev = st.multiselect(
+                            "🔍 Device:",
+                            options=device_vals,
+                            default=device_vals,
+                            key=f"{agency_name}_bpp_device"
                         )
-    
-        # 5) By Source (keeps Agency column for traceability)
-        with st.expander("Combined — By Source (includes Agency column)", expanded=False):
-            src = results["by_source"].copy()
-            
-            # Add filters for all available columns
-            filter_cols = st.columns(4)
-            src_filtered = src.copy()
-            
-            with filter_cols[0]:
-                if "source" in src_filtered.columns:
-                    source_vals = sorted(src_filtered["source"].dropna().unique())
-                    if source_vals:
-                        sel_source = st.multiselect(
-                            "🔍 Source:",
-                            options=source_vals,
-                            default=source_vals,
-                            key="combined_source_filter"
-                        )
-                        if sel_source:
-                            src_filtered = src_filtered[src_filtered["source"].isin(sel_source)]
-            
-            with filter_cols[1]:
-                if "domain" in src_filtered.columns:
-                    domain_vals = sorted(src_filtered["domain"].dropna().unique())
-                    if domain_vals:
-                        sel_domain = st.multiselect(
-                            "🔍 Domain:",
-                            options=domain_vals,
-                            default=domain_vals,
-                            key="combined_src_domain_filter"
-                        )
-                        if sel_domain:
-                            src_filtered = src_filtered[src_filtered["domain"].isin(sel_domain)]
-            
-            with filter_cols[2]:
-                if "platform" in src_filtered.columns:
-                    platform_vals = sorted(src_filtered["platform"].dropna().unique())
-                    if platform_vals:
-                        sel_platform = st.multiselect(
+                        if sel_dev:
+                            bpp_filtered = bpp_filtered[bpp_filtered["device"].isin(sel_dev)]
+                    col_idx += 1
+                
+                with filter_cols[col_idx]:
+                    if "platform" in bpp_filtered.columns:
+                        plat_vals = sorted(bpp_filtered["platform"].unique())
+                        sel_plat = st.multiselect(
                             "🔍 Platform:",
-                            options=platform_vals,
-                            default=platform_vals,
-                            key="combined_src_platform_filter"
+                            options=plat_vals,
+                            default=plat_vals,
+                            key=f"{agency_name}_bpp_platform"
                         )
-                        if sel_platform:
-                            src_filtered = src_filtered[src_filtered["platform"].isin(sel_platform)]
-            
-            with filter_cols[3]:
-                if "agency" in src_filtered.columns:
-                    agency_vals = sorted(src_filtered["agency"].dropna().unique())
-                    if agency_vals:
-                        sel_agency = st.multiselect(
-                            "🔍 Agency:",
-                            options=agency_vals,
-                            default=agency_vals,
-                            key="combined_src_agency_filter"
+                        if sel_plat:
+                            bpp_filtered = bpp_filtered[bpp_filtered["platform"].isin(sel_plat)]
+                col_idx += 1
+                
+                with filter_cols[col_idx]:
+                    if "product" in bpp_filtered.columns:
+                        prod_vals = sorted(bpp_filtered["product"].unique())
+                        sel_prod = st.multiselect(
+                            "🔍 Product:",
+                            options=prod_vals,
+                            default=prod_vals,
+                            key=f"{agency_name}_bpp_product"
                         )
-                        if sel_agency:
-                            src_filtered = src_filtered[src_filtered["agency"].isin(sel_agency)]
-            
-            if not src_filtered.empty:
-                st.dataframe(pretty_headers(src_filtered), use_container_width=True, hide_index=True)
-            else:
-                st.info("No data matches the selected filters.")
-            
-            if DFI_AVAILABLE:
-                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-                    df_png = prepare_df_for_png(results["by_source"])
-                    style = hide_index_styler(df_png)
-                    dfi.export(style, tmp.name)
-                    with open(tmp.name, "rb") as f:
-                        st.download_button(
-                            "⬇️ Download Combined By Source (PNG)", 
-                            f.read(), 
-                            file_name="combined_by_source.png", 
-                            mime="image/png", 
-                            use_container_width=True
-                        )
-    
-        # ---------- Exports (short sheet names <=31 chars) ----------
-        excel_bytes = build_excel({
-            "Platform": results["platform_overview"],
-            "Agency": results["agency_overview"],
-            "Prod x Plat": results["by_product_platform"],
-            "Product": results["by_product_total"],
-            "By Source": results["by_source"],
-        })
-    
-        # ---------- Budget Optimizer (Demo only) ----------
-        with st.expander("💡 Budget Optimizer (Demo) — suggest platform allocation to maximize leads", expanded=False):
-            # Use platform CPL from combined platform overview (exclude TOTAL, Unknown, and Listings)
-            plat_eff = results["platform_overview"].copy()
-            plat_eff = plat_eff[~plat_eff["platform"].isin(["TOTAL", "Unknown", "Listings"])].copy()
-            
-            # If device column exists, aggregate by platform only for the optimizer
-            if "device" in plat_eff.columns:
-                plat_eff = plat_eff.groupby("platform", as_index=False).agg({
-                    "spend": "sum",
-                    "leads": "sum",
-                    "quote_starts": "sum",
-                    "phone_clicks": "sum",
-                    "sms_clicks": "sum"
-                })
-                # Recalculate CPL after aggregation
-                plat_eff["cpl_platform"] = plat_eff.apply(
-                    lambda r: r["spend"] / r["leads"] if r["leads"] > 0 else np.nan,
-                    axis=1
-                )
-            
-            if plat_eff.empty:
-                st.info("No platform data available to compute suggestions.")
-            else:
-                # Compute CPL per platform as spend/leads (already available), guard against zeros
-                eff = plat_eff[["platform", "spend", "cpl_platform", "leads"]].copy()
+                        if sel_prod:
+                            bpp_filtered = bpp_filtered[bpp_filtered["product"].isin(sel_prod)]
                 
-                # Convert CPL to numeric once (moved outside conditional to avoid duplication)
-                eff["cpl_platform"] = pd.to_numeric(eff["cpl_platform"], errors="coerce")
+                bpp_filtered["lead_share_pct"] = fmt_percent_series(bpp_filtered["lead_share_pct"], places=1)
                 
-                # Default total budget = current summed spend if present, else 0
-                default_budget = float(pd.to_numeric(eff["spend"], errors="coerce").fillna(0).sum())
-                total_budget = st.number_input("Total budget to allocate ($)", value=default_budget, min_value=0.0, step=100.0, format="%.2f")
-                st.caption("Allocation is proportional to efficiency (1 / Platform CPL). Platforms with no CPL (no leads) get 0 by default.")
-                conservative_mode = st.checkbox(
-                    f"Conservative mode (dampen shifts when CPL ≤ ${CONSERVATIVE_CPL_THRESHOLD})", 
-                    value=True, 
-                    help="Adds inertia: dampens low-CPL moves and blends with current spend share."
-                )
-                
-                # Minimum floors per platform
-                cols = st.columns(len(eff))
-                min_floors = {}
-                for i, (_, row) in enumerate(eff.iterrows()):
-                    with cols[i]:
-                        min_floors[row["platform"]] = st.number_input(
-                            f"Min ${row['platform']}", 
-                            value=0.0, 
-                            min_value=0.0, 
-                            step=50.0, 
-                            format="%.2f", 
-                            key=f"opt_floor_{row['platform']}"
-                        )
-                
-                # Initialize csv_bytes to avoid undefined variable error
-                csv_bytes = b""
-                
-                # Minimize overall CPL: allocate the remainder to platform(s) with the lowest positive CPL
-                total_floor = float(sum(min_floors.values()))
-                
-                if total_floor > total_budget:
-                    st.error("Sum of minimums exceeds total budget. Lower the minimums or increase the total budget.")
+                if not bpp_filtered.empty:
+                    st.dataframe(pretty_headers(bpp_filtered), use_container_width=True, hide_index=True)
                 else:
-                    remaining = max(0.0, total_budget - total_floor)
-                    
-                    if conservative_mode:
-                        # Conservative mode: blend efficiency with current spend
-                        base_w = eff["cpl_platform"].apply(
-                            lambda x: 0.0 if (pd.isna(x) or x <= 0) else 1.0 / float(x)
-                        )
-                        damp = eff["cpl_platform"].apply(
-                            lambda x: CONSERVATIVE_DAMPING_FACTOR if (pd.notna(x) and x <= CONSERVATIVE_CPL_THRESHOLD) else 1.0
-                        )
-                        base_w = base_w * damp
-                        
-                        total_sp = pd.to_numeric(eff["spend"], errors="coerce").fillna(0).sum()
-                        if total_sp > 0:
-                            s_share = pd.to_numeric(eff["spend"], errors="coerce").fillna(0) / total_sp
-                        else:
-                            s_share = pd.Series([1.0 / len(eff)] * len(eff), index=eff.index)
-                        
-                        final_w = CONSERVATIVE_EFFICIENCY_WEIGHT * base_w + CONSERVATIVE_SPEND_WEIGHT * s_share
-                        wsum = float(final_w.sum())
-                        
-                        if wsum > 0:
-                            eff["alloc_var"] = (final_w / wsum) * remaining
-                        else:
-                            eff["alloc_var"] = remaining / max(1, len(eff))
-                    else:
-                        # Aggressive mode: allocate all to lowest CPL platform(s)
-                        valid = eff["cpl_platform"].where(eff["cpl_platform"] > 0)
-                        if valid.notna().any():
-                            min_cpl = valid.min()
-                            winners = eff["cpl_platform"].eq(min_cpl)
-                            n_win = int(winners.sum()) or 1
-                            eff["alloc_var"] = 0.0
-                            eff.loc[winners, "alloc_var"] = remaining / n_win
-                        else:
-                            eff["alloc_var"] = remaining / max(1, len(eff))
-                    
-                    eff["allocation"] = eff.apply(
-                        lambda r: float(min_floors.get(r["platform"], 0.0)) + float(r["alloc_var"]), 
-                        axis=1
-                    )
-                    
-                    # Round Suggested Spend to nearest increment
-                    eff["allocation"] = (ALLOCATION_ROUNDING_INCREMENT * np.round(
-                        eff["allocation"] / ALLOCATION_ROUNDING_INCREMENT
-                    )).astype(int)
-                    
-                    # Predicted leads = allocation / CPL
-                    eff["predicted_leads"] = eff.apply(
-                        lambda r: (r["allocation"] / r["cpl_platform"]) 
-                        if (pd.notna(r["cpl_platform"]) and r["cpl_platform"] > 0) 
-                        else 0.0, 
-                        axis=1
-                    )
-                    
-                    # Formatting for display
-                    out = eff[["platform", "allocation", "predicted_leads", "cpl_platform"]].copy()
-                    out.rename(columns={
-                        "platform": "Platform",
-                        "allocation": "Suggested Spend",
-                        "predicted_leads": "Predicted Leads",
-                        "cpl_platform": "Platform CPL"
-                    }, inplace=True)
-                    
-                    out["Suggested Spend"] = out["Suggested Spend"].apply(lambda x: f"${x:,.2f}")
-                    out["Platform CPL"] = out["Platform CPL"].apply(
-                        lambda x: f"${x:,.2f}" if pd.notna(x) and x > 0 else "—"
-                    )
-                    out["Predicted Leads"] = out["Predicted Leads"].apply(lambda x: f"{x:,.1f}")
-                    
-                    total_alloc = float(eff["allocation"].sum())
-                    total_pred = float(eff["predicted_leads"].sum())
-                    total_cpl_val = (total_alloc / total_pred) if total_pred > 0 else None
-                    total_cpl_str = (f"${total_cpl_val:,.2f}" if total_cpl_val is not None else "—")
-                    
-                    total_row = pd.DataFrame([{
-                        "Platform": "TOTAL",
-                        "Suggested Spend": f"${total_alloc:,.2f}",
-                        "Predicted Leads": f"{total_pred:,.1f}",
-                        "Platform CPL": total_cpl_str
-                    }])
-                    
-                    out = pd.concat([out, total_row], ignore_index=True)
-                    display_table_with_total(out, "Platform", "TOTAL")
-                    
-                    # Prepare CSV export
-                    out_raw = eff[["platform", "allocation", "predicted_leads", "cpl_platform"]].copy()
-                    out_raw.rename(columns={
-                        "platform": "Platform",
-                        "allocation": "Suggested_Spend",
-                        "predicted_leads": "Predicted_Leads",
-                        "cpl_platform": "Platform_CPL"
-                    }, inplace=True)
-                    csv_bytes = out_raw.to_csv(index=False).encode("utf-8")
-            
-            # Download button outside the else block
-            st.download_button(
-                "⬇️ Download Suggested Allocation (CSV)", 
-                data=csv_bytes, 
-                file_name="demo_budget_optimizer.csv", 
-                mime="text/csv", 
-                use_container_width=True
-            )
-    
-        # ========== AGENCY COMPARISON SECTION ==========
-        if has_legacy_file and has_moa_file:
-            st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
-            st.markdown("---")
-            
-            with st.expander("🔄 **Agency Comparison: Legacy vs. MOA**", expanded=True):
-                st.markdown("### Head-to-Head Performance Analysis")
+                    st.info("No data matches the selected filters.")
                 
+            # By Source
+            with st.expander(f"{agency_name}: By Source", expanded=False):
+                src = single["by_source"].copy()
+                
+                # Add filters for all available columns - conditionally add device
+                num_filters = 4 + (1 if "device" in src.columns else 0)
+                filter_cols = st.columns(num_filters)
+                src_filtered = src.copy()
+                
+                col_idx = 0
+                if "device" in src_filtered.columns:
+                    with filter_cols[col_idx]:
+                        device_vals = sorted(src_filtered["device"].dropna().unique())
+                        if device_vals:
+                            sel_dev = st.multiselect(
+                                "🔍 Device:",
+                                options=device_vals,
+                                default=device_vals,
+                                key=f"{agency_name}_src_device_filter"
+                            )
+                            if sel_dev:
+                                src_filtered = src_filtered[src_filtered["device"].isin(sel_dev)]
+                    col_idx += 1
+                
+                with filter_cols[col_idx]:
+                    if "source" in src_filtered.columns:
+                        source_vals = sorted(src_filtered["source"].dropna().unique())
+                        if source_vals:
+                            sel_source = st.multiselect(
+                                "🔍 Source:",
+                                options=source_vals,
+                                default=source_vals,
+                                key=f"{agency_name}_source_filter"
+                            )
+                            if sel_source:
+                                src_filtered = src_filtered[src_filtered["source"].isin(sel_source)]
+                col_idx += 1
+                
+                with filter_cols[col_idx]:
+                    if "domain" in src_filtered.columns:
+                        domain_vals = sorted(src_filtered["domain"].dropna().unique())
+                        if domain_vals:
+                            sel_domain = st.multiselect(
+                                "🔍 Domain:",
+                                options=domain_vals,
+                                default=domain_vals,
+                                key=f"{agency_name}_src_domain_filter"
+                            )
+                            if sel_domain:
+                                src_filtered = src_filtered[src_filtered["domain"].isin(sel_domain)]
+                col_idx += 1
+                
+                with filter_cols[col_idx]:
+                    if "platform" in src_filtered.columns:
+                        platform_vals = sorted(src_filtered["platform"].dropna().unique())
+                        if platform_vals:
+                            sel_platform = st.multiselect(
+                                "🔍 Platform:",
+                                options=platform_vals,
+                                default=platform_vals,
+                                key=f"{agency_name}_src_platform_filter"
+                            )
+                            if sel_platform:
+                                src_filtered = src_filtered[src_filtered["platform"].isin(sel_platform)]
+                col_idx += 1
+                
+                with filter_cols[col_idx]:
+                    if "agency" in src_filtered.columns:
+                        agency_vals = sorted(src_filtered["agency"].dropna().unique())
+                        if agency_vals:
+                            sel_agency = st.multiselect(
+                                "🔍 Agency:",
+                                options=agency_vals,
+                                default=agency_vals,
+                                key=f"{agency_name}_src_agency_filter"
+                            )
+                            if sel_agency:
+                                src_filtered = src_filtered[src_filtered["agency"].isin(sel_agency)]
+                
+                if not src_filtered.empty:
+                    st.dataframe(pretty_headers(src_filtered), use_container_width=True, hide_index=True)
+                else:
+                    st.info("No data matches the selected filters.")
+                
+        # ========== KPI DASHBOARD ==========
+        st.markdown("### Performance Summary")
+        kpi_cols = st.columns(4)
+
+        plat_overview_kpi = results["platform_overview"]
+        total_row_kpi = plat_overview_kpi[plat_overview_kpi["platform"] == "TOTAL"]
+
+        total_leads_kpi = int(pd.to_numeric(total_row_kpi["leads"], errors="coerce").iloc[0]) if not total_row_kpi.empty else 0
+        total_spend_kpi = float(pd.to_numeric(total_row_kpi.get("spend", pd.Series([0])), errors="coerce").iloc[0]) if not total_row_kpi.empty and "spend" in total_row_kpi.columns else 0
+        overall_cpl_kpi = total_spend_kpi / total_leads_kpi if total_leads_kpi > 0 else 0
+
+        plat_for_top = plat_overview_kpi[~plat_overview_kpi["platform"].isin(["TOTAL", "Unknown", "Listings"])].copy()
+        plat_for_top["leads"] = pd.to_numeric(plat_for_top["leads"], errors="coerce").fillna(0)
+        top_platform_name = plat_for_top.loc[plat_for_top["leads"].idxmax(), "platform"] if not plat_for_top.empty and plat_for_top["leads"].sum() > 0 else "N/A"
+
+        prod_for_top = results["by_product_total"]
+        prod_for_top = prod_for_top[prod_for_top["product"] != "TOTAL"].copy()
+        prod_for_top["leads"] = pd.to_numeric(prod_for_top["leads"], errors="coerce").fillna(0)
+        top_product_name = prod_for_top.loc[prod_for_top["leads"].idxmax(), "product"] if not prod_for_top.empty and prod_for_top["leads"].sum() > 0 else "N/A"
+
+        with kpi_cols[0]:
+            st.metric("Total Leads", f"{total_leads_kpi:,}")
+        with kpi_cols[1]:
+            st.metric("Overall CPL", f"${overall_cpl_kpi:.2f}" if overall_cpl_kpi > 0 else "N/A")
+        with kpi_cols[2]:
+            st.metric("Top Platform", top_platform_name)
+        with kpi_cols[3]:
+            st.metric("Top Product", top_product_name)
+
+        st.markdown("---")
+
+        # ========== SUB-TABS ==========
+        if has_legacy_file and has_moa_file:
+            tab_comp, tab_legacy, tab_moa, tab_optimizer, tab_export = st.tabs([
+                "🔄 Agency Comparison",
+                "🏢 Legacy Detail",
+                "🏢 MOA Detail",
+                "💡 Budget Optimizer",
+                "⬇️ Export"
+            ])
+        elif has_legacy_file:
+            tab_legacy, tab_optimizer, tab_export = st.tabs([
+                "🏢 Legacy Detail",
+                "💡 Budget Optimizer",
+                "⬇️ Export"
+            ])
+            tab_comp = None
+            tab_moa = None
+        else:
+            tab_moa, tab_optimizer, tab_export = st.tabs([
+                "🏢 MOA Detail",
+                "💡 Budget Optimizer",
+                "⬇️ Export"
+            ])
+            tab_comp = None
+            tab_legacy = None
+
+        # ---- Agency Detail Tabs ----
+        if has_legacy_file:
+            with tab_legacy:
+                render_agency_detail("Legacy")
+
+        if has_moa_file:
+            with tab_moa:
+                render_agency_detail("MOA")
+
+        # ---- Agency Comparison Tab ----
+        if has_legacy_file and has_moa_file and tab_comp is not None:
+            with tab_comp:
+                st.markdown("### Head-to-Head Performance Analysis")
+            
                 # Get agency-specific data
                 agency_overview = results["agency_overview"].copy()
                 platform_agency = results["platform_agency"].copy()
-                
+            
                 # Remove TOTAL rows for comparison
                 agency_data = agency_overview[agency_overview["agency"] != "TOTAL"].copy()
                 platform_agency_data = platform_agency[platform_agency["agency"] != "TOTAL"].copy()
-                
+            
                 if not agency_data.empty and len(agency_data) >= 2:
                     # Aggregate by agency (in case device column exists)
                     if "device" in agency_data.columns:
@@ -5321,41 +4636,41 @@ with main_tab1:
                         # Add spend if it exists
                         if "spend" in agency_data.columns:
                             agg_dict["spend"] = "sum"
-                        
+                    
                         agency_summary = agency_data.groupby("agency", as_index=False).agg(agg_dict)
                     else:
                         agency_summary = agency_data.copy()
-                    
+                
                     # Calculate totals for percentages
                     total_leads = agency_summary["leads"].sum()
-                    
+                
                     # Create comparison metrics
                     col1, col2, col3 = st.columns(3)
-                    
+                
                     legacy_row = agency_summary[agency_summary["agency"] == "Legacy"]
                     moa_row = agency_summary[agency_summary["agency"] == "MOA"]
-                    
+                
                     if not legacy_row.empty and not moa_row.empty:
                         legacy_leads = int(legacy_row["leads"].iloc[0])
                         moa_leads = int(moa_row["leads"].iloc[0])
-                        
+                    
                         legacy_pct = (legacy_leads / total_leads * 100) if total_leads > 0 else 0
                         moa_pct = (moa_leads / total_leads * 100) if total_leads > 0 else 0
-                        
+                    
                         with col1:
                             st.metric(
                                 "**Legacy Total Leads**",
                                 f"{legacy_leads:,}",
                                 f"{legacy_pct:.1f}% of total"
                             )
-                        
+                    
                         with col2:
                             st.metric(
                                 "**MOA Total Leads**",
                                 f"{moa_leads:,}",
                                 f"{moa_pct:.1f}% of total"
                             )
-                        
+                    
                         with col3:
                             diff = moa_leads - legacy_leads
                             diff_pct = ((moa_leads - legacy_leads) / legacy_leads * 100) if legacy_leads > 0 else 0
@@ -5365,12 +4680,12 @@ with main_tab1:
                                 f"{diff_pct:+.1f}%",
                                 delta_color="normal" if diff > 0 else "inverse"
                             )
-                    
+                
                     st.markdown('<div class="space-md"></div>', unsafe_allow_html=True)
-                    
+                
                     # Platform-by-Platform Comparison
                     st.markdown("#### Platform Performance Comparison")
-                    
+                
                     if not platform_agency_data.empty:
                         # Aggregate by platform and agency
                         if "device" in platform_agency_data.columns:
@@ -5380,18 +4695,18 @@ with main_tab1:
                             })
                         else:
                             platform_comp = platform_agency_data[["platform", "agency", "leads", "spend"]].copy()
-                        
+                    
                         # Calculate CPL
                         platform_comp["cpl"] = platform_comp.apply(
                             lambda r: r["spend"] / r["leads"] if r["leads"] > 0 else np.nan,
                             axis=1
                         )
-                        
+                    
                         # Pivot for comparison
                         comparison_df = platform_comp.pivot(index="platform", columns="agency", values=["leads", "spend", "cpl"])
                         comparison_df.columns = [f"{col[1]}_{col[0]}" for col in comparison_df.columns]
                         comparison_df = comparison_df.reset_index()
-                        
+                    
                         # Calculate differences
                         if "Legacy_leads" in comparison_df.columns and "MOA_leads" in comparison_df.columns:
                             comparison_df["Lead_Difference"] = comparison_df["MOA_leads"] - comparison_df["Legacy_leads"]
@@ -5400,7 +4715,7 @@ with main_tab1:
                                 if r["Legacy_leads"] > 0 else np.nan,
                                 axis=1
                             )
-                        
+                    
                         if "Legacy_cpl" in comparison_df.columns and "MOA_cpl" in comparison_df.columns:
                             comparison_df["CPL_Difference"] = comparison_df["MOA_cpl"] - comparison_df["Legacy_cpl"]
                             comparison_df["CPL_Winner"] = comparison_df.apply(
@@ -5409,16 +4724,16 @@ with main_tab1:
                                 else "—",
                                 axis=1
                             )
-                        
+                    
                         # Display table
                         display_cols = ["platform"]
                         if "Legacy_leads" in comparison_df.columns:
                             display_cols.extend(["Legacy_leads", "MOA_leads", "Lead_Difference", "Lead_Diff_%"])
                         if "Legacy_cpl" in comparison_df.columns:
                             display_cols.extend(["Legacy_cpl", "MOA_cpl", "CPL_Difference", "CPL_Winner"])
-                        
+                    
                         display_df = comparison_df[display_cols].copy()
-                        
+                    
                         # Format for display
                         display_df = display_df.rename(columns={
                             "platform": "Platform",
@@ -5431,35 +4746,35 @@ with main_tab1:
                             "CPL_Difference": "CPL Diff",
                             "CPL_Winner": "Lower CPL"
                         })
-                        
+                    
                         # Apply formatting
                         for col in ["Legacy Leads", "MOA Leads", "Lead Diff"]:
                             if col in display_df.columns:
                                 display_df[col] = display_df[col].apply(lambda x: f"{int(x):,}" if pd.notna(x) else "—")
-                        
+                    
                         for col in ["Legacy CPL", "MOA CPL", "CPL Diff"]:
                             if col in display_df.columns:
                                 display_df[col] = display_df[col].apply(lambda x: f"${x:.2f}" if pd.notna(x) and x > 0 else "—")
-                        
+                    
                         if "Lead Diff %" in display_df.columns:
                             display_df["Lead Diff %"] = display_df["Lead Diff %"].apply(lambda x: f"{x:+.1f}%" if pd.notna(x) else "—")
-                        
+                    
                         st.dataframe(display_df, use_container_width=True, hide_index=True)
-                        
+                    
                         # Comparison Chart
                         if PLOTLY_AVAILABLE:
                             st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
-                            
+                        
                             chart_type = st.radio(
                                 "Chart Type:",
                                 ["Leads Comparison", "CPL Comparison", "Spend Comparison"],
                                 horizontal=True,
                                 key="agency_comp_chart_type"
                             )
-                            
+                        
                             # Prepare data for chart
                             chart_data = platform_comp.copy()
-                            
+                        
                             if chart_type == "Leads Comparison":
                                 fig = px.bar(
                                     chart_data,
@@ -5472,7 +4787,7 @@ with main_tab1:
                                     color_discrete_map={"Legacy": "#114e38", "MOA": "#47B74F"}
                                 )
                                 fig.update_traces(texttemplate='%{y:,}', textposition='outside')
-                                
+                            
                             elif chart_type == "CPL Comparison":
                                 chart_data_cpl = chart_data[chart_data["cpl"] > 0].copy()
                                 fig = px.bar(
@@ -5487,7 +4802,7 @@ with main_tab1:
                                 )
                                 fig.update_traces(texttemplate='$%{y:.2f}', textposition='outside')
                                 fig.update_yaxes(tickprefix="$")
-                                
+                            
                             else:  # Spend Comparison
                                 chart_data_spend = chart_data[chart_data["spend"] > 0].copy()
                                 fig = px.bar(
@@ -5502,22 +4817,22 @@ with main_tab1:
                                 )
                                 fig.update_traces(texttemplate='$%{y:,.0f}', textposition='outside')
                                 fig.update_yaxes(tickprefix="$")
-                            
+                        
                             fig.update_layout(
                                 height=450,
                                 margin=dict(l=20, r=20, t=40, b=20),
                                 showlegend=True,
                                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                             )
-                            
+                        
                             st.plotly_chart(fig, use_container_width=True)
-                    
+                
                     # Key Insights
                     st.markdown('<div class="space-md"></div>', unsafe_allow_html=True)
                     st.markdown("#### 💡 Key Insights")
-                    
+                
                     insights = []
-                    
+                
                     # Lead volume comparison
                     if not legacy_row.empty and not moa_row.empty:
                         if moa_leads > legacy_leads:
@@ -5528,41 +4843,41 @@ with main_tab1:
                             insights.append(f"📈 **Legacy generated {pct_more:.1f}% more leads** than MOA ({legacy_leads:,} vs {moa_leads:,})")
                         else:
                             insights.append(f"⚖️ **Both agencies generated equal leads** ({legacy_leads:,} each)")
-                    
+                
                     # Platform winners
                     if "CPL_Winner" in comparison_df.columns:
                         legacy_wins = (comparison_df["CPL_Winner"] == "Legacy ✓").sum()
                         moa_wins = (comparison_df["CPL_Winner"] == "MOA ✓").sum()
-                        
+                    
                         if moa_wins > legacy_wins:
                             insights.append(f"🎯 **MOA has better CPL on {moa_wins} platform(s)**, Legacy on {legacy_wins}")
                         elif legacy_wins > moa_wins:
                             insights.append(f"🎯 **Legacy has better CPL on {legacy_wins} platform(s)**, MOA on {moa_wins}")
-                    
+                
                     if insights:
                         for insight in insights:
                             st.markdown(f"- {insight}")
                     else:
                         st.info("Upload data for both agencies to see comparison insights.")
-                    
+                
                     # ========== PERFORMANCE ANALYSIS & RECOMMENDATIONS ==========
                     st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
                     st.markdown("---")
                     st.markdown("### 🔍 Performance Analysis & Recommendations")
-                    
+                
                     # Calculate key metrics for analysis
                     if not legacy_row.empty and not moa_row.empty:
                         legacy_total = int(legacy_row["leads"].iloc[0])
                         moa_total = int(moa_row["leads"].iloc[0])
-                        
+                    
                         # Get spend data from agency_summary (which has aggregated spend if device column existed)
                         if "spend" in agency_summary.columns and "leads" in agency_summary.columns:
                             legacy_spend = agency_summary[agency_summary["agency"] == "Legacy"]["spend"].sum() if "Legacy" in agency_summary["agency"].values else 0
                             moa_spend = agency_summary[agency_summary["agency"] == "MOA"]["spend"].sum() if "MOA" in agency_summary["agency"].values else 0
-                            
+                        
                             legacy_cpl = legacy_spend / legacy_total if legacy_total > 0 else 0
                             moa_cpl = moa_spend / moa_total if moa_total > 0 else 0
-                            
+                        
                             # Determine which is less efficient
                             less_efficient_agency = "Legacy" if legacy_cpl > moa_cpl else "MOA"
                             more_efficient_agency = "MOA" if legacy_cpl > moa_cpl else "Legacy"
@@ -5570,7 +4885,7 @@ with main_tab1:
                             more_efficient_cpl = moa_cpl if more_efficient_agency == "MOA" else legacy_cpl
                             cpl_diff = abs(legacy_cpl - moa_cpl)
                             cpl_pct_diff = (cpl_diff / more_efficient_cpl * 100) if more_efficient_cpl > 0 else 0
-                            
+                        
                             # Show summary
                             st.markdown(f"""
                             **Cost Efficiency Overview:**
@@ -5579,12 +4894,12 @@ with main_tab1:
                             - **Gap:** ${cpl_diff:.2f} per lead
                             - **Volume Context:** {less_efficient_agency} = {legacy_total if less_efficient_agency == 'Legacy' else moa_total:,} leads (${legacy_spend if less_efficient_agency == 'Legacy' else moa_spend:,.2f} spend) • {more_efficient_agency} = {moa_total if more_efficient_agency == 'MOA' else legacy_total:,} leads (${moa_spend if more_efficient_agency == 'MOA' else legacy_spend:,.2f} spend)
                             """)
-                            
+                        
                             # Platform CPL analysis
                             st.markdown(f"#### 🎯 Where is {less_efficient_agency} less efficient?")
-                            
+                        
                             recommendations = []
-                            
+                        
                             if not platform_agency_data.empty and "spend" in platform_agency_data.columns:
                                 plat_comparison = platform_agency_data.copy()
                                 if "device" in plat_comparison.columns:
@@ -5592,20 +4907,20 @@ with main_tab1:
                                         "leads": "sum",
                                         "spend": "sum"
                                     })
-                                
+                            
                                 # Calculate CPL per platform
                                 plat_comparison["cpl"] = plat_comparison.apply(
                                     lambda r: r["spend"] / r["leads"] if r["leads"] > 0 else np.nan,
                                     axis=1
                                 )
-                                
+                            
                                 # Pivot to compare CPLs
                                 plat_pivot = plat_comparison.pivot(index="platform", columns="agency", values=["leads", "spend", "cpl"]).fillna(0)
-                                
+                            
                                 # Flatten column names
                                 plat_pivot.columns = [f"{col[1]}_{col[0]}" for col in plat_pivot.columns]
                                 plat_pivot = plat_pivot.reset_index()
-                                
+                            
                                 # Calculate CPL differences
                                 if f"{less_efficient_agency}_cpl" in plat_pivot.columns and f"{more_efficient_agency}_cpl" in plat_pivot.columns:
                                     plat_pivot["cpl_diff"] = plat_pivot[f"{less_efficient_agency}_cpl"] - plat_pivot[f"{more_efficient_agency}_cpl"]
@@ -5614,11 +4929,11 @@ with main_tab1:
                                         if r[f"{more_efficient_agency}_cpl"] > 0 else 0,
                                         axis=1
                                     )
-                                    
+                                
                                     # Sort by biggest CPL difference
                                     plat_pivot = plat_pivot.sort_values("cpl_diff", ascending=False)
                                     biggest_cpl_gaps = plat_pivot[plat_pivot["cpl_diff"] > 0].head(3)
-                                    
+                                
                                     if not biggest_cpl_gaps.empty:
                                         st.markdown(f"**Platform Efficiency Gaps:**")
                                         for idx, row in biggest_cpl_gaps.iterrows():
@@ -5631,7 +4946,7 @@ with main_tab1:
                                             more_eff_leads = int(row[f"{more_efficient_agency}_leads"])
                                             less_eff_spend = row[f"{less_efficient_agency}_spend"]
                                             more_eff_spend = row[f"{more_efficient_agency}_spend"]
-                                            
+                                        
                                             recommendations.append({
                                                 "platform": platform,
                                                 "cpl_gap": cpl_gap,
@@ -5641,52 +4956,52 @@ with main_tab1:
                                                 "less_eff_leads": less_eff_leads,
                                                 "less_eff_spend": less_eff_spend
                                             })
-                                            
+                                        
                                             st.markdown(f"- **{platform}**: ${cpl_gap:.2f} higher CPL ({cpl_pct:.0f}% less efficient)")
                                             st.markdown(f"  - {less_efficient_agency}: ${less_eff_cpl:.2f} CPL ({less_eff_leads:,} leads @ ${less_eff_spend:,.2f})")
                                             st.markdown(f"  - {more_efficient_agency}: ${more_eff_cpl:.2f} CPL ({more_eff_leads:,} leads @ ${more_eff_spend:,.2f})")
-                            
+                        
                             # Product CPL analysis
                             prod_comparison = results["product_agency"].copy()  # Use product_agency which has agency column
                             if "agency" in prod_comparison.columns:
                                 prod_comp = prod_comparison[prod_comparison["product"] != "TOTAL"].copy()
-                                
+                            
                                 # Note: product data doesn't have spend, so skip CPL analysis
                                 st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
                                 st.markdown(f"**Product Volume Context:**")
                                 st.markdown("*(Product-level spend data not available for CPL calculation)*")
-                                
+                            
                                 if "device" in prod_comp.columns:
                                     prod_comp = prod_comp.groupby(["product", "agency"], as_index=False)["leads"].sum()
-                                
+                            
                                 prod_pivot = prod_comp.pivot(index="product", columns="agency", values="leads").fillna(0)
-                                
+                            
                                 if less_efficient_agency in prod_pivot.columns and more_efficient_agency in prod_pivot.columns:
                                     prod_pivot["Difference"] = prod_pivot[more_efficient_agency] - prod_pivot[less_efficient_agency]
                                     prod_pivot = prod_pivot.sort_values("Difference", ascending=False)
-                                    
+                                
                                     for product, row in prod_pivot.head(3).iterrows():
                                         less_eff_leads = int(row[less_efficient_agency])
                                         more_eff_leads = int(row[more_efficient_agency])
                                         st.markdown(f"- **{product}**: {less_efficient_agency} {less_eff_leads:,} leads • {more_efficient_agency} {more_eff_leads:,} leads")
-                            
+                        
                             # Generate actionable recommendations
                             st.markdown('<div class="space-md"></div>', unsafe_allow_html=True)
                             st.markdown(f"#### 💡 Recommended Actions for {less_efficient_agency}")
-                            
+                        
                             if recommendations:
                                 top_inefficiency = recommendations[0]
-                                
+                            
                                 # Calculate potential savings
                                 potential_savings = top_inefficiency["less_eff_leads"] * (top_inefficiency["less_eff_cpl"] - top_inefficiency["more_eff_cpl"])
-                                
+                            
                                 st.markdown(f"""
                                 **Priority 1: Improve {top_inefficiency['platform']} Efficiency**
                                 - Current CPL: ${top_inefficiency['less_eff_cpl']:.2f}
                                 - Target CPL: ${top_inefficiency['more_eff_cpl']:.2f} (match {more_efficient_agency})
                                 - Efficiency gap: ${top_inefficiency['cpl_gap']:.2f} per lead ({top_inefficiency['cpl_pct']:.0f}% higher)
                                 - **Potential monthly savings**: ${potential_savings:,.2f} if efficiency matches {more_efficient_agency}
-                                
+                            
                                 **Suggested investigations:**
                                 1. **Campaign settings audit**: Compare {less_efficient_agency} vs {more_efficient_agency} on {top_inefficiency['platform']}
                                    - Targeting: Same audiences? Geographic settings?
@@ -5700,7 +5015,7 @@ with main_tab1:
                                 4. **Conversion tracking**: Verify both agencies tracking correctly
                                 5. **Account history**: Older accounts may have better Quality Scores due to historical performance
                                 """)
-                                
+                            
                                 if len(recommendations) > 1:
                                     second_inefficiency = recommendations[1]
                                     second_savings = second_inefficiency["less_eff_leads"] * (second_inefficiency["less_eff_cpl"] - second_inefficiency["more_eff_cpl"])
@@ -5710,13 +5025,13 @@ with main_tab1:
                                     - Potential monthly savings: ${second_savings:,.2f}
                                     - Apply same audit process as Priority 1
                                     """)
-                            
+                        
                             # Device analysis (if available)
                             if add_device_column and "device" in results["agency_overview"].columns:
                                 st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
                                 st.markdown("**Device Considerations:**")
                                 st.markdown("Check device-level performance and consider bid adjustments for mobile/desktop/tablet if one device type shows significantly different efficiency.")
-                            
+                        
                             # Summary recommendation
                             st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
                             total_potential_savings = sum(r["less_eff_leads"] * (r["less_eff_cpl"] - r["more_eff_cpl"]) for r in recommendations)
@@ -5726,31 +5041,31 @@ with main_tab1:
                             """)
                         else:
                             st.warning("Spend data not available for CPL analysis. Upload files with spend/budget columns for efficiency insights.")
-                    
+                
                     # ========== INDIVIDUAL AGENCY BREAKDOWNS ==========
                     st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
                     st.markdown("---")
                     st.markdown("### 📋 Individual Agency Analysis")
-                    
+                
                     # Split data by agency
                     legacy_data = df_in[df_in["agency"] == "Legacy"].copy() if "Legacy" in df_in["agency"].values else pd.DataFrame()
                     moa_data = df_in[df_in["agency"] == "MOA"].copy() if "MOA" in df_in["agency"].values else pd.DataFrame()
-                    
+                
                     # Create two columns for side-by-side comparison
                     col_left, col_right = st.columns(2)
-                    
+                
                     # ========== LEGACY ANALYSIS ==========
                     with col_left:
                         st.markdown("**🏢 Legacy Agency**")
                         st.markdown('<div class="space-xs"></div>', unsafe_allow_html=True)
-                        
+                    
                         if not legacy_data.empty:
                             # Platform breakdown
                             st.markdown("**Platform Overview**")
                             legacy_platform = results["platform_agency"][
                                 results["platform_agency"]["agency"] == "Legacy"
                             ].copy()
-                            
+                        
                             if "device" in legacy_platform.columns:
                                 legacy_platform = legacy_platform.groupby("platform", as_index=False).agg({
                                     "leads": "sum",
@@ -5764,7 +5079,7 @@ with main_tab1:
                                     legacy_platform["spend"] / legacy_platform["leads"],
                                     np.nan
                                 )
-                            
+                        
                             # Remove agency column for cleaner display
                             if "agency" in legacy_platform.columns:
                                 legacy_platform = legacy_platform.drop(columns=["agency"])
@@ -5786,7 +5101,7 @@ with main_tab1:
                             legacy_product = results["product_agency"][
                                 results["product_agency"]["agency"] == "Legacy"
                             ].copy() if "agency" in results["product_agency"].columns else pd.DataFrame()
-                            
+                        
                             if not legacy_product.empty:
                                 if "device" in legacy_product.columns:
                                     legacy_product = legacy_product.groupby("product", as_index=False).agg({
@@ -5808,42 +5123,42 @@ with main_tab1:
                                 legacy_product = pd.concat([legacy_product, pd.DataFrame([totals_row])], ignore_index=True)
 
                                 display_table_with_total(legacy_product, "product", "TOTAL")
-                            
+                        
                             # Source breakdown (Top 5)
                             st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
                             st.markdown("**Top 5 Traffic Sources**")
                             legacy_source = results["by_source"].copy()
-                            
+                        
                             if "lead_opportunities" in legacy_source.columns:
                                 legacy_source = legacy_source.rename(columns={"lead_opportunities": "leads"})
-                            
+                        
                             if "agency" in legacy_source.columns:
                                 legacy_source = legacy_source[legacy_source["agency"] == "Legacy"].copy()
                                 legacy_source = legacy_source.groupby("source", as_index=False)["leads"].sum()
                                 legacy_source = legacy_source.nlargest(5, "leads")
-                                
+                            
                                 # Remove agency column if present
                                 if "agency" in legacy_source.columns:
                                     legacy_source = legacy_source.drop(columns=["agency"])
-                                
+                            
                                 # Use pretty headers
                                 legacy_source_pretty = pretty_headers(legacy_source)
                                 st.dataframe(legacy_source_pretty, use_container_width=True, hide_index=True)
                         else:
                             st.info("No Legacy data uploaded")
-                    
+                
                     # ========== MOA ANALYSIS ==========
                     with col_right:
                         st.markdown("**🏢 MOA Agency**")
                         st.markdown('<div class="space-xs"></div>', unsafe_allow_html=True)
-                        
+                    
                         if not moa_data.empty:
                             # Platform breakdown
                             st.markdown("**Platform Overview**")
                             moa_platform = results["platform_agency"][
                                 results["platform_agency"]["agency"] == "MOA"
                             ].copy()
-                            
+                        
                             if "device" in moa_platform.columns:
                                 moa_platform = moa_platform.groupby("platform", as_index=False).agg({
                                     "leads": "sum",
@@ -5857,7 +5172,7 @@ with main_tab1:
                                     moa_platform["spend"] / moa_platform["leads"],
                                     np.nan
                                 )
-                            
+                        
                             # Remove agency column for cleaner display
                             if "agency" in moa_platform.columns:
                                 moa_platform = moa_platform.drop(columns=["agency"])
@@ -5879,7 +5194,7 @@ with main_tab1:
                             moa_product = results["product_agency"][
                                 results["product_agency"]["agency"] == "MOA"
                             ].copy() if "agency" in results["product_agency"].columns else pd.DataFrame()
-                            
+                        
                             if not moa_product.empty:
                                 if "device" in moa_product.columns:
                                     moa_product = moa_product.groupby("product", as_index=False).agg({
@@ -5901,30 +5216,30 @@ with main_tab1:
                                 moa_product = pd.concat([moa_product, pd.DataFrame([totals_row])], ignore_index=True)
 
                                 display_table_with_total(moa_product, "product", "TOTAL")
-                            
+                        
                             # Source breakdown (Top 5)
                             st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
                             st.markdown("**Top 5 Traffic Sources**")
                             moa_source = results["by_source"].copy()
-                            
+                        
                             if "lead_opportunities" in moa_source.columns:
                                 moa_source = moa_source.rename(columns={"lead_opportunities": "leads"})
-                            
+                        
                             if "agency" in moa_source.columns:
                                 moa_source = moa_source[moa_source["agency"] == "MOA"].copy()
                                 moa_source = moa_source.groupby("source", as_index=False)["leads"].sum()
                                 moa_source = moa_source.nlargest(5, "leads")
-                                
+                            
                                 # Remove agency column if present
                                 if "agency" in moa_source.columns:
                                     moa_source = moa_source.drop(columns=["agency"])
-                                
+                            
                                 # Use pretty headers
                                 moa_source_pretty = pretty_headers(moa_source)
                                 st.dataframe(moa_source_pretty, use_container_width=True, hide_index=True)
                         else:
                             st.info("No MOA data uploaded")
-                    
+                
                     # ========== INDIVIDUAL AGENCY CHARTS ==========
                     if PLOTLY_AVAILABLE:
                         st.markdown('<div class="space-md"></div>', unsafe_allow_html=True)
@@ -6069,24 +5384,24 @@ with main_tab1:
                                         )
                                     )
                                     st.plotly_chart(fig_moa_prod, use_container_width=True)
-                    
+                
                     # ========== ADDITIONAL COMPARISON TABLES ==========
                     st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
                     st.markdown("---")
                     st.markdown("### 📊 Detailed Comparison Tables")
-                    
+                
                     # Get individual agency data
                     legacy_mask = df_in["agency"] == "Legacy"
                     moa_mask = df_in["agency"] == "MOA"
-                    
+                
                     # Product Comparison
                     st.markdown("**Product Performance Comparison**")
                     prod_comparison = results["product_agency"].copy()  # Use product_agency which has agency column
-                    
+                
                     if "agency" in prod_comparison.columns:
                         # Pivot to show Legacy vs MOA side by side
                         prod_comp_clean = prod_comparison[prod_comparison["product"] != "TOTAL"].copy()
-                        
+                    
                         if not prod_comp_clean.empty:
                             # Group by product and agency
                             if "device" in prod_comp_clean.columns:
@@ -6098,12 +5413,12 @@ with main_tab1:
                                 })
                             else:
                                 prod_pivot_data = prod_comp_clean[["product", "agency", "leads", "quote_starts", "phone_clicks", "sms_clicks"]].copy()
-                            
+                        
                             # Create pivot table
                             prod_pivot = prod_pivot_data.pivot(index="product", columns="agency", values=["leads", "quote_starts", "phone_clicks", "sms_clicks"])
                             prod_pivot.columns = [f"{col[1]}_{col[0]}" for col in prod_pivot.columns]
                             prod_pivot = prod_pivot.reset_index()
-                            
+                        
                             # Add difference columns
                             if "Legacy_leads" in prod_pivot.columns and "MOA_leads" in prod_pivot.columns:
                                 prod_pivot["Lead_Diff"] = prod_pivot["MOA_leads"] - prod_pivot["Legacy_leads"]
@@ -6113,21 +5428,21 @@ with main_tab1:
                                     else "Tie",
                                     axis=1
                                 )
-                            
+                        
                             # Format for display
                             display_cols = ["product"]
                             if "Legacy_leads" in prod_pivot.columns:
                                 display_cols.extend(["Legacy_leads", "MOA_leads", "Lead_Diff", "Lead_Winner"])
-                            
+                        
                             if "Legacy_quote_starts" in prod_pivot.columns:
                                 display_cols.extend(["Legacy_quote_starts", "MOA_quote_starts"])
                             if "Legacy_phone_clicks" in prod_pivot.columns:
                                 display_cols.extend(["Legacy_phone_clicks", "MOA_phone_clicks"])
                             if "Legacy_sms_clicks" in prod_pivot.columns:
                                 display_cols.extend(["Legacy_sms_clicks", "MOA_sms_clicks"])
-                            
+                        
                             prod_display = prod_pivot[[col for col in display_cols if col in prod_pivot.columns]].copy()
-                            
+                        
                             # Rename columns
                             prod_display = prod_display.rename(columns={
                                 "product": "Product",
@@ -6142,16 +5457,16 @@ with main_tab1:
                                 "Legacy_sms_clicks": "Legacy SMS",
                                 "MOA_sms_clicks": "MOA SMS"
                             })
-                            
+                        
                             st.dataframe(prod_display, use_container_width=True, hide_index=True)
-                    
+                
                     # Device Comparison (if device breakdown enabled)
                     if add_device_column and "device" in results["agency_overview"].columns:
                         st.markdown('<div class="space-md"></div>', unsafe_allow_html=True)
                         st.markdown("**Device Performance Comparison**")
-                        
+                    
                         device_data = results["agency_overview"][results["agency_overview"]["agency"] != "TOTAL"].copy()
-                        
+                    
                         if not device_data.empty:
                             # Pivot by device and agency
                             device_pivot_data = device_data.groupby(["device", "agency"], as_index=False).agg({
@@ -6160,11 +5475,11 @@ with main_tab1:
                                 "phone_clicks": "sum",
                                 "sms_clicks": "sum"
                             })
-                            
+                        
                             device_pivot = device_pivot_data.pivot(index="device", columns="agency", values=["leads", "quote_starts", "phone_clicks", "sms_clicks"])
                             device_pivot.columns = [f"{col[1]}_{col[0]}" for col in device_pivot.columns]
                             device_pivot = device_pivot.reset_index()
-                            
+                        
                             # Add difference
                             if "Legacy_leads" in device_pivot.columns and "MOA_leads" in device_pivot.columns:
                                 device_pivot["Lead_Diff"] = device_pivot["MOA_leads"] - device_pivot["Legacy_leads"]
@@ -6174,7 +5489,7 @@ with main_tab1:
                                     else "Tie",
                                     axis=1
                                 )
-                            
+                        
                             # Rename and display
                             device_pivot = device_pivot.rename(columns={
                                 "device": "Device",
@@ -6182,46 +5497,46 @@ with main_tab1:
                                 "MOA_leads": "MOA Leads",
                                 "Lead_Diff": "Difference"
                             })
-                            
+                        
                             st.dataframe(device_pivot, use_container_width=True, hide_index=True)
-                    
+                
                     # Source Comparison
                     st.markdown('<div class="space-md"></div>', unsafe_allow_html=True)
                     st.markdown("**Traffic Source Comparison**")
-                    
+                
                     source_data = results["by_source"].copy()
-                    
+                
                     # Rename lead_opportunities to leads if it exists
                     if "lead_opportunities" in source_data.columns:
                         source_data = source_data.rename(columns={"lead_opportunities": "leads"})
-                    
+                
                     if "agency" in source_data.columns and "leads" in source_data.columns:
                         source_comp = source_data[source_data["source"] != "TOTAL"].copy()
-                        
+                    
                         if not source_comp.empty:
                             # ALWAYS aggregate by source and agency to avoid duplicates
                             source_summary = source_comp.groupby(["source", "agency"], as_index=False)["leads"].sum()
-                            
+                        
                             if not source_summary.empty:
                                 # Get top 10 sources overall
                                 top_sources = source_summary.groupby("source")["leads"].sum().nlargest(10).index.tolist()
                                 source_top = source_summary[source_summary["source"].isin(top_sources)]
-                                
+                            
                                 # Pivot
                                 source_pivot = source_top.pivot(index="source", columns="agency", values="leads").fillna(0)
                                 source_pivot = source_pivot.reset_index()
-                                
+                            
                                 if "Legacy" in source_pivot.columns and "MOA" in source_pivot.columns:
                                     source_pivot["Difference"] = source_pivot["MOA"] - source_pivot["Legacy"]
                                     source_pivot = source_pivot.sort_values("Difference", ascending=False)
-                                
+                            
                                 # Rename
                                 source_pivot = source_pivot.rename(columns={
                                     "source": "Traffic Source",
                                     "Legacy": "Legacy Leads",
                                     "MOA": "MOA Leads"
                                 })
-                                
+                            
                                 st.dataframe(source_pivot, use_container_width=True, hide_index=True)
                             else:
                                 st.info("No source data available for comparison.")
@@ -6230,1407 +5545,1592 @@ with main_tab1:
                     else:
                         st.info("Source comparison requires both agencies to have data.")
     
-        # ========== EXPORT SELECTION ==========
-        st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
-        st.markdown("---")
-        st.markdown("### 📦 Export Options")
-        
-        with st.expander("⚙️ Customize Your Export", expanded=False):
-            st.markdown("**Select which tables and charts to include in exports:**")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("**📊 Tables:**")
-                export_platform = st.checkbox("Platform Overview", value=True, key="export_platform")
-                export_agency = st.checkbox("Agency Overview", value=True, key="export_agency")
-                export_product_total = st.checkbox("Product (Total)", value=True, key="export_product_total")
-                export_product_platform = st.checkbox("Product × Platform", value=True, key="export_product_platform")
-                export_source = st.checkbox("By Source", value=True, key="export_source")
-            
-            with col2:
-                st.markdown("**📈 Charts (HTML only):**")
-                export_chart_platform = st.checkbox("Platform Performance Chart", value=True, key="export_chart_platform")
-                export_chart_product = st.checkbox("Product Distribution Chart", value=True, key="export_chart_product")
-                export_chart_agency = st.checkbox("Agency Comparison Chart", value=True, key="export_chart_agency")
-                
-                st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
-                if st.button("✅ Select All", use_container_width=True):
-                    st.session_state.export_platform = True
-                    st.session_state.export_agency = True
-                    st.session_state.export_product_total = True
-                    st.session_state.export_product_platform = True
-                    st.session_state.export_source = True
-                    st.session_state.export_chart_platform = True
-                    st.session_state.export_chart_product = True
-                    st.session_state.export_chart_agency = True
-                    st.rerun()
-                
-                if st.button("❌ Deselect All", use_container_width=True):
-                    st.session_state.export_platform = False
-                    st.session_state.export_agency = False
-                    st.session_state.export_product_total = False
-                    st.session_state.export_product_platform = False
-                    st.session_state.export_source = False
-                    st.session_state.export_chart_platform = False
-                    st.session_state.export_chart_product = False
-                    st.session_state.export_chart_agency = False
-                    st.rerun()
-        
-        # Build filtered exports based on selections
-        selected_sheets = {}
-        if export_platform:
-            selected_sheets["Platform Overview"] = results["platform_overview"]
-        if export_agency:
-            selected_sheets["Agency Overview"] = results["agency_overview"]
-        if export_product_total:
-            selected_sheets["By Product (Total)"] = results["by_product_total"]
-        if export_product_platform:
-            selected_sheets["By Product × Platform"] = results["by_product_platform"]
-        if export_source:
-            selected_sheets["By Source"] = results["by_source"]
-        lpu_export = results.get("platform_lp_utm")
-        if lpu_export is not None and not lpu_export.empty:
-            selected_sheets["Platform x LP x UTM"] = lpu_export
 
-        # Build Excel with selected sheets
-        if selected_sheets:
-            excel_bytes_filtered = build_excel(selected_sheets)
-        else:
-            excel_bytes_filtered = excel_bytes  # Fallback to all
+        # ---- Budget Optimizer Tab ----
+        with tab_optimizer:
+            # Use platform CPL from combined platform overview (exclude TOTAL, Unknown, and Listings)
+            plat_eff = results["platform_overview"].copy()
+            plat_eff = plat_eff[~plat_eff["platform"].isin(["TOTAL", "Unknown", "Listings"])].copy()
         
-        st.download_button(
-            "⬇️ Download Combined Excel Report (Generated "+datetime.now().strftime('%I:%M %p')+")", 
-            excel_bytes_filtered, 
-            "combined_lead_report_demo.xlsx",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-            use_container_width=True
-        )
+            # If device column exists, aggregate by platform only for the optimizer
+            if "device" in plat_eff.columns:
+                plat_eff = plat_eff.groupby("platform", as_index=False).agg({
+                    "spend": "sum",
+                    "leads": "sum",
+                    "quote_starts": "sum",
+                    "phone_clicks": "sum",
+                    "sms_clicks": "sum"
+                })
+                # Recalculate CPL after aggregation
+                plat_eff["cpl_platform"] = plat_eff.apply(
+                    lambda r: r["spend"] / r["leads"] if r["leads"] > 0 else np.nan,
+                    axis=1
+                )
         
-        # Build HTML report with tables AND charts
-        html_charts = {}
-        
-        if PLOTLY_AVAILABLE:
-            # 1. Platform Overview Chart
-            if export_chart_platform:
-                plat_data = results["platform_overview"][results["platform_overview"]["platform"] != "TOTAL"].copy()
-                if not plat_data.empty and "leads" in plat_data.columns:
-                    plat_data["leads"] = pd.to_numeric(plat_data["leads"], errors="coerce").fillna(0)
-                    if plat_data["leads"].sum() > 0:
-                        fig_platform = px.bar(
-                            plat_data,
-                            x="platform",
-                            y="leads",
-                            title="Leads by Platform",
-                            labels={"platform": "Platform", "leads": "Total Leads"},
-                            color="leads",
-                            color_continuous_scale=["#eef7ef", "#47B74F"]
-                        )
-                        fig_platform.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
-                        fig_platform.update_layout(
-                            showlegend=False,
-                            height=400,
-                            margin=dict(l=20, r=20, t=60, b=20)
-                        )
-                        html_charts["Platform Performance"] = fig_platform
+            if plat_eff.empty:
+                st.info("No platform data available to compute suggestions.")
+            else:
+                # Compute CPL per platform as spend/leads (already available), guard against zeros
+                eff = plat_eff[["platform", "spend", "cpl_platform", "leads"]].copy()
             
-            # 2. Product Distribution Pie Chart
-            if export_chart_product:
-                prod_data = results["by_product_total"].copy()
-                if "device" in prod_data.columns:
-                    prod_data = prod_data.groupby("product", as_index=False)["leads"].sum()
+                # Convert CPL to numeric once (moved outside conditional to avoid duplication)
+                eff["cpl_platform"] = pd.to_numeric(eff["cpl_platform"], errors="coerce")
+            
+                # Default total budget = current summed spend if present, else 0
+                default_budget = float(pd.to_numeric(eff["spend"], errors="coerce").fillna(0).sum())
+                total_budget = st.number_input("Total budget to allocate ($)", value=default_budget, min_value=0.0, step=100.0, format="%.2f")
+                st.caption("Allocation is proportional to efficiency (1 / Platform CPL). Platforms with no CPL (no leads) get 0 by default.")
+                conservative_mode = st.checkbox(
+                    f"Conservative mode (dampen shifts when CPL ≤ ${CONSERVATIVE_CPL_THRESHOLD})", 
+                    value=True, 
+                    help="Adds inertia: dampens low-CPL moves and blends with current spend share."
+                )
+            
+                # Minimum floors per platform
+                cols = st.columns(len(eff))
+                min_floors = {}
+                for i, (_, row) in enumerate(eff.iterrows()):
+                    with cols[i]:
+                        min_floors[row["platform"]] = st.number_input(
+                            f"Min ${row['platform']}", 
+                            value=0.0, 
+                            min_value=0.0, 
+                            step=50.0, 
+                            format="%.2f", 
+                            key=f"opt_floor_{row['platform']}"
+                        )
+            
+                # Initialize csv_bytes to avoid undefined variable error
+                csv_bytes = b""
+            
+                # Minimize overall CPL: allocate the remainder to platform(s) with the lowest positive CPL
+                total_floor = float(sum(min_floors.values()))
+            
+                if total_floor > total_budget:
+                    st.error("Sum of minimums exceeds total budget. Lower the minimums or increase the total budget.")
+                else:
+                    remaining = max(0.0, total_budget - total_floor)
                 
-                prod_data = prod_data[prod_data["product"] != "TOTAL"].copy()
-                if not prod_data.empty and "leads" in prod_data.columns:
-                    prod_data["leads"] = pd.to_numeric(prod_data["leads"], errors="coerce").fillna(0)
-                    prod_data = prod_data[prod_data["leads"] > 0]
+                    if conservative_mode:
+                        # Conservative mode: blend efficiency with current spend
+                        base_w = eff["cpl_platform"].apply(
+                            lambda x: 0.0 if (pd.isna(x) or x <= 0) else 1.0 / float(x)
+                        )
+                        damp = eff["cpl_platform"].apply(
+                            lambda x: CONSERVATIVE_DAMPING_FACTOR if (pd.notna(x) and x <= CONSERVATIVE_CPL_THRESHOLD) else 1.0
+                        )
+                        base_w = base_w * damp
                     
-                    if not prod_data.empty:
-                        fig_product = px.pie(
-                            prod_data,
-                            values="leads",
-                            names="product",
-                            title="Lead Distribution by Product",
-                            color_discrete_sequence=MELON_COLORS['primary']
-                        )
-                        fig_product.update_traces(
-                            textposition='inside',
-                            textinfo='percent+label'
-                        )
-                        fig_product.update_layout(
-                            height=500,
-                            margin=dict(l=20, r=20, t=60, b=20)
-                        )
-                        html_charts["Product Distribution"] = fig_product
-            
-            # 3. Agency Comparison (if both exist)
-            if export_chart_agency:
-                agency_data = results["agency_overview"][results["agency_overview"]["agency"] != "TOTAL"].copy()
-                if len(agency_data) >= 2 and "leads" in agency_data.columns:
-                    if "device" in agency_data.columns:
-                        agency_data = agency_data.groupby("agency", as_index=False)["leads"].sum()
+                        total_sp = pd.to_numeric(eff["spend"], errors="coerce").fillna(0).sum()
+                        if total_sp > 0:
+                            s_share = pd.to_numeric(eff["spend"], errors="coerce").fillna(0) / total_sp
+                        else:
+                            s_share = pd.Series([1.0 / len(eff)] * len(eff), index=eff.index)
                     
-                    agency_data["leads"] = pd.to_numeric(agency_data["leads"], errors="coerce").fillna(0)
+                        final_w = CONSERVATIVE_EFFICIENCY_WEIGHT * base_w + CONSERVATIVE_SPEND_WEIGHT * s_share
+                        wsum = float(final_w.sum())
                     
-                    if agency_data["leads"].sum() > 0:
-                        fig_agency = px.bar(
-                            agency_data,
-                            x="agency",
-                            y="leads",
-                            title="Leads by Agency",
-                            labels={"agency": "Agency", "leads": "Total Leads"},
-                            color="agency",
-                            color_discrete_map={"Legacy": "#114e38", "MOA": "#47B74F"}
-                        )
-                        fig_agency.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
-                        fig_agency.update_layout(
-                            showlegend=False,
-                            height=400,
-                            margin=dict(l=20, r=20, t=60, b=20)
-                        )
-                        html_charts["Agency Comparison"] = fig_agency
+                        if wsum > 0:
+                            eff["alloc_var"] = (final_w / wsum) * remaining
+                        else:
+                            eff["alloc_var"] = remaining / max(1, len(eff))
+                    else:
+                        # Aggressive mode: allocate all to lowest CPL platform(s)
+                        valid = eff["cpl_platform"].where(eff["cpl_platform"] > 0)
+                        if valid.notna().any():
+                            min_cpl = valid.min()
+                            winners = eff["cpl_platform"].eq(min_cpl)
+                            n_win = int(winners.sum()) or 1
+                            eff["alloc_var"] = 0.0
+                            eff.loc[winners, "alloc_var"] = remaining / n_win
+                        else:
+                            eff["alloc_var"] = remaining / max(1, len(eff))
+                
+                    eff["allocation"] = eff.apply(
+                        lambda r: float(min_floors.get(r["platform"], 0.0)) + float(r["alloc_var"]), 
+                        axis=1
+                    )
+                
+                    # Round Suggested Spend to nearest increment
+                    eff["allocation"] = (ALLOCATION_ROUNDING_INCREMENT * np.round(
+                        eff["allocation"] / ALLOCATION_ROUNDING_INCREMENT
+                    )).astype(int)
+                
+                    # Predicted leads = allocation / CPL
+                    eff["predicted_leads"] = eff.apply(
+                        lambda r: (r["allocation"] / r["cpl_platform"]) 
+                        if (pd.notna(r["cpl_platform"]) and r["cpl_platform"] > 0) 
+                        else 0.0, 
+                        axis=1
+                    )
+                
+                    # Formatting for display
+                    out = eff[["platform", "allocation", "predicted_leads", "cpl_platform"]].copy()
+                    out.rename(columns={
+                        "platform": "Platform",
+                        "allocation": "Suggested Spend",
+                        "predicted_leads": "Predicted Leads",
+                        "cpl_platform": "Platform CPL"
+                    }, inplace=True)
+                
+                    out["Suggested Spend"] = out["Suggested Spend"].apply(lambda x: f"${x:,.2f}")
+                    out["Platform CPL"] = out["Platform CPL"].apply(
+                        lambda x: f"${x:,.2f}" if pd.notna(x) and x > 0 else "—"
+                    )
+                    out["Predicted Leads"] = out["Predicted Leads"].apply(lambda x: f"{x:,.1f}")
+                
+                    total_alloc = float(eff["allocation"].sum())
+                    total_pred = float(eff["predicted_leads"].sum())
+                    total_cpl_val = (total_alloc / total_pred) if total_pred > 0 else None
+                    total_cpl_str = (f"${total_cpl_val:,.2f}" if total_cpl_val is not None else "—")
+                
+                    total_row = pd.DataFrame([{
+                        "Platform": "TOTAL",
+                        "Suggested Spend": f"${total_alloc:,.2f}",
+                        "Predicted Leads": f"{total_pred:,.1f}",
+                        "Platform CPL": total_cpl_str
+                    }])
+                
+                    out = pd.concat([out, total_row], ignore_index=True)
+                    display_table_with_total(out, "Platform", "TOTAL")
+                
+                    # Prepare CSV export
+                    out_raw = eff[["platform", "allocation", "predicted_leads", "cpl_platform"]].copy()
+                    out_raw.rename(columns={
+                        "platform": "Platform",
+                        "allocation": "Suggested_Spend",
+                        "predicted_leads": "Predicted_Leads",
+                        "cpl_platform": "Platform_CPL"
+                    }, inplace=True)
+                    csv_bytes = out_raw.to_csv(index=False).encode("utf-8")
         
-        html_report = build_html_report(selected_sheets, charts=html_charts)
-        
-        st.download_button(
-            "⬇️ Download Complete HTML Report (Generated "+datetime.now().strftime('%I:%M %p')+")", 
-            html_report.encode('utf-8'),
-            "combined_lead_report.html",
-            "text/html", 
-            use_container_width=True
-        )
-    
-        style_flag = "formatted" if st.session_state.get("sb_csv_style") == "With $ and % symbols" else "raw"
-        csv_platform = df_to_csv_bytes(results["platform_overview"], style=style_flag)
-        csv_ag = df_to_csv_bytes(results["agency_overview"], style=style_flag)
-        csv_bpp = df_to_csv_bytes(results["by_product_platform"], style=style_flag)
-        csv_prod = df_to_csv_bytes(results["by_product_total"], style=style_flag)
-        csv_src = df_to_csv_bytes(results["by_source"], style=style_flag)
-        
-        # Generate HTML versions
-        html_platform = dataframe_to_html(results["platform_overview"], "Platform Overview")
-        html_ag = dataframe_to_html(results["agency_overview"], "Agency Overview")
-        html_bpp = dataframe_to_html(results["by_product_platform"], "Product × Platform")
-        html_prod = dataframe_to_html(results["by_product_total"], "Product Overview")
-        html_src = dataframe_to_html(results["by_source"], "By Source")
-    
-        st.markdown("### Download Individual Reports")
-        
-        # Create tabs for CSV and HTML
-        tab1, tab2 = st.tabs(["📄 CSV Format", "🌐 HTML Format"])
-        
-        with tab1:
-            st.markdown("**CSV Downloads**")
-            c1, c2 = st.columns(2)
-            with c1:
-                st.download_button(
-                    "⬇️ Platform (CSV)", 
-                    data=csv_platform, 
-                    file_name="combined_platform.csv",
-                    mime="text/csv", 
-                    use_container_width=True
-                )
-                st.download_button(
-                    "⬇️ Agency (CSV)", 
-                    data=csv_ag, 
-                    file_name="combined_agency.csv",
-                    mime="text/csv", 
-                    use_container_width=True
-                )
-            with c2:
-                st.download_button(
-                    "⬇️ Product × Platform (CSV)", 
-                    data=csv_bpp, 
-                    file_name="combined_product_x_platform.csv",
-                    mime="text/csv", 
-                    use_container_width=True
-                )
-                st.download_button(
-                    "⬇️ Product (CSV)", 
-                    data=csv_prod, 
-                    file_name="combined_product.csv",
-                    mime="text/csv", 
-                    use_container_width=True
-                )
-                st.download_button(
-                    "⬇️ By Source (CSV)", 
-                    data=csv_src, 
-                    file_name="combined_source.csv",
-                    mime="text/csv", 
-                    use_container_width=True
-                )
-        
-        with tab2:
-            st.markdown("**HTML Downloads** (Open in browser, print-ready)")
-            c1, c2 = st.columns(2)
-            with c1:
-                st.download_button(
-                    "⬇️ Platform (HTML)", 
-                    data=html_platform, 
-                    file_name="platform_overview.html",
-                    mime="text/html", 
-                    use_container_width=True
-                )
-                st.download_button(
-                    "⬇️ Agency (HTML)", 
-                    data=html_ag, 
-                    file_name="agency_overview.html",
-                    mime="text/html", 
-                    use_container_width=True
-                )
-            with c2:
-                st.download_button(
-                    "⬇️ Product × Platform (HTML)", 
-                    data=html_bpp, 
-                    file_name="product_x_platform.html",
-                    mime="text/html", 
-                    use_container_width=True
-                )
-                st.download_button(
-                    "⬇️ Product (HTML)", 
-                    data=html_prod, 
-                    file_name="product_overview.html",
-                    mime="text/html", 
-                    use_container_width=True
-                )
-                st.download_button(
-                    "⬇️ By Source (HTML)", 
-                    data=html_src, 
-                    file_name="by_source.html",
-                    mime="text/html", 
-                    use_container_width=True
-                )
-    
-
-def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_account='All Accounts', filter_to_stats_account=False, shared_budget_df=None):
-    """
-    Process and analyze a single ads platform (Google or Microsoft).
-    Shows budget reports, URL reports, campaign matching, and bid recommendations.
-    
-    Args:
-        platform_name: Name of the platform (e.g., "Google Ads", "Microsoft Ads")
-        ads_df: DataFrame with ad group data for this platform
-        custom_thresholds: Dictionary of bid recommendation thresholds
-        selected_account: Pre-selected account from shared filter (default: 'All Accounts')
-        filter_to_stats_account: Whether to filter to stats account only (default: False)
-        shared_budget_df: Pre-loaded budget DataFrame (optional, if already loaded before combining platforms)
-    """
-    
-    st.markdown(f"**Platform:** {platform_name} • **Ad Groups:** {len(ads_df):,}")
-    
-    # Budget Report - use shared budget if provided, otherwise allow upload
-    budget_df = None
-    
-    if shared_budget_df is not None:
-        # Budget was already loaded before combining platforms
-        budget_df = shared_budget_df
-        st.markdown("---")
-        st.success(f"✅ Using budget data loaded above ({len(budget_df)} accounts)")
-    else:
-        # Budget Report Upload (Optional) - in an expander for visibility
-        st.markdown("---")
-        with st.expander("💰 **Budget Report (Optional)** - Click to upload", expanded=True):
-            st.markdown("""
-            Upload your budget report to automatically filter recommendations by spending status.
-            
-            **Benefits:**
-            - ✅ Only shows "Increase Bids" for accounts that are **Underspending**
-            - ⚠️ Prioritizes "Decrease Bids" for accounts that are **Overspending**
-            - 📊 Adds Budget Status column to all recommendations
-            
-            **Required columns:** Agent (or Name), Status (Underspending/Overspending/etc)
-            """)
-            
-            budget_file = st.file_uploader(
-                "Upload Budget Report (CSV or Excel)",
-                type=['csv', 'xlsx', 'xls'],
-                key=f'budget_upload_{platform_name}',
-                help="Budget report with Agent names and Budget Status"
+            # Download button outside the else block
+            st.download_button(
+                "⬇️ Download Suggested Allocation (CSV)", 
+                data=csv_bytes, 
+                file_name="demo_budget_optimizer.csv", 
+                mime="text/csv", 
+                use_container_width=True
             )
     
-        if budget_file is not None:
-            try:
-                # Check file extension
-                filename = budget_file.name.lower()
+
+        # ---- Export Tab ----
+        with tab_export:
+            # ---------- Exports (short sheet names <=31 chars) ----------
+            excel_bytes = build_excel({
+                "Platform": results["platform_overview"],
+                "Agency": results["agency_overview"],
+                "Prod x Plat": results["by_product_platform"],
+                "Product": results["by_product_total"],
+                "By Source": results["by_source"],
+            })
+    
+            # ========== EXPORT SELECTION ==========
+            st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
+            st.markdown("---")
+            st.markdown("### 📦 Export Options")
+        
+            with st.expander("⚙️ Customize Your Export", expanded=False):
+                st.markdown("**Select which tables and charts to include in exports:**")
+            
+                col1, col2 = st.columns(2)
+            
+                with col1:
+                    st.markdown("**📊 Tables:**")
+                    export_platform = st.checkbox("Platform Overview", value=True, key="export_platform")
+                    export_agency = st.checkbox("Agency Overview", value=True, key="export_agency")
+                    export_product_total = st.checkbox("Product (Total)", value=True, key="export_product_total")
+                    export_product_platform = st.checkbox("Product × Platform", value=True, key="export_product_platform")
+                    export_source = st.checkbox("By Source", value=True, key="export_source")
+            
+                with col2:
+                    st.markdown("**📈 Charts (HTML only):**")
+                    export_chart_platform = st.checkbox("Platform Performance Chart", value=True, key="export_chart_platform")
+                    export_chart_product = st.checkbox("Product Distribution Chart", value=True, key="export_chart_product")
+                    export_chart_agency = st.checkbox("Agency Comparison Chart", value=True, key="export_chart_agency")
                 
-                if filename.endswith('.xlsx') or filename.endswith('.xls'):
-                    # Excel format
-                    budget_df_raw = pd.read_excel(budget_file)
-                    has_headers = True
-                else:
-                    # CSV format - check for headers
-                    # Read first line to check if it's a header or data
-                    budget_file.seek(0)
-                    first_line = budget_file.readline().decode('utf-8').strip()
-                    first_values = first_line.split(',')
+                    st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
+                    if st.button("✅ Select All", use_container_width=True):
+                        st.session_state.export_platform = True
+                        st.session_state.export_agency = True
+                        st.session_state.export_product_total = True
+                        st.session_state.export_product_platform = True
+                        st.session_state.export_source = True
+                        st.session_state.export_chart_platform = True
+                        st.session_state.export_chart_product = True
+                        st.session_state.export_chart_agency = True
+                        st.rerun()
+                
+                    if st.button("❌ Deselect All", use_container_width=True):
+                        st.session_state.export_platform = False
+                        st.session_state.export_agency = False
+                        st.session_state.export_product_total = False
+                        st.session_state.export_product_platform = False
+                        st.session_state.export_source = False
+                        st.session_state.export_chart_platform = False
+                        st.session_state.export_chart_product = False
+                        st.session_state.export_chart_agency = False
+                        st.rerun()
+        
+            # Build filtered exports based on selections
+            selected_sheets = {}
+            if export_platform:
+                selected_sheets["Platform Overview"] = results["platform_overview"]
+            if export_agency:
+                selected_sheets["Agency Overview"] = results["agency_overview"]
+            if export_product_total:
+                selected_sheets["By Product (Total)"] = results["by_product_total"]
+            if export_product_platform:
+                selected_sheets["By Product × Platform"] = results["by_product_platform"]
+            if export_source:
+                selected_sheets["By Source"] = results["by_source"]
+            lpu_export = results.get("platform_lp_utm")
+            if lpu_export is not None and not lpu_export.empty:
+                selected_sheets["Platform x LP x UTM"] = lpu_export
+
+            # Build Excel with selected sheets
+            if selected_sheets:
+                excel_bytes_filtered = build_excel(selected_sheets)
+            else:
+                excel_bytes_filtered = excel_bytes  # Fallback to all
+        
+            st.download_button(
+                "⬇️ Download Combined Excel Report (Generated "+datetime.now().strftime('%I:%M %p')+")", 
+                excel_bytes_filtered, 
+                "combined_lead_report_demo.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
+                use_container_width=True
+            )
+        
+            # Build HTML report with tables AND charts
+            html_charts = {}
+        
+            if PLOTLY_AVAILABLE:
+                # 1. Platform Overview Chart
+                if export_chart_platform:
+                    plat_data = results["platform_overview"][results["platform_overview"]["platform"] != "TOTAL"].copy()
+                    if not plat_data.empty and "leads" in plat_data.columns:
+                        plat_data["leads"] = pd.to_numeric(plat_data["leads"], errors="coerce").fillna(0)
+                        if plat_data["leads"].sum() > 0:
+                            fig_platform = px.bar(
+                                plat_data,
+                                x="platform",
+                                y="leads",
+                                title="Leads by Platform",
+                                labels={"platform": "Platform", "leads": "Total Leads"},
+                                color="leads",
+                                color_continuous_scale=["#eef7ef", "#47B74F"]
+                            )
+                            fig_platform.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
+                            fig_platform.update_layout(
+                                showlegend=False,
+                                height=400,
+                                margin=dict(l=20, r=20, t=60, b=20)
+                            )
+                            html_charts["Platform Performance"] = fig_platform
+            
+                # 2. Product Distribution Pie Chart
+                if export_chart_product:
+                    prod_data = results["by_product_total"].copy()
+                    if "device" in prod_data.columns:
+                        prod_data = prod_data.groupby("product", as_index=False)["leads"].sum()
+                
+                    prod_data = prod_data[prod_data["product"] != "TOTAL"].copy()
+                    if not prod_data.empty and "leads" in prod_data.columns:
+                        prod_data["leads"] = pd.to_numeric(prod_data["leads"], errors="coerce").fillna(0)
+                        prod_data = prod_data[prod_data["leads"] > 0]
                     
-                    # Check if first line looks like headers (contains text like "Agent", "Status")
-                    # vs data (contains values like "Underspending", "Overspending", agent names)
-                    first_line_lower = first_line.lower()
-                    has_header_keywords = any(word in first_line_lower for word in ['agent', 'status', 'budget id', 'description', 'platform'])
-                    has_data_keywords = any(word in first_line_lower for word in ['underspending', 'overspending', 'optimization', 'no conversions'])
+                        if not prod_data.empty:
+                            fig_product = px.pie(
+                                prod_data,
+                                values="leads",
+                                names="product",
+                                title="Lead Distribution by Product",
+                                color_discrete_sequence=MELON_COLORS['primary']
+                            )
+                            fig_product.update_traces(
+                                textposition='inside',
+                                textinfo='percent+label'
+                            )
+                            fig_product.update_layout(
+                                height=500,
+                                margin=dict(l=20, r=20, t=60, b=20)
+                            )
+                            html_charts["Product Distribution"] = fig_product
+            
+                # 3. Agency Comparison (if both exist)
+                if export_chart_agency:
+                    agency_data = results["agency_overview"][results["agency_overview"]["agency"] != "TOTAL"].copy()
+                    if len(agency_data) >= 2 and "leads" in agency_data.columns:
+                        if "device" in agency_data.columns:
+                            agency_data = agency_data.groupby("agency", as_index=False)["leads"].sum()
                     
-                    # Reset to beginning
-                    budget_file.seek(0)
+                        agency_data["leads"] = pd.to_numeric(agency_data["leads"], errors="coerce").fillna(0)
                     
-                    if has_header_keywords and not has_data_keywords:
-                        # Has headers - read normally
-                        budget_df_raw = pd.read_csv(budget_file)
+                        if agency_data["leads"].sum() > 0:
+                            fig_agency = px.bar(
+                                agency_data,
+                                x="agency",
+                                y="leads",
+                                title="Leads by Agency",
+                                labels={"agency": "Agency", "leads": "Total Leads"},
+                                color="agency",
+                                color_discrete_map={"Legacy": "#114e38", "MOA": "#47B74F"}
+                            )
+                            fig_agency.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
+                            fig_agency.update_layout(
+                                showlegend=False,
+                                height=400,
+                                margin=dict(l=20, r=20, t=60, b=20)
+                            )
+                            html_charts["Agency Comparison"] = fig_agency
+        
+            html_report = build_html_report(selected_sheets, charts=html_charts)
+        
+            st.download_button(
+                "⬇️ Download Complete HTML Report (Generated "+datetime.now().strftime('%I:%M %p')+")", 
+                html_report.encode('utf-8'),
+                "combined_lead_report.html",
+                "text/html", 
+                use_container_width=True
+            )
+    
+            style_flag = "formatted" if st.session_state.get("sb_csv_style") == "With $ and % symbols" else "raw"
+            csv_platform = df_to_csv_bytes(results["platform_overview"], style=style_flag)
+            csv_ag = df_to_csv_bytes(results["agency_overview"], style=style_flag)
+            csv_bpp = df_to_csv_bytes(results["by_product_platform"], style=style_flag)
+            csv_prod = df_to_csv_bytes(results["by_product_total"], style=style_flag)
+            csv_src = df_to_csv_bytes(results["by_source"], style=style_flag)
+        
+            # Generate HTML versions
+            html_platform = dataframe_to_html(results["platform_overview"], "Platform Overview")
+            html_ag = dataframe_to_html(results["agency_overview"], "Agency Overview")
+            html_bpp = dataframe_to_html(results["by_product_platform"], "Product × Platform")
+            html_prod = dataframe_to_html(results["by_product_total"], "Product Overview")
+            html_src = dataframe_to_html(results["by_source"], "By Source")
+    
+            st.markdown("### Download Individual Reports")
+        
+            # Create tabs for CSV and HTML
+            tab1, tab2 = st.tabs(["📄 CSV Format", "🌐 HTML Format"])
+        
+            with tab1:
+                st.markdown("**CSV Downloads**")
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.download_button(
+                        "⬇️ Platform (CSV)", 
+                        data=csv_platform, 
+                        file_name="combined_platform.csv",
+                        mime="text/csv", 
+                        use_container_width=True
+                    )
+                    st.download_button(
+                        "⬇️ Agency (CSV)", 
+                        data=csv_ag, 
+                        file_name="combined_agency.csv",
+                        mime="text/csv", 
+                        use_container_width=True
+                    )
+                with c2:
+                    st.download_button(
+                        "⬇️ Product × Platform (CSV)", 
+                        data=csv_bpp, 
+                        file_name="combined_product_x_platform.csv",
+                        mime="text/csv", 
+                        use_container_width=True
+                    )
+                    st.download_button(
+                        "⬇️ Product (CSV)", 
+                        data=csv_prod, 
+                        file_name="combined_product.csv",
+                        mime="text/csv", 
+                        use_container_width=True
+                    )
+                    st.download_button(
+                        "⬇️ By Source (CSV)", 
+                        data=csv_src, 
+                        file_name="combined_source.csv",
+                        mime="text/csv", 
+                        use_container_width=True
+                    )
+        
+            with tab2:
+                st.markdown("**HTML Downloads** (Open in browser, print-ready)")
+                c1, c2 = st.columns(2)
+                with c1:
+                    st.download_button(
+                        "⬇️ Platform (HTML)", 
+                        data=html_platform, 
+                        file_name="platform_overview.html",
+                        mime="text/html", 
+                        use_container_width=True
+                    )
+                    st.download_button(
+                        "⬇️ Agency (HTML)", 
+                        data=html_ag, 
+                        file_name="agency_overview.html",
+                        mime="text/html", 
+                        use_container_width=True
+                    )
+                with c2:
+                    st.download_button(
+                        "⬇️ Product × Platform (HTML)", 
+                        data=html_bpp, 
+                        file_name="product_x_platform.html",
+                        mime="text/html", 
+                        use_container_width=True
+                    )
+                    st.download_button(
+                        "⬇️ Product (HTML)", 
+                        data=html_prod, 
+                        file_name="product_overview.html",
+                        mime="text/html", 
+                        use_container_width=True
+                    )
+                    st.download_button(
+                        "⬇️ By Source (HTML)", 
+                        data=html_src, 
+                        file_name="by_source.html",
+                        mime="text/html", 
+                        use_container_width=True
+                    )
+    
+
+    def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_account='All Accounts', filter_to_stats_account=False, shared_budget_df=None, show_debug=False):
+        """
+        Process and analyze a single ads platform (Google or Microsoft).
+        Shows budget reports, URL reports, campaign matching, and bid recommendations.
+    
+        Args:
+            platform_name: Name of the platform (e.g., "Google Ads", "Microsoft Ads")
+            ads_df: DataFrame with ad group data for this platform
+            custom_thresholds: Dictionary of bid recommendation thresholds
+            selected_account: Pre-selected account from shared filter (default: 'All Accounts')
+            filter_to_stats_account: Whether to filter to stats account only (default: False)
+            shared_budget_df: Pre-loaded budget DataFrame (optional, if already loaded before combining platforms)
+        """
+    
+        st.markdown(f"**Platform:** {platform_name} • **Ad Groups:** {len(ads_df):,}")
+    
+        # Budget Report - use shared budget if provided, otherwise allow upload
+        budget_df = None
+    
+        if shared_budget_df is not None:
+            # Budget was already loaded before combining platforms
+            budget_df = shared_budget_df
+            st.markdown("---")
+            st.success(f"✅ Using budget data loaded above ({len(budget_df)} accounts)")
+        else:
+            # Budget Report Upload (Optional) - in an expander for visibility
+            st.markdown("---")
+            with st.expander("💰 **Budget Report (Optional)** - Click to upload", expanded=True):
+                st.markdown("""
+                Upload your budget report to automatically filter recommendations by spending status.
+            
+                **Benefits:**
+                - ✅ Only shows "Increase Bids" for accounts that are **Underspending**
+                - ⚠️ Prioritizes "Decrease Bids" for accounts that are **Overspending**
+                - 📊 Adds Budget Status column to all recommendations
+            
+                **Required columns:** Agent (or Name), Status (Underspending/Overspending/etc)
+                """)
+            
+                budget_file = st.file_uploader(
+                    "Upload Budget Report (CSV or Excel)",
+                    type=['csv', 'xlsx', 'xls'],
+                    key=f'budget_upload_{platform_name}',
+                    help="Budget report with Agent names and Budget Status"
+                )
+    
+            if budget_file is not None:
+                try:
+                    # Check file extension
+                    filename = budget_file.name.lower()
+                
+                    if filename.endswith('.xlsx') or filename.endswith('.xls'):
+                        # Excel format
+                        budget_df_raw = pd.read_excel(budget_file)
                         has_headers = True
                     else:
-                        # No headers or first row is data - specify column names
-                        budget_df_raw = pd.read_csv(
-                            budget_file,
-                            header=None,
-                            names=['Budget Id', 'Agent', 'Status', 'Description', 'Platform', 
-                                   'Monthly Cap', 'Daily Cap', 'Spend']
-                        )
-                        has_headers = False
-                        st.warning("⚠️ No headers detected. Assuming columns: [Budget Id, Agent, Status, Description, Platform, Monthly Cap, Daily Cap, Spend]")
+                        # CSV format - check for headers
+                        # Read first line to check if it's a header or data
+                        budget_file.seek(0)
+                        first_line = budget_file.readline().decode('utf-8').strip()
+                        first_values = first_line.split(',')
+                    
+                        # Check if first line looks like headers (contains text like "Agent", "Status")
+                        # vs data (contains values like "Underspending", "Overspending", agent names)
+                        first_line_lower = first_line.lower()
+                        has_header_keywords = any(word in first_line_lower for word in ['agent', 'status', 'budget id', 'description', 'platform'])
+                        has_data_keywords = any(word in first_line_lower for word in ['underspending', 'overspending', 'optimization', 'no conversions'])
+                    
+                        # Reset to beginning
+                        budget_file.seek(0)
+                    
+                        if has_header_keywords and not has_data_keywords:
+                            # Has headers - read normally
+                            budget_df_raw = pd.read_csv(budget_file)
+                            has_headers = True
+                        else:
+                            # No headers or first row is data - specify column names
+                            budget_df_raw = pd.read_csv(
+                                budget_file,
+                                header=None,
+                                names=['Budget Id', 'Agent', 'Status', 'Description', 'Platform', 
+                                       'Monthly Cap', 'Daily Cap', 'Spend']
+                            )
+                            has_headers = False
+                            st.warning("⚠️ No headers detected. Assuming columns: [Budget Id, Agent, Status, Description, Platform, Monthly Cap, Daily Cap, Spend]")
                 
-                    # Auto-detect Agent and Status columns (case-insensitive)
-                agent_col = None
-                status_col = None
+                        # Auto-detect Agent and Status columns (case-insensitive)
+                    agent_col = None
+                    status_col = None
                 
-                if has_headers:
-                    # Try to find columns by name
-                    for col in budget_df_raw.columns:
-                        col_lower = str(col).lower().strip()
-                        if agent_col is None and ('agent' in col_lower and 'status' not in col_lower or col_lower == 'name'):
-                            agent_col = col
-                        # Prioritize "Spend Status" over other status columns
-                        if status_col is None and 'spend' in col_lower and 'status' in col_lower:
-                            status_col = col
-                        elif status_col is None and ('status' in col_lower or col_lower == 'state'):
-                            status_col = col
-                else:
-                    # Use default column names
-                    agent_col = 'Agent'
-                    status_col = 'Status'
-                
-                if agent_col and status_col and agent_col in budget_df_raw.columns and status_col in budget_df_raw.columns:
-                    # Clean the data
-                    budget_df = budget_df_raw[[agent_col, status_col]].copy()
-                    budget_df.columns = ['Agent', 'Status']
-                    
-                    # Remove any rows with NaN in Agent or Status
-                    budget_df = budget_df.dropna(subset=['Agent', 'Status'])
-                    
-                    # Clean agent names and status values
-                    budget_df['Agent'] = budget_df['Agent'].astype(str).str.strip()
-                    budget_df['Status'] = budget_df['Status'].astype(str).str.strip()
-                    
-                    # Remove rows where Agent or Status are empty strings
-                    budget_df = budget_df[
-                        (budget_df['Agent'] != '') & 
-                        (budget_df['Agent'] != 'nan') &
-                        (budget_df['Status'] != '') & 
-                        (budget_df['Status'] != 'nan')
-                    ]
-                    
-                    if len(budget_df) > 0:
-                        st.success(f"✅ Loaded budget data for {len(budget_df)} account(s)")
-                        
-                        if has_headers and (agent_col != 'Agent' or status_col != 'Status'):
-                            st.info(f"📋 Detected columns: '{agent_col}' → Agent, '{status_col}' → Status")
-                        
-                        # Show budget status summary
-                        status_counts = budget_df['Status'].value_counts()
-                        cols = st.columns(min(len(status_counts), 5))
-                        for idx, (status, count) in enumerate(status_counts.items()):
-                            if idx < 5:
-                                with cols[idx]:
-                                    st.metric(status, count)
+                    if has_headers:
+                        # Try to find columns by name
+                        for col in budget_df_raw.columns:
+                            col_lower = str(col).lower().strip()
+                            if agent_col is None and ('agent' in col_lower and 'status' not in col_lower or col_lower == 'name'):
+                                agent_col = col
+                            # Prioritize "Spend Status" over other status columns
+                            if status_col is None and 'spend' in col_lower and 'status' in col_lower:
+                                status_col = col
+                            elif status_col is None and ('status' in col_lower or col_lower == 'state'):
+                                status_col = col
                     else:
-                        st.error("❌ No valid budget data found after cleaning")
-                        budget_df = None
-                else:
-                    st.error("❌ Could not find 'Agent' and 'Status' columns")
-                    st.info("Available columns: " + ", ".join([str(c) for c in budget_df_raw.columns[:10]]))
-                    budget_df = None
+                        # Use default column names
+                        agent_col = 'Agent'
+                        status_col = 'Status'
+                
+                    if agent_col and status_col and agent_col in budget_df_raw.columns and status_col in budget_df_raw.columns:
+                        # Clean the data
+                        budget_df = budget_df_raw[[agent_col, status_col]].copy()
+                        budget_df.columns = ['Agent', 'Status']
+                    
+                        # Remove any rows with NaN in Agent or Status
+                        budget_df = budget_df.dropna(subset=['Agent', 'Status'])
+                    
+                        # Clean agent names and status values
+                        budget_df['Agent'] = budget_df['Agent'].astype(str).str.strip()
+                        budget_df['Status'] = budget_df['Status'].astype(str).str.strip()
+                    
+                        # Remove rows where Agent or Status are empty strings
+                        budget_df = budget_df[
+                            (budget_df['Agent'] != '') & 
+                            (budget_df['Agent'] != 'nan') &
+                            (budget_df['Status'] != '') & 
+                            (budget_df['Status'] != 'nan')
+                        ]
+                    
+                        if len(budget_df) > 0:
+                            st.success(f"✅ Loaded budget data for {len(budget_df)} account(s)")
                         
-            except Exception as e:
-                st.error(f"Error loading budget report: {str(e)}")
-                import traceback
-                st.code(traceback.format_exc())
-                budget_df = None
+                            if has_headers and (agent_col != 'Agent' or status_col != 'Status'):
+                                st.info(f"📋 Detected columns: '{agent_col}' → Agent, '{status_col}' → Status")
+                        
+                            # Show budget status summary
+                            status_counts = budget_df['Status'].value_counts()
+                            cols = st.columns(min(len(status_counts), 5))
+                            for idx, (status, count) in enumerate(status_counts.items()):
+                                if idx < 5:
+                                    with cols[idx]:
+                                        st.metric(status, count)
+                        else:
+                            st.error("❌ No valid budget data found after cleaning")
+                            budget_df = None
+                    else:
+                        st.error("❌ Could not find 'Agent' and 'Status' columns")
+                        st.info("Available columns: " + ", ".join([str(c) for c in budget_df_raw.columns[:10]]))
+                        budget_df = None
+                        
+                except Exception as e:
+                    st.error(f"Error loading budget report: {str(e)}")
+                    import traceback
+                    st.code(traceback.format_exc())
+                    budget_df = None
     
-    st.markdown("---")
+        st.markdown("---")
     
-    # Match budget status to accounts if budget data provided
-    if budget_df is not None:
-        # Debug: Show what we're working with
-        with st.expander("🔧 Budget Matching Debug", expanded=False):
-            st.caption(f"Budget DF shape: {budget_df.shape}")
-            st.caption(f"Budget DF columns: {budget_df.columns.tolist()}")
-            if len(budget_df) > 0:
-                st.caption(f"Sample row: {budget_df.iloc[0].to_dict()}")
+        # Match budget status to accounts if budget data provided
+        if budget_df is not None:
+            # Debug: Show what we're working with
+            if show_debug:
+              with st.expander("🔧 Budget Matching Debug", expanded=False):
+                st.caption(f"Budget DF shape: {budget_df.shape}")
+                st.caption(f"Budget DF columns: {budget_df.columns.tolist()}")
+                if len(budget_df) > 0:
+                    st.caption(f"Sample row: {budget_df.iloc[0].to_dict()}")
         
-        ads_df = match_budget_to_accounts(ads_df, budget_df)
+            ads_df = match_budget_to_accounts(ads_df, budget_df)
         
-        # Show matching summary (only if Budget Status column was added)
-        if 'Budget Status' in ads_df.columns:
-            matched = ads_df['Budget Status'].notna().sum()
-            total = len(ads_df['Account'].unique())
-            st.info(f"✅ Matched budget status for {matched} of {total} accounts")
-        else:
-            st.warning("⚠️ Budget data loaded but 'Budget Status' column not found")
-    
-    # URL Report Upload (Optional) - for precise campaign ID matching
-    st.markdown("---")
-    with st.expander("🔗 **URL Reports (Optional)** - For more precise campaign matching", expanded=False):
-        st.markdown("""
-        Upload URL reports to match campaigns by ID instead of name. This is more accurate when campaign names vary.
-        
-        **Benefits:**
-        - ✅ More precise campaign matching using Campaign IDs
-        - ✅ Handles campaign name variations automatically
-        - ✅ Supports both Google Ads and Microsoft Advertising
-        - ✅ Matches by Account + Ad group for perfect accuracy
-        
-        **Tip:** If your agent runs ads on both Google and Microsoft, upload both reports for complete coverage.
-        
-        **Required columns:** 
-        - Account name (or Account)
-        - Ad group (or Ad group name)
-        - Campaign ID (e.g., `MLGDA0055-003RE2`, `MLBDSF001-001R`)
-        
-        **Optional:** Ad Group ID for additional precision
-        """)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            google_url_file = st.file_uploader(
-                "📊 Google Ads URL Report",
-                type=['csv', 'xlsx', 'xls'],
-                key=f'google_url_report_{platform_name}',
-                help="Google Ads report with Campaign ID and Ad group columns"
-            )
-        
-        with col2:
-            microsoft_url_file = st.file_uploader(
-                "🔷 Microsoft Ads URL Report",
-                type=['csv', 'xlsx', 'xls'],
-                key=f'microsoft_url_report_{platform_name}',
-                help="Microsoft Advertising report with Campaign ID and Ad group columns"
-            )
-    
-    # Combine URL reports
-    url_report_dfs = []
-    
-    if google_url_file is not None:
-        try:
-            # Check file extension
-            filename = google_url_file.name.lower()
-            
-            if filename.endswith('.xlsx') or filename.endswith('.xls'):
-                # Excel format
-                google_df = pd.read_excel(google_url_file, skiprows=2)
-                url_report_dfs.append(google_df)
-                st.success(f"✅ Loaded Google URL report: {len(google_df):,} rows")
+            # Show matching summary (only if Budget Status column was added)
+            if 'Budget Status' in ads_df.columns:
+                matched = ads_df['Budget Status'].notna().sum()
+                total = len(ads_df['Account'].unique())
+                st.info(f"✅ Matched budget status for {matched} of {total} accounts")
             else:
-                # CSV format - try UTF-16 first (common Google Ads export format)
-                try:
-                    google_df = pd.read_csv(google_url_file, encoding='utf-16', sep='\t', skiprows=2)
+                st.warning("⚠️ Budget data loaded but 'Budget Status' column not found")
+    
+        # URL Report Upload (Optional) - for precise campaign ID matching
+        st.markdown("---")
+        with st.expander("🔗 **URL Reports (Optional)** - For more precise campaign matching", expanded=False):
+            st.markdown("""
+            Upload URL reports to match campaigns by ID instead of name. This is more accurate when campaign names vary.
+        
+            **Benefits:**
+            - ✅ More precise campaign matching using Campaign IDs
+            - ✅ Handles campaign name variations automatically
+            - ✅ Supports both Google Ads and Microsoft Advertising
+            - ✅ Matches by Account + Ad group for perfect accuracy
+        
+            **Tip:** If your agent runs ads on both Google and Microsoft, upload both reports for complete coverage.
+        
+            **Required columns:** 
+            - Account name (or Account)
+            - Ad group (or Ad group name)
+            - Campaign ID (e.g., `MLGDA0055-003RE2`, `MLBDSF001-001R`)
+        
+            **Optional:** Ad Group ID for additional precision
+            """)
+        
+            col1, col2 = st.columns(2)
+        
+            with col1:
+                google_url_file = st.file_uploader(
+                    "📊 Google Ads URL Report",
+                    type=['csv', 'xlsx', 'xls'],
+                    key=f'google_url_report_{platform_name}',
+                    help="Google Ads report with Campaign ID and Ad group columns"
+                )
+        
+            with col2:
+                microsoft_url_file = st.file_uploader(
+                    "🔷 Microsoft Ads URL Report",
+                    type=['csv', 'xlsx', 'xls'],
+                    key=f'microsoft_url_report_{platform_name}',
+                    help="Microsoft Advertising report with Campaign ID and Ad group columns"
+                )
+    
+        # Combine URL reports
+        url_report_dfs = []
+    
+        if google_url_file is not None:
+            try:
+                # Check file extension
+                filename = google_url_file.name.lower()
+            
+                if filename.endswith('.xlsx') or filename.endswith('.xls'):
+                    # Excel format
+                    google_df = pd.read_excel(google_url_file, skiprows=2)
                     url_report_dfs.append(google_df)
                     st.success(f"✅ Loaded Google URL report: {len(google_df):,} rows")
-                except Exception:
-                    google_url_file.seek(0)
+                else:
+                    # CSV format - try UTF-16 first (common Google Ads export format)
                     try:
-                        google_df = pd.read_csv(google_url_file, encoding='utf-8')
+                        google_df = pd.read_csv(google_url_file, encoding='utf-16', sep='\t', skiprows=2)
                         url_report_dfs.append(google_df)
                         st.success(f"✅ Loaded Google URL report: {len(google_df):,} rows")
-                    except Exception as e:
-                        st.error(f"❌ Error loading Google URL report: {str(e)}")
-        except Exception as e:
-            st.error(f"❌ Error loading Google URL report: {str(e)}")
+                    except Exception:
+                        google_url_file.seek(0)
+                        try:
+                            google_df = pd.read_csv(google_url_file, encoding='utf-8')
+                            url_report_dfs.append(google_df)
+                            st.success(f"✅ Loaded Google URL report: {len(google_df):,} rows")
+                        except Exception as e:
+                            st.error(f"❌ Error loading Google URL report: {str(e)}")
+            except Exception as e:
+                st.error(f"❌ Error loading Google URL report: {str(e)}")
     
-    if microsoft_url_file is not None:
-        try:
-            # Microsoft exports as Excel with header rows
-            if microsoft_url_file.name.endswith('.xlsx') or microsoft_url_file.name.endswith('.xls'):
-                ms_df = pd.read_excel(microsoft_url_file, skiprows=5)
-                # Set first row as header
-                ms_df.columns = ms_df.iloc[0]
-                ms_df = ms_df[1:].reset_index(drop=True)
-            else:
-                # CSV format
-                ms_df = pd.read_csv(microsoft_url_file, encoding='utf-16', sep='\t', skiprows=5)
-                ms_df.columns = ms_df.iloc[0]
-                ms_df = ms_df[1:].reset_index(drop=True)
+        if microsoft_url_file is not None:
+            try:
+                # Microsoft exports as Excel with header rows
+                if microsoft_url_file.name.endswith('.xlsx') or microsoft_url_file.name.endswith('.xls'):
+                    ms_df = pd.read_excel(microsoft_url_file, skiprows=5)
+                    # Set first row as header
+                    ms_df.columns = ms_df.iloc[0]
+                    ms_df = ms_df[1:].reset_index(drop=True)
+                else:
+                    # CSV format
+                    ms_df = pd.read_csv(microsoft_url_file, encoding='utf-16', sep='\t', skiprows=5)
+                    ms_df.columns = ms_df.iloc[0]
+                    ms_df = ms_df[1:].reset_index(drop=True)
             
-            # Microsoft column names: 'Campaign name', 'Ad group' (not 'Ad group name')
-            # Standardize to match Google format
-            rename_map = {}
-            if 'Campaign name' in ms_df.columns:
-                rename_map['Campaign name'] = 'Campaign'
-            # Note: Microsoft uses 'Ad group', Google uses 'Ad group' - no rename needed
+                # Microsoft column names: 'Campaign name', 'Ad group' (not 'Ad group name')
+                # Standardize to match Google format
+                rename_map = {}
+                if 'Campaign name' in ms_df.columns:
+                    rename_map['Campaign name'] = 'Campaign'
+                # Note: Microsoft uses 'Ad group', Google uses 'Ad group' - no rename needed
             
-            if rename_map:
-                ms_df = ms_df.rename(columns=rename_map)
+                if rename_map:
+                    ms_df = ms_df.rename(columns=rename_map)
             
-            # Clean Campaign ID and Ad Group ID - remove brackets
-            if 'Campaign ID' in ms_df.columns:
-                ms_df['Campaign ID'] = ms_df['Campaign ID'].astype(str).str.replace('[', '').str.replace(']', '').str.strip()
-            if 'Ad group ID' in ms_df.columns:
-                ms_df['Ad group ID'] = ms_df['Ad group ID'].astype(str).str.replace('[', '').str.replace(']', '').str.strip()
+                # Clean Campaign ID and Ad Group ID - remove brackets
+                if 'Campaign ID' in ms_df.columns:
+                    ms_df['Campaign ID'] = ms_df['Campaign ID'].astype(str).str.replace('[', '').str.replace(']', '').str.strip()
+                if 'Ad group ID' in ms_df.columns:
+                    ms_df['Ad group ID'] = ms_df['Ad group ID'].astype(str).str.replace('[', '').str.replace(']', '').str.strip()
             
-            url_report_dfs.append(ms_df)
-            st.success(f"✅ Loaded Microsoft URL report: {len(ms_df):,} rows")
-        except Exception as e:
-            st.error(f"❌ Error loading Microsoft URL report: {str(e)}")
-            import traceback
-            st.code(traceback.format_exc())
+                url_report_dfs.append(ms_df)
+                st.success(f"✅ Loaded Microsoft URL report: {len(ms_df):,} rows")
+            except Exception as e:
+                st.error(f"❌ Error loading Microsoft URL report: {str(e)}")
+                import traceback
+                st.code(traceback.format_exc())
     
-    # Combine all URL reports into one dataframe
-    url_report_df = None
-    if url_report_dfs:
-        url_report_df = pd.concat(url_report_dfs, ignore_index=True)
-        st.info(f"📊 Combined URL reports: {len(url_report_df):,} total rows from {len(url_report_dfs)} file(s)")
+        # Combine all URL reports into one dataframe
+        url_report_df = None
+        if url_report_dfs:
+            url_report_df = pd.concat(url_report_dfs, ignore_index=True)
+            st.info(f"📊 Combined URL reports: {len(url_report_df):,} total rows from {len(url_report_dfs)} file(s)")
     
-    # Enrich with campaign conversion data from Tab 1 (if available)
-    if 'campaign_stats' in st.session_state:
-        # Debug: Show campaign_stats structure
-        with st.expander("🔍 Campaign Stats Debug (Office Matching)"):
-            st.write("**Campaign Stats Shape:**", st.session_state.campaign_stats.shape)
-            st.write("**Campaign Stats Columns:**", st.session_state.campaign_stats.columns.tolist())
+        # Enrich with campaign conversion data from Tab 1 (if available)
+        if 'campaign_stats' in st.session_state:
+            # Debug: Show campaign_stats structure
+            if show_debug:
+              with st.expander("🔍 Campaign Stats Debug (Office Matching)"):
+                st.write("**Campaign Stats Shape:**", st.session_state.campaign_stats.shape)
+                st.write("**Campaign Stats Columns:**", st.session_state.campaign_stats.columns.tolist())
             
-            if 'Office' in st.session_state.campaign_stats.columns:
-                st.write("**Office Distribution:**", st.session_state.campaign_stats['Office'].value_counts().to_dict())
-                st.write("**Sample Campaign Stats (first 10):**")
-                st.dataframe(st.session_state.campaign_stats[['Campaign', 'Office', 'Total Conversions']].head(10))
-            else:
-                st.warning("⚠️ No 'Office' column found in campaign_stats - office matching will not work!")
-                st.write("**Sample Campaign Stats (first 10):**")
-                st.dataframe(st.session_state.campaign_stats.head(10))
-        
-        ads_df = enrich_ads_with_campaign_stats(ads_df, st.session_state.campaign_stats, url_report_df)
-        
-        # Enrich with Product and UTM from mapping file if available
-        if 'campaign_mapping' in st.session_state and st.session_state.campaign_mapping is not None:
-            mapping_df = st.session_state.campaign_mapping
-            
-            # Merge on Campaign + Ad group
-            ads_df = ads_df.merge(
-                mapping_df[['Campaign', 'Ad group', 'Product', 'UTM']],
-                on=['Campaign', 'Ad group'],
-                how='left',
-                suffixes=('', '_map')
-            )
-            
-            # Show enrichment summary
-            enriched_count = ads_df['Product'].notna().sum() if 'Product' in ads_df.columns else 0
-            st.info(f"📊 Enriched {enriched_count}/{len(ads_df)} ad groups with Product/UTM data from mapping")
-        
-        # Show matching summary only if the column was added
-        if 'Campaign Conversions' in ads_df.columns:
-            matched_campaigns = ads_df['Campaign Conversions'].notna().sum()
-            total_ad_groups = len(ads_df)
-            
-            # Debug: Show matching details by office
-            with st.expander("🔍 Office Matching Results"):
                 if 'Office' in st.session_state.campaign_stats.columns:
-                    st.write("**Matching by Office:**")
-                    
-                    # Sample matched campaigns
-                    matched_df = ads_df[ads_df['Campaign Conversions'].notna()][['Campaign', 'Campaign Conversions']].head(10)
-                    if len(matched_df) > 0:
-                        st.write(f"**Matched Campaigns (showing {len(matched_df)} of {matched_campaigns}):**")
-                        st.dataframe(matched_df)
-                    
-                    # Sample unmatched campaigns
-                    unmatched_df = ads_df[ads_df['Campaign Conversions'].isna()][['Campaign']].head(10)
-                    if len(unmatched_df) > 0:
-                        st.write(f"**Unmatched Campaigns (showing {len(unmatched_df)} of {total_ad_groups - matched_campaigns}):**")
-                        for idx, row in unmatched_df.iterrows():
-                            campaign = row['Campaign']
-                            # Detect what office this campaign would be assigned
-                            if 'MOA' in str(campaign).upper():
-                                detected_office = 'MOA'
-                            else:
-                                detected_office = 'Legacy'
-                            st.write(f"  - `{campaign}` → Detected office: **{detected_office}**")
+                    st.write("**Office Distribution:**", st.session_state.campaign_stats['Office'].value_counts().to_dict())
+                    st.write("**Sample Campaign Stats (first 10):**")
+                    st.dataframe(st.session_state.campaign_stats[['Campaign', 'Office', 'Total Conversions']].head(10))
                 else:
-                    st.write("No office-based matching (Office column missing)")
+                    st.warning("⚠️ No 'Office' column found in campaign_stats - office matching will not work!")
+                    st.write("**Sample Campaign Stats (first 10):**")
+                    st.dataframe(st.session_state.campaign_stats.head(10))
+        
+            ads_df = enrich_ads_with_campaign_stats(ads_df, st.session_state.campaign_stats, url_report_df)
+        
+            # Enrich with Product and UTM from mapping file if available
+            if 'campaign_mapping' in st.session_state and st.session_state.campaign_mapping is not None:
+                mapping_df = st.session_state.campaign_mapping
             
-            if url_report_df is not None:
-                # Check if URL report has Campaign ID column
-                has_campaign_id = any('campaign' in str(col).lower() and 'id' in str(col).lower() for col in url_report_df.columns)
-                if has_campaign_id:
-                    st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using Campaign IDs")
+                # Merge on Campaign + Ad group
+                ads_df = ads_df.merge(
+                    mapping_df[['Campaign', 'Ad group', 'Product', 'UTM']],
+                    on=['Campaign', 'Ad group'],
+                    how='left',
+                    suffixes=('', '_map')
+                )
+            
+                # Show enrichment summary
+                enriched_count = ads_df['Product'].notna().sum() if 'Product' in ads_df.columns else 0
+                st.info(f"📊 Enriched {enriched_count}/{len(ads_df)} ad groups with Product/UTM data from mapping")
+        
+            # Show matching summary only if the column was added
+            if 'Campaign Conversions' in ads_df.columns:
+                matched_campaigns = ads_df['Campaign Conversions'].notna().sum()
+                total_ad_groups = len(ads_df)
+            
+                # Debug: Show matching details by office
+                if show_debug:
+                  with st.expander("🔍 Office Matching Results"):
+                    if 'Office' in st.session_state.campaign_stats.columns:
+                        st.write("**Matching by Office:**")
+                    
+                        # Sample matched campaigns
+                        matched_df = ads_df[ads_df['Campaign Conversions'].notna()][['Campaign', 'Campaign Conversions']].head(10)
+                        if len(matched_df) > 0:
+                            st.write(f"**Matched Campaigns (showing {len(matched_df)} of {matched_campaigns}):**")
+                            st.dataframe(matched_df)
+                    
+                        # Sample unmatched campaigns
+                        unmatched_df = ads_df[ads_df['Campaign Conversions'].isna()][['Campaign']].head(10)
+                        if len(unmatched_df) > 0:
+                            st.write(f"**Unmatched Campaigns (showing {len(unmatched_df)} of {total_ad_groups - matched_campaigns}):**")
+                            for idx, row in unmatched_df.iterrows():
+                                campaign = row['Campaign']
+                                # Detect what office this campaign would be assigned
+                                if 'MOA' in str(campaign).upper():
+                                    detected_office = 'MOA'
+                                else:
+                                    detected_office = 'Legacy'
+                                st.write(f"  - `{campaign}` → Detected office: **{detected_office}**")
+                    else:
+                        st.write("No office-based matching (Office column missing)")
+            
+                if url_report_df is not None:
+                    # Check if URL report has Campaign ID column
+                    has_campaign_id = any('campaign' in str(col).lower() and 'id' in str(col).lower() for col in url_report_df.columns)
+                    if has_campaign_id:
+                        st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using Campaign IDs")
+                    else:
+                        st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups from URL report")
                 else:
-                    st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups from URL report")
+                    # Check if ads report has Campaign ID column
+                    has_campaign_id_in_ads = any('campaign' in str(col).lower() and 'id' in str(col).lower() for col in ads_df.columns)
+                    if has_campaign_id_in_ads:
+                        st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using Campaign IDs (direct match)")
+                    else:
+                        st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using campaign names")
+                        st.info("💡 Upload URL reports above for more precise matching by Campaign ID")
+    
+    
+        # Apply account filter (passed from parent)
+        if show_debug:
+          with st.expander("🔧 Filter Details", expanded=False):
+            st.caption(f"🔍 Account filter: selected_account='{selected_account}', has Account column={'Account' in ads_df.columns}")
+        
+            if selected_account != 'All Accounts' and 'Account' in ads_df.columns:
+                before_filter = len(ads_df)
+                st.caption(f"  Filtered from {before_filter:,} → filtering...")
             else:
-                # Check if ads report has Campaign ID column
-                has_campaign_id_in_ads = any('campaign' in str(col).lower() and 'id' in str(col).lower() for col in ads_df.columns)
-                if has_campaign_id_in_ads:
-                    st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using Campaign IDs (direct match)")
-                else:
-                    st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using campaign names")
-                    st.info("💡 Upload URL reports above for more precise matching by Campaign ID")
+                st.caption(f"  Using all {len(ads_df):,} ad groups")
     
-    
-    # Apply account filter (passed from parent)
-    with st.expander("🔧 Filter Details", expanded=False):
-        st.caption(f"🔍 Account filter: selected_account='{selected_account}', has Account column={'Account' in ads_df.columns}")
-        
         if selected_account != 'All Accounts' and 'Account' in ads_df.columns:
-            before_filter = len(ads_df)
-            st.caption(f"  Filtered from {before_filter:,} → filtering...")
-        else:
-            st.caption(f"  Using all {len(ads_df):,} ad groups")
-    
-    if selected_account != 'All Accounts' and 'Account' in ads_df.columns:
-        ads_df_filtered = ads_df[ads_df['Account'] == selected_account].copy()
+            ads_df_filtered = ads_df[ads_df['Account'] == selected_account].copy()
         
-        if len(ads_df_filtered) == 0:
-            available_accounts = ads_df['Account'].unique()[:10]
-            st.warning(f"⚠️ No rows match account '{selected_account}'. Available accounts: {list(available_accounts)}")
-    else:
-        ads_df_filtered = ads_df.copy()
+            if len(ads_df_filtered) == 0:
+                available_accounts = ads_df['Account'].unique()[:10]
+                st.warning(f"⚠️ No rows match account '{selected_account}'. Available accounts: {list(available_accounts)}")
+        else:
+            ads_df_filtered = ads_df.copy()
     
-    # Apply stats account filter if checkbox is enabled
-    if filter_to_stats_account:
-        with st.expander("📊 Stats Account Matching", expanded=False):
+        # Apply stats account filter if checkbox is enabled
+        if filter_to_stats_account and show_debug:
+            with st.expander("📊 Stats Account Matching", expanded=False):
+                has_campaign_data = 'campaign_stats' in st.session_state and st.session_state.campaign_stats is not None
+                has_domain = 'stats_agent_domain' in st.session_state and st.session_state.stats_agent_domain is not None
+            
+                st.caption(f"🔍 Stats account filter active. Has campaign data: {has_campaign_data}, Has domain: {has_domain}")
+            
+                if has_campaign_data:
+                    matched_account = None
+                
+                    # Try to match using domain from URL report (if url_report_df exists)
+                    if 'url_report_df' in locals() and url_report_df is not None and not url_report_df.empty and 'Ad final URL' in url_report_df.columns and has_domain:
+                        stats_domain = st.session_state.stats_agent_domain
+                        st.caption(f"🔍 Looking for domain: {stats_domain} in URL report")
+                    
+                        # Find accounts whose URLs contain the stats domain
+                        for _, row in url_report_df.iterrows():
+                            url = row.get('Ad final URL')
+                            account = row.get('Account name')
+                        
+                            if pd.notna(url) and pd.notna(account) and stats_domain in str(url):
+                                matched_account = str(account).strip()
+                                st.caption(f"✅ Found matching account: {matched_account}")
+                                break
+                    
+                        if not matched_account:
+                            st.warning(f"⚠️ No account found with domain '{stats_domain}' in URL report")
+                    else:
+                        st.warning("⚠️ URL report not available or missing 'Ad final URL' column")
+        
+            # Actually apply the filter (outside expander)
             has_campaign_data = 'campaign_stats' in st.session_state and st.session_state.campaign_stats is not None
             has_domain = 'stats_agent_domain' in st.session_state and st.session_state.stats_agent_domain is not None
-            
-            st.caption(f"🔍 Stats account filter active. Has campaign data: {has_campaign_data}, Has domain: {has_domain}")
-            
+        
             if has_campaign_data:
                 matched_account = None
-                
+            
                 # Try to match using domain from URL report (if url_report_df exists)
                 if 'url_report_df' in locals() and url_report_df is not None and not url_report_df.empty and 'Ad final URL' in url_report_df.columns and has_domain:
                     stats_domain = st.session_state.stats_agent_domain
-                    st.caption(f"🔍 Looking for domain: {stats_domain} in URL report")
-                    
+
                     # Find accounts whose URLs contain the stats domain
                     for _, row in url_report_df.iterrows():
                         url = row.get('Ad final URL')
                         account = row.get('Account name')
-                        
+                    
                         if pd.notna(url) and pd.notna(account) and stats_domain in str(url):
                             matched_account = str(account).strip()
-                            st.caption(f"✅ Found matching account: {matched_account}")
                             break
-                    
-                    if not matched_account:
-                        st.warning(f"⚠️ No account found with domain '{stats_domain}' in URL report")
-                else:
-                    st.warning("⚠️ URL report not available or missing 'Ad final URL' column")
-        
-        # Actually apply the filter (outside expander)
-        has_campaign_data = 'campaign_stats' in st.session_state and st.session_state.campaign_stats is not None
-        has_domain = 'stats_agent_domain' in st.session_state and st.session_state.stats_agent_domain is not None
-        
-        if has_campaign_data:
-            matched_account = None
             
-            # Try to match using domain from URL report (if url_report_df exists)
-            if 'url_report_df' in locals() and url_report_df is not None and not url_report_df.empty and 'Ad final URL' in url_report_df.columns and has_domain:
-                stats_domain = st.session_state.stats_agent_domain
+                # If we found a matching account, filter to it
+                if matched_account and matched_account in ads_df_filtered['Account'].values:
+                    ads_df_filtered = ads_df_filtered[ads_df_filtered['Account'] == matched_account].copy()
+                    file_name = st.session_state.get('stats_file_uploaded', 'stats report')
+                    st.info(f"📊 Showing data for: **{matched_account}** (from {file_name}) — {len(ads_df_filtered):,} ad groups")
+                elif matched_account:
+                    st.warning(f"⚠️ Account '{matched_account}' not found in ad group data")
 
-                # Find accounts whose URLs contain the stats domain
-                for _, row in url_report_df.iterrows():
-                    url = row.get('Ad final URL')
-                    account = row.get('Account name')
-                    
-                    if pd.notna(url) and pd.notna(account) and stats_domain in str(url):
-                        matched_account = str(account).strip()
-                        break
-            
-            # If we found a matching account, filter to it
-            if matched_account and matched_account in ads_df_filtered['Account'].values:
-                ads_df_filtered = ads_df_filtered[ads_df_filtered['Account'] == matched_account].copy()
-                file_name = st.session_state.get('stats_file_uploaded', 'stats report')
-                st.info(f"📊 Showing data for: **{matched_account}** (from {file_name}) — {len(ads_df_filtered):,} ad groups")
-            elif matched_account:
-                st.warning(f"⚠️ Account '{matched_account}' not found in ad group data")
+        # Run analysis on filtered data
+        with st.spinner('Analyzing account health...'):
+            analysis_results = analyze_ads_account(ads_df_filtered, custom_thresholds)
 
-    # Run analysis on filtered data
-    with st.spinner('Analyzing account health...'):
-        analysis_results = analyze_ads_account(ads_df_filtered, custom_thresholds)
-
-    # Account Overview
-    st.markdown("---")
-    st.markdown("### 📊 Account Overview")
-    
-    # Show which platforms are included using the Platform column
-    if 'Platform' in ads_df_filtered.columns:
-        platform_counts = ads_df_filtered['Platform'].value_counts()
-        platform_info = " + ".join([f"{platform}: {count} ad groups" for platform, count in platform_counts.items()])
-        st.info(f"**Platforms:** {platform_info}")
-
-    active_count = len(ads_df_filtered[ads_df_filtered['Impr.'] > 0])
-    total_spend = ads_df_filtered['Cost'].sum()
-    total_clicks = ads_df_filtered['Clicks'].sum()
-    avg_cpc = total_spend / total_clicks if total_clicks > 0 else 0
-
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Total Ad Groups", f"{len(ads_df_filtered):,}", help="Total number of ad groups in the selected account(s)")
-        st.caption(f"Active: {active_count:,}")
-        st.caption("ℹ️ Active = has impressions", help="Ad groups with at least 1 impression in the date range")
-    with col2:
-        st.metric("Total Spend", f"${total_spend:,.2f}", help="Total cost across all ad groups in the selected account(s)")
-    with col3:
-        st.metric("Total Clicks", f"{total_clicks:,.0f}", help="Total clicks received across all ad groups")
-    with col4:
-        st.metric("Avg. CPC", f"${avg_cpc:.2f}", help="Average cost per click (Total Spend ÷ Total Clicks)")
-
-    # Recommendations by category
-    st.markdown("---")
-    st.markdown("### 🎯 Bid Recommendations")
-    
-    # Add help expander with explanations
-    with st.expander("ℹ️ Understanding the Recommendations", expanded=False):
-        st.markdown("""
-        **How to use these recommendations:**
-        
-        Each tab shows ad groups that need a specific action. Click through the tabs to see your priorities.
-        
-        **🚀 Major Opportunities**
-        - Ad groups with high CTR (>{:.0f}%) but low impression share (<{:.0f}%)
-        - These are WINNING ads that aren't showing enough
-        - Action: Increase bids 40-50% to capture more quality traffic
-        
-        **🔺 Increase Bids**
-        - Losing >{:.0f}% of auctions to rank (low bids)
-        - Not reaching top 3 positions (Top IS <{:.0f}%)
-        - **AND impression share <40%** (missing most of the market)
-        - Action: Increase bids 30-40% to capture more traffic
-        - Note: If you're already at 60%+ impression share, ignore the "lost auctions" - you're getting enough traffic
-        
-        **✅ Maintain**
-        - Already in the sweet spot (position 2-3)
-        - Top IS {:.0f}-{:.0f}%, Abs Top IS {:.0f}-{:.0f}%
-        - Action: Keep current bids, don't change anything
-        
-        **🔻 Decrease Bids**
-        - Appearing in position 1 too often (>{:.0f}% of the time)
-        - Overpaying for clicks you'd get at position 2-3
-        - Action: Decrease bids 15-20% to drop to position 2-3
-        
-        **⚠️ Review**
-        - Very low CTR (<{:.1f}%) suggests poor ad/keyword relevance
-        - Need to fix ad copy or keywords before adjusting bids
-        - Action: Review and improve ads, OR decrease bids 30%
-        
-        **🛑 Cleanup**
-        - Enabled but zero impressions (dead weight)
-        - Cluttering your account management
-        - Action: Consider pausing to simplify your account
-        """.format(
-            custom_thresholds['good_ctr_threshold']*100,
-            custom_thresholds['low_impr_share_threshold']*100,
-            custom_thresholds['increase_lost_is_rank_min']*100,
-            custom_thresholds['target_top_is_min']*100,
-            custom_thresholds['target_top_is_min']*100,
-            custom_thresholds['target_top_is_max']*100,
-            custom_thresholds['target_abs_top_is_min']*100,
-            custom_thresholds['target_abs_top_is_max']*100,
-            custom_thresholds['decrease_abs_top_is_min']*100,
-            custom_thresholds['poor_ctr_threshold']*100
-        ))
-
-    # Create tabs for each category
-    rec_tabs = st.tabs([
-        f"🚀 Major Opportunities ({len(analysis_results['major_opportunity'])})",
-        f"🔺 Increase Bids ({len(analysis_results['losing_auctions'])})",
-        f"✅ Maintain ({len(analysis_results['perfect_position'])})",
-        f"🔻 Decrease Bids ({len(analysis_results['overpaying_position_1'])})",
-        f"⚠️ Review ({len(analysis_results['poor_quality'])})",
-        f"❌ No Conversions ({len(analysis_results['no_conversions'])})",
-        f"🛑 Cleanup ({len(analysis_results['zero_impressions'])})"
-    ])
-
-    # Major Opportunities
-    with rec_tabs[0]:
-        df_opp = analysis_results['major_opportunity']
-        if len(df_opp) > 0:
-            st.markdown(f"""
-            **Logic:** CTR >{custom_thresholds['good_ctr_threshold']*100:.0f}% 
-            AND Impression Share <{custom_thresholds['low_impr_share_threshold']*100:.0f}%
-
-            These ad groups have great engagement but low market share. 
-            Major growth potential!
-            """)
-
-            # Display table
-            display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
-                          'Current Bid', 'Recommended New Bid',
-                          'CTR', 'Search impr. share', 'Search lost IS (rank)', 
-                          'Cost', 'Clicks']
-            
-            # Only include bid columns if they exist
-            available_cols = [col for col in display_cols if col in df_opp.columns]
-
-            display_df = df_opp[available_cols].copy()
-            
-            # Format metrics
-            if 'Campaign Conversions' in display_df.columns:
-                display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
-            if 'Current Bid' in display_df.columns:
-                display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
-            if 'Recommended New Bid' in display_df.columns:
-                display_df['Recommended New Bid'] = display_df['Recommended New Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
-            if 'CTR' in display_df.columns:
-                display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            if 'Search impr. share' in display_df.columns:
-                display_df['Search impr. share'] = display_df['Search impr. share'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            if 'Search lost IS (rank)' in display_df.columns:
-                display_df['Search lost IS (rank)'] = display_df['Search lost IS (rank)'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            if 'Cost' in display_df.columns:
-                display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
-            if 'Clicks' in display_df.columns:
-                display_df['Clicks'] = display_df['Clicks'].apply(lambda x: format_ads_metric(x, 'number'))
-            
-            # Rename columns with helpful descriptions
-            rename_map = {
-                'Current Bid': 'Current Bid',
-                'Recommended New Bid': 'New Bid',
-                'Campaign Conversions': 'Campaign Leads',
-                'CTR': 'CTR',
-                'Search impr. share': 'Impr. Share',
-                'Search lost IS (rank)': 'Lost to Bids'
-            }
-            display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
-            
-            # Metric legend above table
-            st.markdown("""
-            <div style='background: #f0f2f6; padding: 12px; border-radius: 8px; margin-bottom: 12px;'>
-                <strong>📊 Column Definitions:</strong><br/>
-                <span style='color: #666; font-size: 14px;'>
-                <b>CTR (Click Rate)</b> = Clicks ÷ Impressions • Measures ad relevance and quality<br/>
-                <b>Impr. Share (% of market)</b> = Your impressions ÷ Total available impressions • Shows how much traffic you're capturing<br/>
-                <b>Lost to Low Bids (%)</b> = Auctions lost because your bid was too low • Higher = more room to grow
-                </span>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-            
-            # Add metric explanations below table
-            st.caption("💡 **CTR** = Click-through rate (engagement quality) | **Impr. Share** = % of available impressions you're getting | **Lost to Low Bids** = % of auctions you're losing because your bid is too low")
-
-            # Download button
-            csv = df_opp.to_csv(index=False)
-            st.download_button(
-                "⬇️ Download Major Opportunities",
-                csv,
-                "major_opportunities.csv",
-                "text/csv",
-                use_container_width=True
-            )
-        else:
-            st.info("No major opportunities found. All high-CTR ad groups are capturing good impression share.")
-
-    # Increase Bids
-    with rec_tabs[1]:
-        df_inc = analysis_results['losing_auctions']
-        if len(df_inc) > 0:
-            # Show different message if budget data is present
-            has_budget = 'Budget Status' in df_inc.columns and df_inc['Budget Status'].notna().any()
-            
-            if has_budget:
-                st.markdown(f"""
-                **Logic (WITH Budget Data):** Budget Status = Underspending
-                AND Lost IS (rank) >{custom_thresholds['increase_lost_is_rank_min']*100:.0f}% 
-                AND Top IS <{custom_thresholds['target_top_is_min']*100:.0f}%
-                AND Impression Share <40%
-
-                ✅ **These accounts have confirmed budget room to scale!**
-                
-                Only showing ad groups where the account is actively underspending. 
-                You can safely increase these bids to capture more traffic.
-                """)
-            else:
-                st.markdown(f"""
-                **Logic (WITHOUT Budget Data):** Lost IS (rank) >{custom_thresholds['increase_lost_is_rank_min']*100:.0f}% 
-                AND Top IS <{custom_thresholds['target_top_is_min']*100:.0f}%
-                AND Impression Share <40%
-
-                ⚠️ **Verify budget has room before increasing!**
-                
-                Upload budget report to automatically filter by underspending accounts.
-                """)
-
-
-            display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 'Budget Status', 
-                          'Current Bid', 'Recommended New Bid', 'Bid Change %', 'Search impr. share', 
-                          'Search lost IS (rank)', 'Search top IS', 'CTR', 'Cost']
-            
-            # Only include columns that exist
-            available_cols = [col for col in display_cols if col in df_inc.columns]
-            display_df = df_inc[available_cols].copy()
-            
-            # Format metrics
-            if 'Campaign Conversions' in display_df.columns:
-                display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
-            if 'Current Bid' in display_df.columns:
-                display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
-            if 'Recommended New Bid' in display_df.columns:
-                display_df['Recommended New Bid'] = display_df['Recommended New Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
-            if 'Bid Change %' in display_df.columns:
-                display_df['Bid Change %'] = display_df['Bid Change %'].apply(lambda x: f"+{int(x)}%" if pd.notna(x) else '--')
-            if 'Search impr. share' in display_df.columns:
-                display_df['Search impr. share'] = display_df['Search impr. share'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            if 'Search lost IS (rank)' in display_df.columns:
-                display_df['Search lost IS (rank)'] = display_df['Search lost IS (rank)'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            if 'Search top IS' in display_df.columns:
-                display_df['Search top IS'] = display_df['Search top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            if 'CTR' in display_df.columns:
-                display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            if 'Cost' in display_df.columns:
-                display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
-            
-            # Rename columns
-            rename_map = {
-                'Current Bid': 'Current Bid',
-                'Recommended New Bid': 'New Bid',
-                'Search impr. share': 'Impr. Share',
-                'Search lost IS (rank)': 'Lost to Bids',
-                'Search top IS': 'Top 3 %'
-            }
-            display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
-            
-            # Metric legend
-            st.markdown("""
-            <div style='background: #f0f2f6; padding: 12px; border-radius: 8px; margin-bottom: 12px;'>
-                <strong>📊 Column Definitions:</strong><br/>
-                <span style='color: #666; font-size: 14px;'>
-                <b>Impr. Share</b> = % of available traffic you're capturing • <40% = room to grow<br/>
-                <b>Lost to Bids</b> = % of auctions you lost because bid was too low<br/>
-                <b>Top 3 %</b> = % of time you appear in positions 1-3 • Target: 60-80%<br/>
-                <b>Key insight:</b> Only increase if impression share is LOW. If you're already at 60%+ impression share, you're getting enough traffic.
-                </span>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-            
-            st.caption("💡 **Lost to Low Bids** = % of auctions you're losing | **Top 3 Position** = % of time you appear in positions 1-3 | **Target: 60-80%**")
-
-            csv = df_inc.to_csv(index=False)
-            st.download_button(
-                "⬇️ Download Increase Bid List",
-                csv,
-                "increase_bids.csv",
-                "text/csv",
-                use_container_width=True
-            )
-        else:
-            st.success("✅ No ad groups losing significant auctions to rank.")
-
-    # Maintain
-    with rec_tabs[2]:
-        df_maintain = analysis_results['perfect_position']
-        if len(df_maintain) > 0:
-            st.markdown(f"""
-            **Logic:** Top IS {custom_thresholds['target_top_is_min']*100:.0f}-{custom_thresholds['target_top_is_max']*100:.0f}% 
-            AND Abs. Top IS {custom_thresholds['target_abs_top_is_min']*100:.0f}-{custom_thresholds['target_abs_top_is_max']*100:.0f}%
-
-            Perfect position 2-3 sweet spot! Keep these bids as-is.
-            """)
-
-            display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
-                          'Search top IS', 'Search abs. top IS', 'CTR', 'Avg. CPC', 'Cost']
-
-            # Only include columns that exist
-            available_cols = [col for col in display_cols if col in df_maintain.columns]
-            display_df = df_maintain[available_cols].copy()
-            
-            # Format metrics
-            if 'Campaign Conversions' in display_df.columns:
-                display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
-            display_df['Search top IS'] = display_df['Search top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            display_df['Search abs. top IS'] = display_df['Search abs. top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            display_df['Avg. CPC'] = display_df['Avg. CPC'].apply(lambda x: format_ads_metric(x, 'currency'))
-            display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
-            
-            # Rename columns
-            display_df = display_df.rename(columns={
-                'Search top IS': 'Top 3 Position (%)',
-                'Search abs. top IS': 'Position 1 (%)',
-                'CTR': 'CTR (Click Rate)',
-                'Avg. CPC': 'Avg. CPC'
-            })
-            
-            # Metric legend
-            st.markdown("""
-            <div style='background: #d1ecf1; padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #47B74F;'>
-                <strong>✅ Column Definitions (Perfect Balance):</strong><br/>
-                <span style='color: #666; font-size: 14px;'>
-                <b>Top 3 Position (%)</b> = How often you show in positions 1-3 • Sweet spot: 60-80%<br/>
-                <b>Position 1 (%)</b> = How often you're in the #1 spot • Sweet spot: 20-40% (not too much!)<br/>
-                <b>Why this is perfect:</b> You're visible in top positions most of the time, but not overpaying for #1
-                </span>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-            
-            st.caption("💡 **Perfect Balance:** Top 3 Position 60-80% + Position 1 only 20-40% = You're in the cost-efficient sweet spot!")
-        else:
-            st.warning("No ad groups currently in the perfect position 2-3 sweet spot.")
-
-    # Decrease Bids
-    with rec_tabs[3]:
-        df_dec = analysis_results['overpaying_position_1']
-        if len(df_dec) > 0:
-            st.markdown(f"""
-            **Logic:** Abs. Top IS >{custom_thresholds['decrease_abs_top_is_min']*100:.0f}%
-
-            These ad groups are appearing in position 1 too often. Decrease bids to drop to position 2-3.
-            """)
-
-            display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
-                          'Budget Status', 'Current Bid', 'Recommended New Bid', 'Bid Change %',
-                          'Search abs. top IS', 'Search top IS', 'Cost']
-            
-            # Only include columns that exist
-            available_cols = [col for col in display_cols if col in df_dec.columns]
-            display_df = df_dec[available_cols].copy()
-            
-            # Format metrics
-            if 'Campaign Conversions' in display_df.columns:
-                display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
-            if 'Current Bid' in display_df.columns:
-                display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
-            if 'Recommended New Bid' in display_df.columns:
-                display_df['Recommended New Bid'] = display_df['Recommended New Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
-            if 'Bid Change %' in display_df.columns:
-                display_df['Bid Change %'] = display_df['Bid Change %'].apply(lambda x: f"{int(x)}%" if pd.notna(x) else '--')
-            if 'Search abs. top IS' in display_df.columns:
-                display_df['Search abs. top IS'] = display_df['Search abs. top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            if 'Search top IS' in display_df.columns:
-                display_df['Search top IS'] = display_df['Search top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            if 'Cost' in display_df.columns:
-                display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
-            
-            # Rename columns
-            rename_map = {
-                'Current Bid': 'Current Bid',
-                'Recommended New Bid': 'New Bid',
-                'Search abs. top IS': 'Position 1 %',
-                'Search top IS': 'Top 3 %'
-            }
-            display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
-            
-            # Metric legend
-            st.markdown("""
-            <div style='background: #fff3cd; padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #CC8F15;'>
-                <strong>⚠️ Column Definitions (Overpaying):</strong><br/>
-                <span style='color: #666; font-size: 14px;'>
-                <b>Position 1 (%)</b> = How often you're in the #1 spot • >50% = You're overpaying!<br/>
-                <b>Top 3 Position (%)</b> = Total time in positions 1-3 • You'll stay visible after decreasing bids<br/>
-                <b>The problem:</b> Position 1 is expensive. You'd get most of these clicks at position 2-3 for less money
-                </span>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-            
-            st.caption("💡 **Overpaying:** Position 1 is expensive! Target: Show position 1 only 20-40% of the time, not 50%+")
-
-            csv = df_dec.to_csv(index=False)
-            st.download_button(
-                "⬇️ Download Decrease Bid List",
-                csv,
-                "decrease_bids.csv",
-                "text/csv",
-                use_container_width=True
-            )
-        else:
-            st.success("✅ Position 1 strategy is working well - not overpaying!")
-
-    # Review
-    with rec_tabs[4]:
-        df_review = analysis_results['poor_quality']
-        if len(df_review) > 0:
-            st.markdown(f"""
-            **Logic:** CTR <{custom_thresholds['poor_ctr_threshold']*100:.1f}% AND spend >${custom_thresholds['min_spend_threshold']:.0f}
-
-            Low engagement suggests poor ad/keyword relevance. Fix ads before adjusting bids.
-            """)
-
-            display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
-                          'Current Bid', 'Recommended New Bid', 'Bid Change %', 'CTR', 'Search impr. share', 
-                          'Cost', 'Clicks']
-            
-            # Only include columns that exist
-            available_cols = [col for col in display_cols if col in df_review.columns]
-            display_df = df_review[available_cols].copy()
-            
-            # Format metrics
-            if 'Campaign Conversions' in display_df.columns:
-                display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
-            if 'Current Bid' in display_df.columns:
-                display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
-            if 'Recommended New Bid' in display_df.columns:
-                display_df['Recommended New Bid'] = display_df['Recommended New Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
-            if 'Bid Change %' in display_df.columns:
-                display_df['Bid Change %'] = display_df['Bid Change %'].apply(lambda x: f"{int(x)}%" if pd.notna(x) else '--')
-            if 'CTR' in display_df.columns:
-                display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            if 'Search impr. share' in display_df.columns:
-                display_df['Search impr. share'] = display_df['Search impr. share'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            if 'Cost' in display_df.columns:
-                display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
-            if 'Clicks' in display_df.columns:
-                display_df['Clicks'] = display_df['Clicks'].apply(lambda x: format_ads_metric(x, 'number'))
-            
-            # Rename columns
-            rename_map = {
-                'Current Bid': 'Current Bid',
-                'Recommended New Bid': 'New Bid',
-                'Search impr. share': 'Impr. Share'
-            }
-            display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
-            
-            # Metric legend
-            st.markdown("""
-            <div style='background: #f8d7da; padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #E9736E;'>
-                <strong>🚨 Column Definitions (Quality Issues):</strong><br/>
-                <span style='color: #666; font-size: 14px;'>
-                <b>CTR (Click Rate)</b> = Clicks ÷ Impressions • <1.5% is very low = poor relevance<br/>
-                <b>Impr. Share (%)</b> = How much traffic you're getting • Low share + low CTR = double problem<br/>
-                <b>The issue:</b> People see your ad but don't click. Your ad or keywords don't match their search intent
-                </span>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-            
-            st.caption("💡 **Low CTR Warning:** CTR <1.5% usually means your ad or keywords don't match what people are searching for. Fix the ad first!")
-
-            csv = df_review.to_csv(index=False)
-            st.download_button(
-                "⬇️ Download Review List",
-                csv,
-                "review_quality.csv",
-                "text/csv",
-                use_container_width=True
-            )
-        else:
-            st.success("✅ No major quality issues detected.")
-
-    # No Conversions (only shows if campaign data available)
-    with rec_tabs[5]:
-        df_no_conv = analysis_results['no_conversions']
-        if len(df_no_conv) > 0:
-            st.markdown(f"""
-            **Logic:** Campaign has 0 conversions AND Cost >$100
-
-            These ad groups are in campaigns spending money but generating ZERO leads. 
-            This is the highest priority issue - you're wasting budget.
-            
-            **Possible causes:**
-            - Wrong audience targeting
-            - Landing page issues  
-            - Tracking problems
-            - Poor keyword intent match
-            """)
-
-            display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
-                          'Current Bid', 'Cost', 'Clicks', 'CTR', 'Search impr. share']
-            
-            # Only include columns that exist
-            available_cols = [col for col in display_cols if col in df_no_conv.columns]
-            display_df = df_no_conv[available_cols].copy()
-            
-            # Format metrics
-            if 'Campaign Conversions' in display_df.columns:
-                display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
-            if 'Current Bid' in display_df.columns:
-                display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
-            if 'Cost' in display_df.columns:
-                display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
-            if 'Clicks' in display_df.columns:
-                display_df['Clicks'] = display_df['Clicks'].apply(lambda x: format_ads_metric(x, 'number'))
-            if 'CTR' in display_df.columns:
-                display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            if 'Search impr. share' in display_df.columns:
-                display_df['Search impr. share'] = display_df['Search impr. share'].apply(lambda x: format_ads_metric(x, 'percentage'))
-            
-            # Rename columns
-            rename_map = {
-                'Campaign Conversions': 'Campaign Leads',
-                'Search impr. share': 'Impr. Share'
-            }
-            display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
-            
-            # Metric legend
-            st.markdown("""
-            <div style='background: #f8d7da; padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #E9736E;'>
-                <strong>🚨 CRITICAL: Zero Conversions!</strong><br/>
-                <span style='color: #666; font-size: 14px;'>
-                <b>Campaign Leads</b> = Total conversions for the entire campaign (all ad groups combined)<br/>
-                <b>Action</b> = PAUSE these campaigns immediately OR investigate why tracking shows zero conversions<br/>
-                <b>Warning:</b> You're spending money and getting clicks but NO leads
-                </span>
-            </div>
-            """, unsafe_allow_html=True)
-
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-            
-            # Show total wasted spend
-            total_waste = df_no_conv['Cost'].sum()
-            st.error(f"💸 **Total Wasted Spend:** ${total_waste:,.2f} across {len(df_no_conv)} ad groups with zero conversions")
-
-            csv = df_no_conv.to_csv(index=False)
-            st.download_button(
-                "⬇️ Download No Conversions List",
-                csv,
-                "no_conversions.csv",
-                "text/csv",
-                use_container_width=True
-            )
-        else:
-            if 'Campaign Conversions' in ads_df_filtered.columns:
-                st.success("✅ All campaigns with significant spend are generating conversions!")
-            else:
-                st.info("ℹ️ No campaign conversion data available. Upload stats in Tab 1 to see this analysis.")
-
-    # Cleanup
-    with rec_tabs[6]:
-        df_cleanup = analysis_results['zero_impressions']
-        if len(df_cleanup) > 0:
-            st.markdown(f"""
-            **Logic:** Zero impressions + Enabled status
-
-            These {len(df_cleanup):,} ad groups are enabled but receiving no traffic. 
-            Consider pausing to simplify account management.
-            """)
-
-            display_cols = ['Platform', 'Account', 'Ad group', 'Campaign']
-            if 'Default max. CPC' in df_cleanup.columns:
-                display_cols.append('Default max. CPC')
-            
-            # Only include columns that exist
-            available_cols = [col for col in display_cols if col in df_cleanup.columns]
-
-            st.dataframe(df_cleanup[available_cols], use_container_width=True, hide_index=True)
-
-            csv = df_cleanup.to_csv(index=False)
-            st.download_button(
-                "⬇️ Download Zero Impression List (for bulk pausing)",
-                csv,
-                "zero_impressions_cleanup.csv",
-                "text/csv",
-                use_container_width=True
-            )
-        else:
-            st.success("✅ No zero-impression ad groups to clean up.")
-    
-    # ---- Tab 1 Debug Section ----
-    if 'debug_info' in st.session_state and st.session_state.debug_info:
-        debug = st.session_state.debug_info
+        # Account Overview
         st.markdown("---")
-        # ========== CONSOLIDATED DEBUG & STATUS TABLE ==========
-        st.markdown("---")
-        st.markdown("### 🔍 Debug & Status Report")
-        
-        # Build comprehensive single table with all debug data
-        all_debug_data = []
-        
-        # Get debug dict
-        debug = st.session_state.get('debug_info', {})
-        
-        # === PROCESSING STATUS ===
-        if 'files_loaded' in st.session_state:
-            all_debug_data.append(["Files Loaded", st.session_state.files_loaded, "✅"])
-        
-        if 'total_rows' in st.session_state:
-            all_debug_data.append(["Total Rows", st.session_state.total_rows, "✅"])
-        
-        if 'agency_distribution' in st.session_state:
-            for agency, count in st.session_state.agency_distribution.items():
-                all_debug_data.append([f"{agency} Rows", count, "✅"])
-        
-        # === CAMPAIGN PROCESSING ===
-        if 'tab1_campaign_col_detected' in debug:
-            all_debug_data.append(["Campaign Column Detected", debug['tab1_campaign_col_detected'], "✅"])
-        
-        if 'tab1_campaigns_processed' in debug:
-            all_debug_data.append(["Campaigns Processed", debug['tab1_campaigns_processed'], "✅"])
-        
-        if 'tab1_domain_detected' in debug and debug['tab1_domain_detected']:
-            all_debug_data.append(["Domain Detected", debug['tab1_domain_detected'], "✅"])
-        
-        # === PRODUCT ENRICHMENT ===
-        if 'product_enrichment_count' in st.session_state:
-            enriched = st.session_state.product_enrichment_count
-            total = st.session_state.product_enrichment_total
-            pct = (100 * enriched / total) if total > 0 else 0
-            status = "✅" if enriched > 0 else "⚠️"
-            all_debug_data.append(["Product Enrichment", f"{enriched}/{total} ({pct:.1f}%)", status])
-        
-        if 'product_matching_debug' in st.session_state and st.session_state.product_matching_debug:
-            matching_df = pd.DataFrame(st.session_state.product_matching_debug)
-            matched_count = matching_df[matching_df['Matched'] == 'YES'].shape[0]
-            total_count = matching_df.shape[0]
-            match_rate = (100 * matched_count / total_count) if total_count > 0 else 0
-            status = "✅" if matched_count > 0 else "⚠️"
-            all_debug_data.append(["Product Match Rate", f"{matched_count}/{total_count} ({match_rate:.1f}%)", status])
-        
-        # === TAB 2 DATA ===
-        if 'campaign_stats_count' in st.session_state:
-            all_debug_data.append(["Campaign Stats for Tab 2", st.session_state.campaign_stats_count, "✅"])
-        
-        # Display single consolidated table
-        if all_debug_data:
-            consolidated_df = pd.DataFrame(all_debug_data, columns=["Metric", "Value", "Status"])
-            st.dataframe(consolidated_df, hide_index=True, use_container_width=True)
-        
-        # Product Matching Details Table (if available)
-        if 'product_matching_debug' in st.session_state and st.session_state.product_matching_debug:
-            st.markdown("**Product Matching Details:**")
-            matching_detail_df = pd.DataFrame(st.session_state.product_matching_debug)
-            st.dataframe(matching_detail_df, hide_index=True, use_container_width=True)
-        
-        # Sample Campaign IDs
-        if 'tab1_sample_campaigns' in debug and debug['tab1_sample_campaigns']:
-            sample_text = ", ".join(str(c) for c in debug['tab1_sample_campaigns'][:10])
-            st.markdown(f"**Sample Campaign IDs:** `{sample_text}`")
-        
-        # Build text export
-        debug_text = "=== TAB 1 DEBUG & STATUS REPORT ===\n\n"
-        if all_debug_data:
-            for row in all_debug_data:
-                debug_text += f"{row[0]}: {row[1]} {row[2]}\n"
-            debug_text += "\n"
-        
-        if 'product_matching_debug' in st.session_state and st.session_state.product_matching_debug:
-            debug_text += "PRODUCT MATCHING DETAILS:\n"
-            for idx, row in matching_detail_df.iterrows():
-                debug_text += f"  Campaign ID: {row['Campaign ID']}\n"
-                debug_text += f"  Pattern: {row['Pattern']}\n"
-                debug_text += f"  Product: {row.get('Product', 'N/A')}\n"
-                debug_text += f"  Matched: {row['Matched']}\n\n"
-        
-        if 'tab1_sample_campaigns' in debug and debug['tab1_sample_campaigns']:
-            debug_text += f"Sample Campaign IDs: {sample_text}\n"
-        
-        # Download and copy buttons
-        st.markdown("---")
-        col1, col2 = st.columns(2)
-        
+        st.markdown("### 📊 Account Overview")
+    
+        # Show which platforms are included using the Platform column
+        if 'Platform' in ads_df_filtered.columns:
+            platform_counts = ads_df_filtered['Platform'].value_counts()
+            platform_info = " + ".join([f"{platform}: {count} ad groups" for platform, count in platform_counts.items()])
+            st.info(f"**Platforms:** {platform_info}")
+
+        active_count = len(ads_df_filtered[ads_df_filtered['Impr.'] > 0])
+        total_spend = ads_df_filtered['Cost'].sum()
+        total_clicks = ads_df_filtered['Clicks'].sum()
+        avg_cpc = total_spend / total_clicks if total_clicks > 0 else 0
+
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.download_button(
-                label="📥 Download Tab 1 Debug Report",
-                data=debug_text,
-                file_name="tab1_debug_report.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
-        
+            st.metric("Total Ad Groups", f"{len(ads_df_filtered):,}", help="Total number of ad groups in the selected account(s)")
+            st.caption(f"Active: {active_count:,}")
+            st.caption("ℹ️ Active = has impressions", help="Ad groups with at least 1 impression in the date range")
         with col2:
-            if st.button("📋 Copy to Clipboard", key="copy_tab1_debug", use_container_width=True):
-                st.code(debug_text, language=None)
+            st.metric("Total Spend", f"${total_spend:,.2f}", help="Total cost across all ad groups in the selected account(s)")
+        with col3:
+            st.metric("Total Clicks", f"{total_clicks:,.0f}", help="Total clicks received across all ad groups")
+        with col4:
+            st.metric("Avg. CPC", f"${avg_cpc:.2f}", help="Average cost per click (Total Spend ÷ Total Clicks)")
+
+        # Recommendations by category
+        st.markdown("---")
+        st.markdown("### 🎯 Bid Recommendations")
+    
+        # Add help expander with explanations
+        with st.expander("ℹ️ Understanding the Recommendations", expanded=False):
+            st.markdown("""
+            **How to use these recommendations:**
+        
+            Each tab shows ad groups that need a specific action. Click through the tabs to see your priorities.
+        
+            **🚀 Major Opportunities**
+            - Ad groups with high CTR (>{:.0f}%) but low impression share (<{:.0f}%)
+            - These are WINNING ads that aren't showing enough
+            - Action: Increase bids 40-50% to capture more quality traffic
+        
+            **🔺 Increase Bids**
+            - Losing >{:.0f}% of auctions to rank (low bids)
+            - Not reaching top 3 positions (Top IS <{:.0f}%)
+            - **AND impression share <40%** (missing most of the market)
+            - Action: Increase bids 30-40% to capture more traffic
+            - Note: If you're already at 60%+ impression share, ignore the "lost auctions" - you're getting enough traffic
+        
+            **✅ Maintain**
+            - Already in the sweet spot (position 2-3)
+            - Top IS {:.0f}-{:.0f}%, Abs Top IS {:.0f}-{:.0f}%
+            - Action: Keep current bids, don't change anything
+        
+            **🔻 Decrease Bids**
+            - Appearing in position 1 too often (>{:.0f}% of the time)
+            - Overpaying for clicks you'd get at position 2-3
+            - Action: Decrease bids 15-20% to drop to position 2-3
+        
+            **⚠️ Review**
+            - Very low CTR (<{:.1f}%) suggests poor ad/keyword relevance
+            - Need to fix ad copy or keywords before adjusting bids
+            - Action: Review and improve ads, OR decrease bids 30%
+        
+            **🛑 Cleanup**
+            - Enabled but zero impressions (dead weight)
+            - Cluttering your account management
+            - Action: Consider pausing to simplify your account
+            """.format(
+                custom_thresholds['good_ctr_threshold']*100,
+                custom_thresholds['low_impr_share_threshold']*100,
+                custom_thresholds['increase_lost_is_rank_min']*100,
+                custom_thresholds['target_top_is_min']*100,
+                custom_thresholds['target_top_is_min']*100,
+                custom_thresholds['target_top_is_max']*100,
+                custom_thresholds['target_abs_top_is_min']*100,
+                custom_thresholds['target_abs_top_is_max']*100,
+                custom_thresholds['decrease_abs_top_is_min']*100,
+                custom_thresholds['poor_ctr_threshold']*100
+            ))
+
+        # Create tabs for each category
+        rec_tabs = st.tabs([
+            f"🚀 Major Opportunities ({len(analysis_results['major_opportunity'])})",
+            f"🔺 Increase Bids ({len(analysis_results['losing_auctions'])})",
+            f"✅ Maintain ({len(analysis_results['perfect_position'])})",
+            f"🔻 Decrease Bids ({len(analysis_results['overpaying_position_1'])})",
+            f"⚠️ Review ({len(analysis_results['poor_quality'])})",
+            f"❌ No Conversions ({len(analysis_results['no_conversions'])})",
+            f"🛑 Cleanup ({len(analysis_results['zero_impressions'])})"
+        ])
+
+        # Major Opportunities
+        with rec_tabs[0]:
+            df_opp = analysis_results['major_opportunity']
+            if len(df_opp) > 0:
+                st.markdown(f"""
+                **Logic:** CTR >{custom_thresholds['good_ctr_threshold']*100:.0f}% 
+                AND Impression Share <{custom_thresholds['low_impr_share_threshold']*100:.0f}%
+
+                These ad groups have great engagement but low market share. 
+                Major growth potential!
+                """)
+
+                # Display table
+                display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
+                              'Current Bid', 'Recommended New Bid',
+                              'CTR', 'Search impr. share', 'Search lost IS (rank)', 
+                              'Cost', 'Clicks']
+            
+                # Only include bid columns if they exist
+                available_cols = [col for col in display_cols if col in df_opp.columns]
+
+                display_df = df_opp[available_cols].copy()
+            
+                # Format metrics
+                if 'Campaign Conversions' in display_df.columns:
+                    display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
+                if 'Current Bid' in display_df.columns:
+                    display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                if 'Recommended New Bid' in display_df.columns:
+                    display_df['Recommended New Bid'] = display_df['Recommended New Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                if 'CTR' in display_df.columns:
+                    display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                if 'Search impr. share' in display_df.columns:
+                    display_df['Search impr. share'] = display_df['Search impr. share'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                if 'Search lost IS (rank)' in display_df.columns:
+                    display_df['Search lost IS (rank)'] = display_df['Search lost IS (rank)'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                if 'Cost' in display_df.columns:
+                    display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+                if 'Clicks' in display_df.columns:
+                    display_df['Clicks'] = display_df['Clicks'].apply(lambda x: format_ads_metric(x, 'number'))
+            
+                # Rename columns with helpful descriptions
+                rename_map = {
+                    'Current Bid': 'Current Bid',
+                    'Recommended New Bid': 'New Bid',
+                    'Campaign Conversions': 'Campaign Leads',
+                    'CTR': 'CTR',
+                    'Search impr. share': 'Impr. Share',
+                    'Search lost IS (rank)': 'Lost to Bids'
+                }
+                display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
+            
+                # Metric legend above table
+                st.markdown("""
+                <div style='background: #f0f2f6; padding: 12px; border-radius: 8px; margin-bottom: 12px;'>
+                    <strong>📊 Column Definitions:</strong><br/>
+                    <span style='color: #666; font-size: 14px;'>
+                    <b>CTR (Click Rate)</b> = Clicks ÷ Impressions • Measures ad relevance and quality<br/>
+                    <b>Impr. Share (% of market)</b> = Your impressions ÷ Total available impressions • Shows how much traffic you're capturing<br/>
+                    <b>Lost to Low Bids (%)</b> = Auctions lost because your bid was too low • Higher = more room to grow
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            
+                # Add metric explanations below table
+                st.caption("💡 **CTR** = Click-through rate (engagement quality) | **Impr. Share** = % of available impressions you're getting | **Lost to Low Bids** = % of auctions you're losing because your bid is too low")
+
+                # Download button
+                csv = df_opp.to_csv(index=False)
+                st.download_button(
+                    "⬇️ Download Major Opportunities",
+                    csv,
+                    "major_opportunities.csv",
+                    "text/csv",
+                    use_container_width=True
+                )
+            else:
+                st.info("No major opportunities found. All high-CTR ad groups are capturing good impression share.")
+
+        # Increase Bids
+        with rec_tabs[1]:
+            df_inc = analysis_results['losing_auctions']
+            if len(df_inc) > 0:
+                # Show different message if budget data is present
+                has_budget = 'Budget Status' in df_inc.columns and df_inc['Budget Status'].notna().any()
+            
+                if has_budget:
+                    st.markdown(f"""
+                    **Logic (WITH Budget Data):** Budget Status = Underspending
+                    AND Lost IS (rank) >{custom_thresholds['increase_lost_is_rank_min']*100:.0f}% 
+                    AND Top IS <{custom_thresholds['target_top_is_min']*100:.0f}%
+                    AND Impression Share <40%
+
+                    ✅ **These accounts have confirmed budget room to scale!**
+                
+                    Only showing ad groups where the account is actively underspending. 
+                    You can safely increase these bids to capture more traffic.
+                    """)
+                else:
+                    st.markdown(f"""
+                    **Logic (WITHOUT Budget Data):** Lost IS (rank) >{custom_thresholds['increase_lost_is_rank_min']*100:.0f}% 
+                    AND Top IS <{custom_thresholds['target_top_is_min']*100:.0f}%
+                    AND Impression Share <40%
+
+                    ⚠️ **Verify budget has room before increasing!**
+                
+                    Upload budget report to automatically filter by underspending accounts.
+                    """)
+
+
+                display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 'Budget Status', 
+                              'Current Bid', 'Recommended New Bid', 'Bid Change %', 'Search impr. share', 
+                              'Search lost IS (rank)', 'Search top IS', 'CTR', 'Cost']
+            
+                # Only include columns that exist
+                available_cols = [col for col in display_cols if col in df_inc.columns]
+                display_df = df_inc[available_cols].copy()
+            
+                # Format metrics
+                if 'Campaign Conversions' in display_df.columns:
+                    display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
+                if 'Current Bid' in display_df.columns:
+                    display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                if 'Recommended New Bid' in display_df.columns:
+                    display_df['Recommended New Bid'] = display_df['Recommended New Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                if 'Bid Change %' in display_df.columns:
+                    display_df['Bid Change %'] = display_df['Bid Change %'].apply(lambda x: f"+{int(x)}%" if pd.notna(x) else '--')
+                if 'Search impr. share' in display_df.columns:
+                    display_df['Search impr. share'] = display_df['Search impr. share'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                if 'Search lost IS (rank)' in display_df.columns:
+                    display_df['Search lost IS (rank)'] = display_df['Search lost IS (rank)'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                if 'Search top IS' in display_df.columns:
+                    display_df['Search top IS'] = display_df['Search top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                if 'CTR' in display_df.columns:
+                    display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                if 'Cost' in display_df.columns:
+                    display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+            
+                # Rename columns
+                rename_map = {
+                    'Current Bid': 'Current Bid',
+                    'Recommended New Bid': 'New Bid',
+                    'Search impr. share': 'Impr. Share',
+                    'Search lost IS (rank)': 'Lost to Bids',
+                    'Search top IS': 'Top 3 %'
+                }
+                display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
+            
+                # Metric legend
+                st.markdown("""
+                <div style='background: #f0f2f6; padding: 12px; border-radius: 8px; margin-bottom: 12px;'>
+                    <strong>📊 Column Definitions:</strong><br/>
+                    <span style='color: #666; font-size: 14px;'>
+                    <b>Impr. Share</b> = % of available traffic you're capturing • <40% = room to grow<br/>
+                    <b>Lost to Bids</b> = % of auctions you lost because bid was too low<br/>
+                    <b>Top 3 %</b> = % of time you appear in positions 1-3 • Target: 60-80%<br/>
+                    <b>Key insight:</b> Only increase if impression share is LOW. If you're already at 60%+ impression share, you're getting enough traffic.
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            
+                st.caption("💡 **Lost to Low Bids** = % of auctions you're losing | **Top 3 Position** = % of time you appear in positions 1-3 | **Target: 60-80%**")
+
+                csv = df_inc.to_csv(index=False)
+                st.download_button(
+                    "⬇️ Download Increase Bid List",
+                    csv,
+                    "increase_bids.csv",
+                    "text/csv",
+                    use_container_width=True
+                )
+            else:
+                st.success("✅ No ad groups losing significant auctions to rank.")
+
+        # Maintain
+        with rec_tabs[2]:
+            df_maintain = analysis_results['perfect_position']
+            if len(df_maintain) > 0:
+                st.markdown(f"""
+                **Logic:** Top IS {custom_thresholds['target_top_is_min']*100:.0f}-{custom_thresholds['target_top_is_max']*100:.0f}% 
+                AND Abs. Top IS {custom_thresholds['target_abs_top_is_min']*100:.0f}-{custom_thresholds['target_abs_top_is_max']*100:.0f}%
+
+                Perfect position 2-3 sweet spot! Keep these bids as-is.
+                """)
+
+                display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
+                              'Search top IS', 'Search abs. top IS', 'CTR', 'Avg. CPC', 'Cost']
+
+                # Only include columns that exist
+                available_cols = [col for col in display_cols if col in df_maintain.columns]
+                display_df = df_maintain[available_cols].copy()
+            
+                # Format metrics
+                if 'Campaign Conversions' in display_df.columns:
+                    display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
+                display_df['Search top IS'] = display_df['Search top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                display_df['Search abs. top IS'] = display_df['Search abs. top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                display_df['Avg. CPC'] = display_df['Avg. CPC'].apply(lambda x: format_ads_metric(x, 'currency'))
+                display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+            
+                # Rename columns
+                display_df = display_df.rename(columns={
+                    'Search top IS': 'Top 3 Position (%)',
+                    'Search abs. top IS': 'Position 1 (%)',
+                    'CTR': 'CTR (Click Rate)',
+                    'Avg. CPC': 'Avg. CPC'
+                })
+            
+                # Metric legend
+                st.markdown("""
+                <div style='background: #d1ecf1; padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #47B74F;'>
+                    <strong>✅ Column Definitions (Perfect Balance):</strong><br/>
+                    <span style='color: #666; font-size: 14px;'>
+                    <b>Top 3 Position (%)</b> = How often you show in positions 1-3 • Sweet spot: 60-80%<br/>
+                    <b>Position 1 (%)</b> = How often you're in the #1 spot • Sweet spot: 20-40% (not too much!)<br/>
+                    <b>Why this is perfect:</b> You're visible in top positions most of the time, but not overpaying for #1
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            
+                st.caption("💡 **Perfect Balance:** Top 3 Position 60-80% + Position 1 only 20-40% = You're in the cost-efficient sweet spot!")
+            else:
+                st.warning("No ad groups currently in the perfect position 2-3 sweet spot.")
+
+        # Decrease Bids
+        with rec_tabs[3]:
+            df_dec = analysis_results['overpaying_position_1']
+            if len(df_dec) > 0:
+                st.markdown(f"""
+                **Logic:** Abs. Top IS >{custom_thresholds['decrease_abs_top_is_min']*100:.0f}%
+
+                These ad groups are appearing in position 1 too often. Decrease bids to drop to position 2-3.
+                """)
+
+                display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
+                              'Budget Status', 'Current Bid', 'Recommended New Bid', 'Bid Change %',
+                              'Search abs. top IS', 'Search top IS', 'Cost']
+            
+                # Only include columns that exist
+                available_cols = [col for col in display_cols if col in df_dec.columns]
+                display_df = df_dec[available_cols].copy()
+            
+                # Format metrics
+                if 'Campaign Conversions' in display_df.columns:
+                    display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
+                if 'Current Bid' in display_df.columns:
+                    display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                if 'Recommended New Bid' in display_df.columns:
+                    display_df['Recommended New Bid'] = display_df['Recommended New Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                if 'Bid Change %' in display_df.columns:
+                    display_df['Bid Change %'] = display_df['Bid Change %'].apply(lambda x: f"{int(x)}%" if pd.notna(x) else '--')
+                if 'Search abs. top IS' in display_df.columns:
+                    display_df['Search abs. top IS'] = display_df['Search abs. top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                if 'Search top IS' in display_df.columns:
+                    display_df['Search top IS'] = display_df['Search top IS'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                if 'Cost' in display_df.columns:
+                    display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+            
+                # Rename columns
+                rename_map = {
+                    'Current Bid': 'Current Bid',
+                    'Recommended New Bid': 'New Bid',
+                    'Search abs. top IS': 'Position 1 %',
+                    'Search top IS': 'Top 3 %'
+                }
+                display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
+            
+                # Metric legend
+                st.markdown("""
+                <div style='background: #fff3cd; padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #CC8F15;'>
+                    <strong>⚠️ Column Definitions (Overpaying):</strong><br/>
+                    <span style='color: #666; font-size: 14px;'>
+                    <b>Position 1 (%)</b> = How often you're in the #1 spot • >50% = You're overpaying!<br/>
+                    <b>Top 3 Position (%)</b> = Total time in positions 1-3 • You'll stay visible after decreasing bids<br/>
+                    <b>The problem:</b> Position 1 is expensive. You'd get most of these clicks at position 2-3 for less money
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            
+                st.caption("💡 **Overpaying:** Position 1 is expensive! Target: Show position 1 only 20-40% of the time, not 50%+")
+
+                csv = df_dec.to_csv(index=False)
+                st.download_button(
+                    "⬇️ Download Decrease Bid List",
+                    csv,
+                    "decrease_bids.csv",
+                    "text/csv",
+                    use_container_width=True
+                )
+            else:
+                st.success("✅ Position 1 strategy is working well - not overpaying!")
+
+        # Review
+        with rec_tabs[4]:
+            df_review = analysis_results['poor_quality']
+            if len(df_review) > 0:
+                st.markdown(f"""
+                **Logic:** CTR <{custom_thresholds['poor_ctr_threshold']*100:.1f}% AND spend >${custom_thresholds['min_spend_threshold']:.0f}
+
+                Low engagement suggests poor ad/keyword relevance. Fix ads before adjusting bids.
+                """)
+
+                display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
+                              'Current Bid', 'Recommended New Bid', 'Bid Change %', 'CTR', 'Search impr. share', 
+                              'Cost', 'Clicks']
+            
+                # Only include columns that exist
+                available_cols = [col for col in display_cols if col in df_review.columns]
+                display_df = df_review[available_cols].copy()
+            
+                # Format metrics
+                if 'Campaign Conversions' in display_df.columns:
+                    display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
+                if 'Current Bid' in display_df.columns:
+                    display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                if 'Recommended New Bid' in display_df.columns:
+                    display_df['Recommended New Bid'] = display_df['Recommended New Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                if 'Bid Change %' in display_df.columns:
+                    display_df['Bid Change %'] = display_df['Bid Change %'].apply(lambda x: f"{int(x)}%" if pd.notna(x) else '--')
+                if 'CTR' in display_df.columns:
+                    display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                if 'Search impr. share' in display_df.columns:
+                    display_df['Search impr. share'] = display_df['Search impr. share'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                if 'Cost' in display_df.columns:
+                    display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+                if 'Clicks' in display_df.columns:
+                    display_df['Clicks'] = display_df['Clicks'].apply(lambda x: format_ads_metric(x, 'number'))
+            
+                # Rename columns
+                rename_map = {
+                    'Current Bid': 'Current Bid',
+                    'Recommended New Bid': 'New Bid',
+                    'Search impr. share': 'Impr. Share'
+                }
+                display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
+            
+                # Metric legend
+                st.markdown("""
+                <div style='background: #f8d7da; padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #E9736E;'>
+                    <strong>🚨 Column Definitions (Quality Issues):</strong><br/>
+                    <span style='color: #666; font-size: 14px;'>
+                    <b>CTR (Click Rate)</b> = Clicks ÷ Impressions • <1.5% is very low = poor relevance<br/>
+                    <b>Impr. Share (%)</b> = How much traffic you're getting • Low share + low CTR = double problem<br/>
+                    <b>The issue:</b> People see your ad but don't click. Your ad or keywords don't match their search intent
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            
+                st.caption("💡 **Low CTR Warning:** CTR <1.5% usually means your ad or keywords don't match what people are searching for. Fix the ad first!")
+
+                csv = df_review.to_csv(index=False)
+                st.download_button(
+                    "⬇️ Download Review List",
+                    csv,
+                    "review_quality.csv",
+                    "text/csv",
+                    use_container_width=True
+                )
+            else:
+                st.success("✅ No major quality issues detected.")
+
+        # No Conversions (only shows if campaign data available)
+        with rec_tabs[5]:
+            df_no_conv = analysis_results['no_conversions']
+            if len(df_no_conv) > 0:
+                st.markdown(f"""
+                **Logic:** Campaign has 0 conversions AND Cost >$100
+
+                These ad groups are in campaigns spending money but generating ZERO leads. 
+                This is the highest priority issue - you're wasting budget.
+            
+                **Possible causes:**
+                - Wrong audience targeting
+                - Landing page issues  
+                - Tracking problems
+                - Poor keyword intent match
+                """)
+
+                display_cols = ['Platform', 'Account', 'Ad group', 'Campaign', 'Campaign Conversions', 
+                              'Current Bid', 'Cost', 'Clicks', 'CTR', 'Search impr. share']
+            
+                # Only include columns that exist
+                available_cols = [col for col in display_cols if col in df_no_conv.columns]
+                display_df = df_no_conv[available_cols].copy()
+            
+                # Format metrics
+                if 'Campaign Conversions' in display_df.columns:
+                    display_df['Campaign Conversions'] = display_df['Campaign Conversions'].apply(lambda x: format_ads_metric(x, 'number'))
+                if 'Current Bid' in display_df.columns:
+                    display_df['Current Bid'] = display_df['Current Bid'].apply(lambda x: format_ads_metric(x, 'currency'))
+                if 'Cost' in display_df.columns:
+                    display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+                if 'Clicks' in display_df.columns:
+                    display_df['Clicks'] = display_df['Clicks'].apply(lambda x: format_ads_metric(x, 'number'))
+                if 'CTR' in display_df.columns:
+                    display_df['CTR'] = display_df['CTR'].apply(lambda x: format_ads_metric(x, 'percentage'))
+                if 'Search impr. share' in display_df.columns:
+                    display_df['Search impr. share'] = display_df['Search impr. share'].apply(lambda x: format_ads_metric(x, 'percentage'))
+            
+                # Rename columns
+                rename_map = {
+                    'Campaign Conversions': 'Campaign Leads',
+                    'Search impr. share': 'Impr. Share'
+                }
+                display_df = display_df.rename(columns={k: v for k, v in rename_map.items() if k in display_df.columns})
+            
+                # Metric legend
+                st.markdown("""
+                <div style='background: #f8d7da; padding: 12px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #E9736E;'>
+                    <strong>🚨 CRITICAL: Zero Conversions!</strong><br/>
+                    <span style='color: #666; font-size: 14px;'>
+                    <b>Campaign Leads</b> = Total conversions for the entire campaign (all ad groups combined)<br/>
+                    <b>Action</b> = PAUSE these campaigns immediately OR investigate why tracking shows zero conversions<br/>
+                    <b>Warning:</b> You're spending money and getting clicks but NO leads
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+            
+                # Show total wasted spend
+                total_waste = df_no_conv['Cost'].sum()
+                st.error(f"💸 **Total Wasted Spend:** ${total_waste:,.2f} across {len(df_no_conv)} ad groups with zero conversions")
+
+                csv = df_no_conv.to_csv(index=False)
+                st.download_button(
+                    "⬇️ Download No Conversions List",
+                    csv,
+                    "no_conversions.csv",
+                    "text/csv",
+                    use_container_width=True
+                )
+            else:
+                if 'Campaign Conversions' in ads_df_filtered.columns:
+                    st.success("✅ All campaigns with significant spend are generating conversions!")
+                else:
+                    st.info("ℹ️ No campaign conversion data available. Upload stats in Tab 1 to see this analysis.")
+
+        # Cleanup
+        with rec_tabs[6]:
+            df_cleanup = analysis_results['zero_impressions']
+            if len(df_cleanup) > 0:
+                st.markdown(f"""
+                **Logic:** Zero impressions + Enabled status
+
+                These {len(df_cleanup):,} ad groups are enabled but receiving no traffic. 
+                Consider pausing to simplify account management.
+                """)
+
+                display_cols = ['Platform', 'Account', 'Ad group', 'Campaign']
+                if 'Default max. CPC' in df_cleanup.columns:
+                    display_cols.append('Default max. CPC')
+            
+                # Only include columns that exist
+                available_cols = [col for col in display_cols if col in df_cleanup.columns]
+
+                st.dataframe(df_cleanup[available_cols], use_container_width=True, hide_index=True)
+
+                csv = df_cleanup.to_csv(index=False)
+                st.download_button(
+                    "⬇️ Download Zero Impression List (for bulk pausing)",
+                    csv,
+                    "zero_impressions_cleanup.csv",
+                    "text/csv",
+                    use_container_width=True
+                )
+            else:
+                st.success("✅ No zero-impression ad groups to clean up.")
+    
+        # ---- Tab 1 Debug Section ----
+        if 'debug_info' in st.session_state and st.session_state.debug_info:
+            debug = st.session_state.debug_info
+            st.markdown("---")
+            # ========== CONSOLIDATED DEBUG & STATUS TABLE ==========
+            st.markdown("---")
+            st.markdown("### 🔍 Debug & Status Report")
+        
+            # Build comprehensive single table with all debug data
+            all_debug_data = []
+        
+            # Get debug dict
+            debug = st.session_state.get('debug_info', {})
+        
+            # === PROCESSING STATUS ===
+            if 'files_loaded' in st.session_state:
+                all_debug_data.append(["Files Loaded", st.session_state.files_loaded, "✅"])
+        
+            if 'total_rows' in st.session_state:
+                all_debug_data.append(["Total Rows", st.session_state.total_rows, "✅"])
+        
+            if 'agency_distribution' in st.session_state:
+                for agency, count in st.session_state.agency_distribution.items():
+                    all_debug_data.append([f"{agency} Rows", count, "✅"])
+        
+            # === CAMPAIGN PROCESSING ===
+            if 'tab1_campaign_col_detected' in debug:
+                all_debug_data.append(["Campaign Column Detected", debug['tab1_campaign_col_detected'], "✅"])
+        
+            if 'tab1_campaigns_processed' in debug:
+                all_debug_data.append(["Campaigns Processed", debug['tab1_campaigns_processed'], "✅"])
+        
+            if 'tab1_domain_detected' in debug and debug['tab1_domain_detected']:
+                all_debug_data.append(["Domain Detected", debug['tab1_domain_detected'], "✅"])
+        
+            # === PRODUCT ENRICHMENT ===
+            if 'product_enrichment_count' in st.session_state:
+                enriched = st.session_state.product_enrichment_count
+                total = st.session_state.product_enrichment_total
+                pct = (100 * enriched / total) if total > 0 else 0
+                status = "✅" if enriched > 0 else "⚠️"
+                all_debug_data.append(["Product Enrichment", f"{enriched}/{total} ({pct:.1f}%)", status])
+        
+            if 'product_matching_debug' in st.session_state and st.session_state.product_matching_debug:
+                matching_df = pd.DataFrame(st.session_state.product_matching_debug)
+                matched_count = matching_df[matching_df['Matched'] == 'YES'].shape[0]
+                total_count = matching_df.shape[0]
+                match_rate = (100 * matched_count / total_count) if total_count > 0 else 0
+                status = "✅" if matched_count > 0 else "⚠️"
+                all_debug_data.append(["Product Match Rate", f"{matched_count}/{total_count} ({match_rate:.1f}%)", status])
+        
+            # === TAB 2 DATA ===
+            if 'campaign_stats_count' in st.session_state:
+                all_debug_data.append(["Campaign Stats for Tab 2", st.session_state.campaign_stats_count, "✅"])
+        
+            # Display single consolidated table
+            if all_debug_data:
+                consolidated_df = pd.DataFrame(all_debug_data, columns=["Metric", "Value", "Status"])
+                st.dataframe(consolidated_df, hide_index=True, use_container_width=True)
+        
+            # Product Matching Details Table (if available)
+            if 'product_matching_debug' in st.session_state and st.session_state.product_matching_debug:
+                st.markdown("**Product Matching Details:**")
+                matching_detail_df = pd.DataFrame(st.session_state.product_matching_debug)
+                st.dataframe(matching_detail_df, hide_index=True, use_container_width=True)
+        
+            # Sample Campaign IDs
+            if 'tab1_sample_campaigns' in debug and debug['tab1_sample_campaigns']:
+                sample_text = ", ".join(str(c) for c in debug['tab1_sample_campaigns'][:10])
+                st.markdown(f"**Sample Campaign IDs:** `{sample_text}`")
+        
+            # Build text export
+            debug_text = "=== TAB 1 DEBUG & STATUS REPORT ===\n\n"
+            if all_debug_data:
+                for row in all_debug_data:
+                    debug_text += f"{row[0]}: {row[1]} {row[2]}\n"
+                debug_text += "\n"
+        
+            if 'product_matching_debug' in st.session_state and st.session_state.product_matching_debug:
+                debug_text += "PRODUCT MATCHING DETAILS:\n"
+                for idx, row in matching_detail_df.iterrows():
+                    debug_text += f"  Campaign ID: {row['Campaign ID']}\n"
+                    debug_text += f"  Pattern: {row['Pattern']}\n"
+                    debug_text += f"  Product: {row.get('Product', 'N/A')}\n"
+                    debug_text += f"  Matched: {row['Matched']}\n\n"
+        
+            if 'tab1_sample_campaigns' in debug and debug['tab1_sample_campaigns']:
+                debug_text += f"Sample Campaign IDs: {sample_text}\n"
+        
+            # Download and copy buttons
+            st.markdown("---")
+            col1, col2 = st.columns(2)
+        
+            with col1:
+                st.download_button(
+                    label="📥 Download Tab 1 Debug Report",
+                    data=debug_text,
+                    file_name="tab1_debug_report.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+        
+            with col2:
+                if st.button("📋 Copy to Clipboard", key="copy_tab1_debug", use_container_width=True):
+                    st.code(debug_text, language=None)
+
 
 
 # ========== TAB 2: ADS ACCOUNT HEALTH ==========
@@ -7661,6 +7161,7 @@ with main_tab2:
         with st.sidebar:
             st.markdown("---")
             st.markdown("### ⚙️ Ads Health Settings")
+            show_debug_tab2 = st.checkbox("Developer Tools", value=False, key="dev_tools_tab2")
 
             with st.expander("Customize Thresholds", expanded=False):
                 st.markdown("**Position Targets**")
@@ -7938,7 +7439,8 @@ with main_tab2:
                 all_ads_df = pd.concat(combined_dfs, ignore_index=True)
                 
                 # Show debug details in expander
-                with st.expander("🔧 Platform Combination Details", expanded=False):
+                if show_debug_tab2:
+                  with st.expander("🔧 Platform Combination Details", expanded=False):
                     for platform_name, ads_df in ads_data_by_platform:
                         st.caption(f"  → Added {len(ads_df)} ad groups from **{platform_name}**")
                         st.caption(f"     Columns: {', '.join(ads_df.columns[:10].tolist())}...")
@@ -7994,12 +7496,13 @@ with main_tab2:
                 
                 # Process as single combined analysis (NO TABS - all data in one view)
                 process_ads_platform(
-                    "All Platforms Combined", 
-                    all_ads_df, 
-                    custom_thresholds, 
-                    selected_account, 
+                    "All Platforms Combined",
+                    all_ads_df,
+                    custom_thresholds,
+                    selected_account,
                     filter_to_stats_account,
-                    shared_budget_df  # Pass the budget data
+                    shared_budget_df,
+                    show_debug=show_debug_tab2
                 )
                 
 
