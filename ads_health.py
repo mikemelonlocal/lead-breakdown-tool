@@ -1570,7 +1570,10 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             # Show sample values for debugging
             sample = ads_df[ads_df['Campaign Conversions'].notna()][['Campaign', 'Campaign Conversions']].drop_duplicates('Campaign').head(5)
             if not sample.empty:
-                st.caption(f"Sample: {', '.join(f'{r.Campaign} → {r[1]:,.0f}' for r in sample.itertuples())}")
+                st.caption("Sample: " + ", ".join(
+                    f"{row['Campaign']} → {row['Campaign Conversions']:,.0f}"
+                    for _, row in sample.iterrows()
+                ))
         
             # Debug: Show matching details by office
             if show_debug:
