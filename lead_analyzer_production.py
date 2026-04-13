@@ -3126,6 +3126,55 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
             totals_utm["device"] = ""
         utm_overview = pd.concat([utm_overview, pd.DataFrame([totals_utm])], ignore_index=True)
 
+    # ---------- Aggregate Platform × Landing Page × UTM ----------
+    platform_lp_utm = None
+    if col_campaign and col_landing:
+        df_lpu = df.copy()
+        df_lpu["utm"] = df_lpu[col_campaign].apply(extract_utm_from_campaign_id)
+        df_lpu["utm"] = df_lpu["utm"].replace("", "Unmatched")
+        # Clean landing page to path only (strip protocol + domain)
+        df_lpu["landing_page"] = df_lpu[col_landing].apply(
+            lambda x: re.sub(r'^https?://[^/]*', '', str(x).strip()).rstrip('/') or '/'
+        )
+
+        group_cols_lpu = (
+            ["device", "platform", "landing_page", "utm"]
+            if add_device_column
+            else ["platform", "landing_page", "utm"]
+        )
+
+        platform_lp_utm = df_lpu.groupby(group_cols_lpu, as_index=False).agg(
+            quote_starts=(col_qs, "sum"),
+            phone_clicks=(col_phone, "sum"),
+            sms_clicks=(col_sms, "sum"),
+            leads=("lead_opportunities", "sum")
+        ).sort_values(
+            ["platform", "leads", "landing_page", "utm"],
+            ascending=[True, False, True, True]
+        ).reset_index(drop=True)
+
+        platform_lp_utm = platform_lp_utm[
+            (platform_lp_utm["quote_starts"] > 0) |
+            (platform_lp_utm["phone_clicks"] > 0) |
+            (platform_lp_utm["sms_clicks"] > 0) |
+            (platform_lp_utm["leads"] > 0)
+        ].reset_index(drop=True)
+
+        totals_lpu = {
+            "platform": "",
+            "landing_page": "",
+            "utm": "TOTAL",
+            "quote_starts": platform_lp_utm["quote_starts"].sum(),
+            "phone_clicks": platform_lp_utm["phone_clicks"].sum(),
+            "sms_clicks": platform_lp_utm["sms_clicks"].sum(),
+            "leads": platform_lp_utm["leads"].sum()
+        }
+        if add_device_column:
+            totals_lpu["device"] = ""
+        platform_lp_utm = pd.concat(
+            [platform_lp_utm, pd.DataFrame([totals_lpu])], ignore_index=True
+        )
+
     return {
         "platform_overview": plat_out,
         "by_product_total": prod_tot_out,
@@ -3136,6 +3185,7 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
         "product_platform_agency": prod_plat_agency,
         "product_agency": prod_agency,
         "utm_overview": utm_overview,
+        "platform_lp_utm": platform_lp_utm,
         "device_overview": device_overview,
         "device_platform": device_platform
     }
@@ -4016,11 +4066,28 @@ with main_tab1:
                                         use_container_width=True
                                     )
     
+                # Platform × Landing Page × UTM
+                with st.expander(f"{agency_name}: Platform × Landing Page × UTM + TOTAL", expanded=False):
+                    lpu = single.get("platform_lp_utm")
+                    if lpu is not None and not lpu.empty:
+                        lpu_filters = {}
+                        if "device" in lpu.columns:
+                            lpu_filters["device"] = f"{agency_name}_lpu_device"
+                        if "platform" in lpu.columns:
+                            lpu_filters["platform"] = f"{agency_name}_lpu_platform"
+                        if "landing_page" in lpu.columns:
+                            lpu_filters["landing_page"] = f"{agency_name}_lpu_lp"
+                        if "utm" in lpu.columns:
+                            lpu_filters["utm"] = f"{agency_name}_lpu_utm"
+                        display_table_with_total(lpu, "utm", "TOTAL", filters=lpu_filters if lpu_filters else None)
+                    else:
+                        st.info("No Campaign ID or Landing Page column found — table unavailable.")
+
                 # By Product
                 with st.expander(f"{agency_name}: By Product (All Platforms)", expanded=False):
                     # Tracking disclaimer
                     st.info("ℹ️ **Note:** \"Other\" in Product classifications represents leads where MySFDomain's tracking software was unable to identify the insurance product type. While the majority of leads are tracked correctly, MySFDomain's platform has some limitations in product categorization that affect a small percentage of data.")
-                    
+
                     prod_tot = single["by_product_total"].copy()
                     
                     # Add chart with controls
@@ -4698,6 +4765,23 @@ with main_tab1:
             else:
                 st.info("No Campaign ID column found - UTM overview unavailable.")
     
+        # 2c) Combined Platform × Landing Page × UTM + TOTAL
+        with st.expander("Combined — Platform × Landing Page × UTM + TOTAL", expanded=False):
+            lpu_combined = results.get("platform_lp_utm")
+            if lpu_combined is not None and not lpu_combined.empty:
+                lpu_filters = {}
+                if "device" in lpu_combined.columns:
+                    lpu_filters["device"] = "combined_lpu_device"
+                if "platform" in lpu_combined.columns:
+                    lpu_filters["platform"] = "combined_lpu_platform"
+                if "landing_page" in lpu_combined.columns:
+                    lpu_filters["landing_page"] = "combined_lpu_lp"
+                if "utm" in lpu_combined.columns:
+                    lpu_filters["utm"] = "combined_lpu_utm"
+                display_table_with_total(lpu_combined, "utm", "TOTAL", filters=lpu_filters if lpu_filters else None)
+            else:
+                st.info("No Campaign ID or Landing Page column found — table unavailable.")
+
         # 3) Product × Platform totals (no agency split)
         with st.expander("Combined — Product × Platform (Totals + % Share)", expanded=False):
             st.info("ℹ️ **Note:** \"Other\" or \"Unknown\" classifications represent leads that MySFDomain's tracking software was unable to categorize. While the majority of leads are tracked correctly, MySFDomain's platform has some limitations in lead categorization that affect a small percentage of data.")
@@ -6081,7 +6165,10 @@ with main_tab1:
             selected_sheets["By Product × Platform"] = results["by_product_platform"]
         if export_source:
             selected_sheets["By Source"] = results["by_source"]
-        
+        lpu_export = results.get("platform_lp_utm")
+        if lpu_export is not None and not lpu_export.empty:
+            selected_sheets["Platform x LP x UTM"] = lpu_export
+
         # Build Excel with selected sheets
         if selected_sheets:
             excel_bytes_filtered = build_excel(selected_sheets)
