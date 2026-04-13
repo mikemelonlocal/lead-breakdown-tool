@@ -648,6 +648,27 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         ads_df.loc[mask, 'Campaign Conversions'] = _via_direct[mask]
     
     # Strategy 3: Name-based matching (fallback)
+    # Build campaign_name_map from stats: campaign name → conversions
+    campaign_name_map = {}
+    if 'Campaign' in campaign_stats_df.columns:
+        for _, row in campaign_stats_df.iterrows():
+            cname = str(row['Campaign']).strip() if pd.notna(row.get('Campaign')) else None
+            if not cname or cname == 'nan':
+                continue
+            convs = row.get('Total Conversions', 0)
+            if has_office:
+                office_val = row.get('Office', 'Legacy')
+                key = (cname, office_val)
+                if key not in campaign_name_map:
+                    campaign_name_map[key] = {'conversions': convs}
+                else:
+                    campaign_name_map[key]['conversions'] += convs
+            else:
+                if cname not in campaign_name_map:
+                    campaign_name_map[cname] = {'conversions': convs}
+                else:
+                    campaign_name_map[cname]['conversions'] += convs
+
     def get_conversions_by_name(campaign_name):
         if pd.isna(campaign_name):
             return None
