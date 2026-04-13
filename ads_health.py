@@ -780,6 +780,7 @@ def load_ads_export(file):
                 'Top impression rate': 'Search top IS',
                 'Absolute top impression rate': 'Search abs. top IS',
                 'Impression share lost to rank': 'Search lost IS (rank)',
+                'Impression share lost to budget': 'Search lost IS (budget)',
                 'Top impression share': 'Search top IS',
                 'Absolute top impression share': 'Search abs. top IS',
                 'Current maximum CPC': 'Default max. CPC',
@@ -824,7 +825,7 @@ def load_ads_export(file):
         
         # Clean percentage columns (convert to decimal)
         pct_cols = ['CTR', 'Search impr. share', 'Search top IS', 'Search abs. top IS',
-                    'Search lost IS (rank)', 'Search lost top IS (rank)', 'Conv. rate',
+                    'Search lost IS (rank)', 'Search lost IS (budget)', 'Search lost top IS (rank)', 'Conv. rate',
                     'Search exact match IS']
         for col in pct_cols:
             if col in df.columns:
@@ -879,6 +880,7 @@ def analyze_ads_account(df, thresholds):
         return {
             'major_opportunity': pd.DataFrame(),
             'losing_auctions': pd.DataFrame(),
+            'budget_constrained': pd.DataFrame(),
             'perfect_position': pd.DataFrame(),
             'overpaying_position_1': pd.DataFrame(),
             'poor_quality': pd.DataFrame(),
@@ -951,17 +953,41 @@ def analyze_ads_account(df, thresholds):
         results['losing_auctions']['reason'] = 'Underspending + low impression share + losing auctions'
         results['losing_auctions']['priority'] = 'High'
     else:
-        # WITHOUT budget data: Use impression share as proxy
+        # WITHOUT budget data: Use Search lost IS (budget) as a proxy
+        # Only suggest bid increases when lost IS to BUDGET is low (< 10%),
+        # meaning the account is NOT budget-constrained.
+        has_budget_is = 'Search lost IS (budget)' in active_df.columns
+        budget_filter = (active_df['Search lost IS (budget)'] < 0.10) if has_budget_is else True
+
         results['losing_auctions'] = active_df[
+            budget_filter &
             (active_df['Search lost IS (rank)'] > thresholds['increase_lost_is_rank_min']) &
             (active_df['Search top IS'] < thresholds['target_top_is_min']) &
-            (active_df['Search impr. share'] < 0.40) &  # Missing >60% of market - room to grow
+            (active_df['Search impr. share'] < 0.40) &
             (active_df['CTR'] > thresholds['poor_ctr_threshold']) &
             (active_df['Cost'] > 10)
         ].copy()
-        results['losing_auctions']['recommendation'] = 'Increase bid 30-40% (verify budget has room)'
-        results['losing_auctions']['reason'] = 'Low impression share + losing auctions to rank'
+
+        if has_budget_is:
+            results['losing_auctions']['recommendation'] = 'Increase bid 30-40%'
+            results['losing_auctions']['reason'] = 'Not budget-constrained + low impression share + losing auctions to rank'
+        else:
+            results['losing_auctions']['recommendation'] = 'Increase bid 30-40% (verify budget has room)'
+            results['losing_auctions']['reason'] = 'Low impression share + losing auctions to rank (no budget data to verify)'
         results['losing_auctions']['priority'] = 'High'
+
+        # Flag budget-constrained ad groups that were excluded
+        if has_budget_is:
+            budget_blocked = active_df[
+                (active_df['Search lost IS (budget)'] >= 0.10) &
+                (active_df['Search lost IS (rank)'] > thresholds['increase_lost_is_rank_min']) &
+                (active_df['Search top IS'] < thresholds['target_top_is_min'])
+            ]
+            if not budget_blocked.empty:
+                results['budget_constrained'] = budget_blocked.copy()
+                results['budget_constrained']['recommendation'] = 'Increase BUDGET first (not bids)'
+                results['budget_constrained']['reason'] = f'Losing {budget_blocked["Search lost IS (budget)"].mean()*100:.0f}%+ impressions to budget — raising bids will waste spend'
+                results['budget_constrained']['priority'] = 'High'
     
     # Calculate recommended new bid based on lost IS (rank)
     # Use sliding scale: the more IS lost, the bigger the increase
@@ -1664,18 +1690,61 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
         ))
 
     # Create tabs for each category
-    rec_tabs = st.tabs([
+    budget_constrained = analysis_results.get('budget_constrained', pd.DataFrame())
+    tab_names = [
         f"🚀 Major Opportunities ({len(analysis_results['major_opportunity'])})",
         f"🔺 Increase Bids ({len(analysis_results['losing_auctions'])})",
+    ]
+    if not budget_constrained.empty:
+        tab_names.append(f"💰 Budget Constrained ({len(budget_constrained)})")
+    tab_names.extend([
         f"✅ Maintain ({len(analysis_results['perfect_position'])})",
         f"🔻 Decrease Bids ({len(analysis_results['overpaying_position_1'])})",
         f"⚠️ Review ({len(analysis_results['poor_quality'])})",
         f"❌ No Conversions ({len(analysis_results['no_conversions'])})",
         f"🛑 Cleanup ({len(analysis_results['zero_impressions'])})"
     ])
+    rec_tabs = st.tabs(tab_names)
+
+    # Track tab index since budget_constrained tab shifts the rest
+    _tab_idx = {"major": 0, "increase": 1}
+    _next = 2
+    if not budget_constrained.empty:
+        _tab_idx["budget"] = _next; _next += 1
+    _tab_idx["maintain"] = _next; _next += 1
+    _tab_idx["decrease"] = _next; _next += 1
+    _tab_idx["review"] = _next; _next += 1
+    _tab_idx["no_conv"] = _next; _next += 1
+    _tab_idx["cleanup"] = _next
+
+    # Budget Constrained (only if data exists)
+    if "budget" in _tab_idx:
+        with rec_tabs[_tab_idx["budget"]]:
+            st.markdown(f"""
+            **{len(budget_constrained)} ad group(s)** are losing impressions primarily due to **budget limits**, not bid rank.
+            Increasing bids on these would waste spend — **increase the daily/monthly budget first**.
+            """)
+            if not budget_constrained.empty:
+                display_cols = ['Campaign', 'Ad group', 'Cost', 'Clicks', 'Impr.',
+                                'Search impr. share', 'Search lost IS (budget)', 'Search lost IS (rank)']
+                display_cols = [c for c in display_cols if c in budget_constrained.columns]
+                display_df = budget_constrained[display_cols].copy()
+                if 'Search lost IS (budget)' in display_df.columns:
+                    display_df['Search lost IS (budget)'] = display_df['Search lost IS (budget)'].apply(
+                        lambda x: format_ads_metric(x, 'percentage'))
+                if 'Search lost IS (rank)' in display_df.columns:
+                    display_df['Search lost IS (rank)'] = display_df['Search lost IS (rank)'].apply(
+                        lambda x: format_ads_metric(x, 'percentage'))
+                if 'Cost' in display_df.columns:
+                    display_df['Cost'] = display_df['Cost'].apply(lambda x: format_ads_metric(x, 'currency'))
+                display_df = display_df.rename(columns={
+                    'Search lost IS (budget)': 'Lost to Budget',
+                    'Search lost IS (rank)': 'Lost to Bids',
+                })
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     # Major Opportunities
-    with rec_tabs[0]:
+    with rec_tabs[_tab_idx["major"]]:
         df_opp = analysis_results['major_opportunity']
         if len(df_opp) > 0:
             st.markdown(f"""
@@ -1756,7 +1825,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             st.info("No major opportunities found. All high-CTR ad groups are capturing good impression share.")
 
     # Increase Bids
-    with rec_tabs[1]:
+    with rec_tabs[_tab_idx["increase"]]:
         df_inc = analysis_results['losing_auctions']
         if len(df_inc) > 0:
             # Show different message if budget data is present
@@ -1853,7 +1922,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             st.success("✅ No ad groups losing significant auctions to rank.")
 
     # Maintain
-    with rec_tabs[2]:
+    with rec_tabs[_tab_idx["maintain"]]:
         df_maintain = analysis_results['perfect_position']
         if len(df_maintain) > 0:
             st.markdown(f"""
@@ -1906,7 +1975,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             st.warning("No ad groups currently in the perfect position 2-3 sweet spot.")
 
     # Decrease Bids
-    with rec_tabs[3]:
+    with rec_tabs[_tab_idx["decrease"]]:
         df_dec = analysis_results['overpaying_position_1']
         if len(df_dec) > 0:
             st.markdown(f"""
@@ -1976,7 +2045,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             st.success("✅ Position 1 strategy is working well - not overpaying!")
 
     # Review
-    with rec_tabs[4]:
+    with rec_tabs[_tab_idx["review"]]:
         df_review = analysis_results['poor_quality']
         if len(df_review) > 0:
             st.markdown(f"""
@@ -2047,7 +2116,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             st.success("✅ No major quality issues detected.")
 
     # No Conversions (only shows if campaign data available)
-    with rec_tabs[5]:
+    with rec_tabs[_tab_idx["no_conv"]]:
         df_no_conv = analysis_results['no_conversions']
         if len(df_no_conv) > 0:
             st.markdown(f"""
@@ -2124,7 +2193,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 st.info("ℹ️ No campaign conversion data available. Upload stats in Tab 1 to see this analysis.")
 
     # Cleanup
-    with rec_tabs[6]:
+    with rec_tabs[_tab_idx["cleanup"]]:
         df_cleanup = analysis_results['zero_impressions']
         if len(df_cleanup) > 0:
             st.markdown(f"""
