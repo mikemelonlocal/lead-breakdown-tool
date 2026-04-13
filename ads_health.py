@@ -1563,6 +1563,14 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
         if 'Campaign Conversions' in ads_df.columns:
             matched_campaigns = ads_df['Campaign Conversions'].notna().sum()
             total_ad_groups = len(ads_df)
+
+            # Always show a brief matching summary
+            matched_total = ads_df['Campaign Conversions'].sum()
+            st.caption(f"📊 Campaign Leads: matched {matched_campaigns}/{total_ad_groups} ad groups, total leads = {matched_total:,.0f}")
+            # Show sample values for debugging
+            sample = ads_df[ads_df['Campaign Conversions'].notna()][['Campaign', 'Campaign Conversions']].drop_duplicates('Campaign').head(5)
+            if not sample.empty:
+                st.caption(f"Sample: {', '.join(f'{r.Campaign} → {r[1]:,.0f}' for r in sample.itertuples())}")
         
             # Debug: Show matching details by office
             if show_debug:
