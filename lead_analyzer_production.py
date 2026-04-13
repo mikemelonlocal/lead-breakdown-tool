@@ -2400,28 +2400,56 @@ def dataframe_to_html(df, title="Table"):
     return html.encode('utf-8')
 
 
+_MELON_MAX_DEVICE_CODES = {"AM", "AT", "AD", "HM", "HT", "HD"}
+
 def extract_utm_from_campaign_id(campaign_id, tokens=UTM_TOKENS_FIXED):
     """
     Extract UTM token from campaign ID.
 
     Returns the actual UTM code (e.g., "AM", "HM", "172"), never a product name.
+    Uses the campaign number anchored to the platform prefix (e.g., MLGDF172 → 172)
+    so that ad group numbers after the dash (e.g., -001) don't false-match.
     """
-    s = str(campaign_id or "")
-    upper = s.upper()
+    raw = str(campaign_id or "").strip()
 
-    # Melon Max campaigns — return the device code, not the product name
+    # Strip MD5 hash prefix if present
+    hash_match = re.match(r'^[0-9A-Fa-f]{32}(.+)$', raw)
+    if hash_match:
+        raw = hash_match.group(1)
+
+    upper = raw.upper()
+
+    # Melon Max campaigns — return the device code
     if "QS" in upper:
-        for code in ["AM", "AT", "AD", "HM", "HT", "HD"]:
+        for code in _MELON_MAX_DEVICE_CODES:
             if code in upper:
                 return code
         return "QS"
 
-    # Standard token matching for all other campaigns
+    # Listings
+    if "MLLIST" in upper:
+        return "MLLIST"
+
+    # Extract campaign number anchored to platform+device prefix
+    # e.g., MLGDF172-001HVT1 → 172, MLBM001-1 → 001, GD004-10 → 004
+    num_match = re.search(
+        r'(?:MLSG|MLSB|MLG|MLB|[GB])[DM]F?(\d{3,4})', upper
+    )
+    if not num_match:
+        num_match = re.search(r'F(\d{3,4})', upper)
+
+    if num_match:
+        return num_match.group(1)
+
+    # Non-numeric tokens (PPR, PPA, PPH, PPC) — substring match
     for t in tokens:
         tt = str(t or "").strip()
-        if not tt:
+        if not tt or tt in _MELON_MAX_DEVICE_CODES or tt == "MLLIST":
             continue
-        if tt.lower() in s.lower():
+        # Skip numeric tokens — already handled above
+        if tt.isdigit():
+            continue
+        if tt.lower() in raw.lower():
             return tt
 
     return ""
