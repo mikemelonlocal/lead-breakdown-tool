@@ -92,16 +92,16 @@ def display_table_with_total(df, total_identifier_col="platform", total_value="T
             
             # Display data table (sortable)
             if not df_data.empty:
-                st.dataframe(df_data, use_container_width=True, hide_index=True)
+                st.dataframe(df_data, width="stretch", hide_index=True)
             else:
                 st.info("No data matches the selected filters.")
             
             # Display total row (non-sortable, styled differently)
             st.markdown("**Total:**")
-            st.dataframe(df_total, use_container_width=True, hide_index=True)
+            st.dataframe(df_total, width="stretch", hide_index=True)
             return
     
     # Fallback: display as-is if no TOTAL row found
-    st.dataframe(df_pretty, use_container_width=True, hide_index=True)
+    st.dataframe(df_pretty, width="stretch", hide_index=True)
 
 

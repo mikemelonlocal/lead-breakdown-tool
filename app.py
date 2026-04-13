@@ -1216,7 +1216,7 @@ with main_tab1:
                                 height=400,
                                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                             )
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, width="stretch")
                             st.markdown("---")
                         else:
                             # Regular platform charts (when device breakdown is OFF)
@@ -1270,7 +1270,7 @@ with main_tab1:
                                 height=400,
                                 margin=dict(l=20, r=20, t=40, b=20)
                             )
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, width="stretch")
                             st.markdown("---")
                 
                 # Currency formatting is now handled by display_table_with_total
@@ -1489,7 +1489,7 @@ with main_tab1:
                                     x=1.05
                                 )
                             )
-                            st.plotly_chart(fig_pie, use_container_width=True)
+                            st.plotly_chart(fig_pie, width="stretch")
                         else:  # Bar
                             fig_bar = px.bar(
                                 prod_agg,
@@ -1506,7 +1506,7 @@ with main_tab1:
                                 showlegend=False,
                                 height=400
                             )
-                            st.plotly_chart(fig_bar, use_container_width=True)
+                            st.plotly_chart(fig_bar, width="stretch")
                         
                         st.markdown("---")
                 
@@ -1651,7 +1651,7 @@ with main_tab1:
                             height=400,
                             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                         )
-                        st.plotly_chart(fig_bpp, use_container_width=True)
+                        st.plotly_chart(fig_bpp, width="stretch")
                         
                         st.markdown("---")
                 
@@ -1709,7 +1709,7 @@ with main_tab1:
                 bpp_filtered["lead_share_pct"] = fmt_percent_series(bpp_filtered["lead_share_pct"], places=1)
                 
                 if not bpp_filtered.empty:
-                    st.dataframe(pretty_headers(bpp_filtered), use_container_width=True, hide_index=True)
+                    st.dataframe(pretty_headers(bpp_filtered), width="stretch", hide_index=True)
                 else:
                     st.info("No data matches the selected filters.")
                 
@@ -1793,7 +1793,7 @@ with main_tab1:
                                 src_filtered = src_filtered[src_filtered["agency"].isin(sel_agency)]
                 
                 if not src_filtered.empty:
-                    st.dataframe(pretty_headers(src_filtered), use_container_width=True, hide_index=True)
+                    st.dataframe(pretty_headers(src_filtered), width="stretch", hide_index=True)
                 else:
                     st.info("No data matches the selected filters.")
                 
@@ -2029,7 +2029,7 @@ with main_tab1:
                         if "Lead Diff %" in display_df.columns:
                             display_df["Lead Diff %"] = display_df["Lead Diff %"].apply(lambda x: f"{x:+.1f}%" if pd.notna(x) else "—")
                     
-                        st.dataframe(display_df, use_container_width=True, hide_index=True)
+                        st.dataframe(display_df, width="stretch", hide_index=True)
                     
                         # Comparison Chart
                         if PLOTLY_AVAILABLE:
@@ -2095,7 +2095,7 @@ with main_tab1:
                                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                             )
                         
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, width="stretch")
                 
                     # Key Insights
                     st.markdown('<div class="space-md"></div>', unsafe_allow_html=True)
@@ -2413,7 +2413,7 @@ with main_tab1:
                             
                                 # Use pretty headers
                                 legacy_source_pretty = pretty_headers(legacy_source)
-                                st.dataframe(legacy_source_pretty, use_container_width=True, hide_index=True)
+                                st.dataframe(legacy_source_pretty, width="stretch", hide_index=True)
                         else:
                             st.info("No Legacy data uploaded")
                 
@@ -2506,7 +2506,7 @@ with main_tab1:
                             
                                 # Use pretty headers
                                 moa_source_pretty = pretty_headers(moa_source)
-                                st.dataframe(moa_source_pretty, use_container_width=True, hide_index=True)
+                                st.dataframe(moa_source_pretty, width="stretch", hide_index=True)
                         else:
                             st.info("No MOA data uploaded")
                 
@@ -2549,7 +2549,7 @@ with main_tab1:
                                     )
                                     fig_legacy.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
                                     fig_legacy.update_layout(height=350, showlegend=False)
-                                    st.plotly_chart(fig_legacy, use_container_width=True)
+                                    st.plotly_chart(fig_legacy, width="stretch")
 
                             st.markdown("**Legacy - Product Distribution**")
                             if not legacy_data.empty:
@@ -2589,7 +2589,7 @@ with main_tab1:
                                             x=0.5
                                         )
                                     )
-                                    st.plotly_chart(fig_legacy_prod, use_container_width=True)
+                                    st.plotly_chart(fig_legacy_prod, width="stretch")
 
                         with chart_col2:
                             st.markdown("**MOA - Platform Performance**")
@@ -2613,7 +2613,7 @@ with main_tab1:
                                     )
                                     fig_moa.update_traces(texttemplate='%{y:,.0f}', textposition='outside')
                                     fig_moa.update_layout(height=350, showlegend=False)
-                                    st.plotly_chart(fig_moa, use_container_width=True)
+                                    st.plotly_chart(fig_moa, width="stretch")
 
                             st.markdown("**MOA - Product Distribution**")
                             if not moa_data.empty:
@@ -2653,7 +2653,7 @@ with main_tab1:
                                             x=0.5
                                         )
                                     )
-                                    st.plotly_chart(fig_moa_prod, use_container_width=True)
+                                    st.plotly_chart(fig_moa_prod, width="stretch")
                 
                     # ========== ADDITIONAL COMPARISON TABLES ==========
                     st.markdown('<div class="space-lg"></div>', unsafe_allow_html=True)
@@ -2728,7 +2728,7 @@ with main_tab1:
                                 "MOA_sms_clicks": "MOA SMS"
                             })
                         
-                            st.dataframe(prod_display, use_container_width=True, hide_index=True)
+                            st.dataframe(prod_display, width="stretch", hide_index=True)
                 
                     # Device Comparison (if device breakdown enabled)
                     if add_device_column and "device" in results["agency_overview"].columns:
@@ -2768,7 +2768,7 @@ with main_tab1:
                                 "Lead_Diff": "Difference"
                             })
                         
-                            st.dataframe(device_pivot, use_container_width=True, hide_index=True)
+                            st.dataframe(device_pivot, width="stretch", hide_index=True)
                 
                     # Source Comparison
                     st.markdown('<div class="space-md"></div>', unsafe_allow_html=True)
@@ -2807,7 +2807,7 @@ with main_tab1:
                                     "MOA": "MOA Leads"
                                 })
                             
-                                st.dataframe(source_pivot, use_container_width=True, hide_index=True)
+                                st.dataframe(source_pivot, width="stretch", hide_index=True)
                             else:
                                 st.info("No source data available for comparison.")
                         else:
@@ -3069,7 +3069,7 @@ with main_tab1:
                                                "QS Reliability", "Device Score", "Agency Score", "Composite"]
                         for col in sig_display.columns[1:]:
                             sig_display[col] = sig_display[col].apply(lambda x: f"{x:.3f}")
-                        st.dataframe(sig_display, use_container_width=True, hide_index=True)
+                        st.dataframe(sig_display, width="stretch", hide_index=True)
 
                         st.caption("**Signal weights:** CPL Efficiency 35% | Product Value 20% | Conv. Rate 15% | QS Reliability 10% | Device 10% | Agency 10%")
 
@@ -3081,7 +3081,7 @@ with main_tab1:
                                 for ag, cpl in agencies.items():
                                     rows.append({"Platform": plat, "Agency": ag, "CPL": f"${cpl:.2f}"})
                             if rows:
-                                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                                st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
                     # ── Display: Product Mix ──
                     if product_mix:
@@ -3091,7 +3091,7 @@ with main_tab1:
                                 for prod, share in sorted(mix.items(), key=lambda x: -x[1]):
                                     rows.append({"Platform": plat, "Product": prod, "Share": f"{share*100:.1f}%"})
                             if rows:
-                                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                                st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
                     # ── Display: Conversion Rates ──
                     if "page_views" in eff.columns:
@@ -3102,7 +3102,7 @@ with main_tab1:
                             cr["Page Views"] = cr["Page Views"].apply(lambda x: f"{x:,.0f}")
                             cr["Leads"] = cr["Leads"].apply(lambda x: f"{x:,.0f}")
                             cr["Conv. Rate"] = cr["Conv. Rate"].apply(lambda x: f"{x*100:.2f}%")
-                            st.dataframe(cr, use_container_width=True, hide_index=True)
+                            st.dataframe(cr, width="stretch", hide_index=True)
 
                     # ── CSV Export ──
                     out_raw = eff[["platform", "allocation", "predicted_leads", "cpl_platform"]].copy()
@@ -3115,7 +3115,7 @@ with main_tab1:
                     data=csv_bytes,
                     file_name="budget_optimizer.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    width="stretch"
                 )
 
             # ── Historical Trend Analysis ──
@@ -3203,7 +3203,7 @@ with main_tab1:
                     trend_display["spend"] = trend_display["spend"].apply(lambda x: f"${x:,.2f}")
                     trend_display["cpl"] = trend_display["cpl"].apply(lambda x: f"${x:,.2f}" if x > 0 else "—")
                     trend_display.columns = ["Period", "Platform", "Leads", "Spend", "CPL"]
-                    st.dataframe(trend_display, use_container_width=True, hide_index=True)
+                    st.dataframe(trend_display, width="stretch", hide_index=True)
 
                     # CPL trend chart
                     if PLOTLY_AVAILABLE:
@@ -3217,7 +3217,7 @@ with main_tab1:
                                 color_discrete_sequence=MELON_COLORS['primary']
                             )
                             fig.update_layout(height=400)
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, width="stretch")
 
                         fig2 = px.bar(
                             trend_df, x="period", y="leads", color="platform",
@@ -3227,7 +3227,7 @@ with main_tab1:
                             color_discrete_sequence=MELON_COLORS['primary']
                         )
                         fig2.update_layout(height=400)
-                        st.plotly_chart(fig2, use_container_width=True)
+                        st.plotly_chart(fig2, width="stretch")
                 else:
                     st.info("Upload prior period files above to see trend comparison.")
     
@@ -3268,7 +3268,7 @@ with main_tab1:
                     export_chart_agency = st.checkbox("Agency Comparison Chart", value=True, key="export_chart_agency")
                 
                     st.markdown('<div class="space-sm"></div>', unsafe_allow_html=True)
-                    if st.button("✅ Select All", use_container_width=True):
+                    if st.button("✅ Select All", width="stretch"):
                         st.session_state.export_platform = True
                         st.session_state.export_agency = True
                         st.session_state.export_product_total = True
@@ -3279,7 +3279,7 @@ with main_tab1:
                         st.session_state.export_chart_agency = True
                         st.rerun()
                 
-                    if st.button("❌ Deselect All", use_container_width=True):
+                    if st.button("❌ Deselect All", width="stretch"):
                         st.session_state.export_platform = False
                         st.session_state.export_agency = False
                         st.session_state.export_product_total = False
@@ -3317,7 +3317,7 @@ with main_tab1:
                 excel_bytes_filtered, 
                 "combined_lead_report_demo.xlsx",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", 
-                use_container_width=True
+                width="stretch"
             )
         
             # Build HTML report with tables AND charts
@@ -3410,7 +3410,7 @@ with main_tab1:
                 html_report.encode('utf-8'),
                 "combined_lead_report.html",
                 "text/html", 
-                use_container_width=True
+                width="stretch"
             )
     
             style_flag = "formatted" if st.session_state.get("sb_csv_style") == "With $ and % symbols" else "raw"
@@ -3441,14 +3441,14 @@ with main_tab1:
                         data=csv_platform, 
                         file_name="combined_platform.csv",
                         mime="text/csv", 
-                        use_container_width=True
+                        width="stretch"
                     )
                     st.download_button(
                         "⬇️ Agency (CSV)", 
                         data=csv_ag, 
                         file_name="combined_agency.csv",
                         mime="text/csv", 
-                        use_container_width=True
+                        width="stretch"
                     )
                 with c2:
                     st.download_button(
@@ -3456,21 +3456,21 @@ with main_tab1:
                         data=csv_bpp, 
                         file_name="combined_product_x_platform.csv",
                         mime="text/csv", 
-                        use_container_width=True
+                        width="stretch"
                     )
                     st.download_button(
                         "⬇️ Product (CSV)", 
                         data=csv_prod, 
                         file_name="combined_product.csv",
                         mime="text/csv", 
-                        use_container_width=True
+                        width="stretch"
                     )
                     st.download_button(
                         "⬇️ By Source (CSV)", 
                         data=csv_src, 
                         file_name="combined_source.csv",
                         mime="text/csv", 
-                        use_container_width=True
+                        width="stretch"
                     )
         
             with tab2:
@@ -3482,14 +3482,14 @@ with main_tab1:
                         data=html_platform, 
                         file_name="platform_overview.html",
                         mime="text/html", 
-                        use_container_width=True
+                        width="stretch"
                     )
                     st.download_button(
                         "⬇️ Agency (HTML)", 
                         data=html_ag, 
                         file_name="agency_overview.html",
                         mime="text/html", 
-                        use_container_width=True
+                        width="stretch"
                     )
                 with c2:
                     st.download_button(
@@ -3497,21 +3497,21 @@ with main_tab1:
                         data=html_bpp, 
                         file_name="product_x_platform.html",
                         mime="text/html", 
-                        use_container_width=True
+                        width="stretch"
                     )
                     st.download_button(
                         "⬇️ Product (HTML)", 
                         data=html_prod, 
                         file_name="product_overview.html",
                         mime="text/html", 
-                        use_container_width=True
+                        width="stretch"
                     )
                     st.download_button(
                         "⬇️ By Source (HTML)", 
                         data=html_src, 
                         file_name="by_source.html",
                         mime="text/html", 
-                        use_container_width=True
+                        width="stretch"
                     )
     
 
@@ -3914,7 +3914,7 @@ if 'debug_info' in st.session_state and st.session_state.debug_info:
         
         if tab2_debug_data:
             tab2_df = pd.DataFrame(tab2_debug_data, columns=["Metric", "Value", "Status"])
-            st.dataframe(tab2_df, hide_index=True, use_container_width=True)
+            st.dataframe(tab2_df, hide_index=True, width="stretch")
         
         # Build text export
         tab2_debug_text = "=== TAB 2 DEBUG & STATUS REPORT ===\n\n"
@@ -3932,11 +3932,11 @@ if 'debug_info' in st.session_state and st.session_state.debug_info:
                 data=tab2_debug_text,
                 file_name="tab2_debug_report.txt",
                 mime="text/plain",
-                use_container_width=True
+                width="stretch"
             )
         
         with col2:
-            if st.button("📋 Copy to Clipboard", key="copy_tab2_debug", use_container_width=True):
+            if st.button("📋 Copy to Clipboard", key="copy_tab2_debug", width="stretch"):
                 st.code(tab2_debug_text, language=None)
 
 # ---- Footer ----

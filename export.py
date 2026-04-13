@@ -76,7 +76,7 @@ def build_excel(sheets: dict):
             
             # Auto-size columns and apply formatting
             for i, col in enumerate(df.columns):
-                max_len = max(len(str(col)), *(df[col].astype(str).map(len).tolist() or [0])) + 2
+                max_len = max(len(str(col)), *(df[col].fillna('').astype(str).apply(len).tolist() or [0])) + 2
                 ws.set_column(i, i, min(max_len, 60))
                 
                 col_l = str(col).lower()

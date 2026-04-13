@@ -269,7 +269,8 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         return None
 
     # Run campaign number matching first (most reliable)
-    ads_df['Campaign Conversions'] = ads_df.apply(_match_by_campaign_number, axis=1)
+    # Use float64 dtype to avoid LossySetitemError with PyArrow-backed columns
+    ads_df['Campaign Conversions'] = ads_df.apply(_match_by_campaign_number, axis=1).astype('float64')
 
     # Strategy 1: Match using Campaign Name from ad group report
     # Campaign names like "Legacy - Fire 172 - SF Renters Insurance - Desktop"
@@ -1825,7 +1826,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                     'Search lost IS (budget)': 'Lost to Budget',
                     'Search lost IS (rank)': 'Lost to Bids',
                 })
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
+                st.dataframe(display_df, width="stretch", hide_index=True)
 
     # Major Opportunities
     with rec_tabs[_tab_idx["major"]]:
@@ -1891,7 +1892,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             </div>
             """, unsafe_allow_html=True)
 
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, width="stretch", hide_index=True)
         
             # Add metric explanations below table
             st.caption("💡 **CTR** = Click-through rate (engagement quality) | **Impr. Share** = % of available impressions you're getting | **Lost to Low Bids** = % of auctions you're losing because your bid is too low")
@@ -1903,7 +1904,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 csv,
                 "major_opportunities.csv",
                 "text/csv",
-                use_container_width=True
+                width="stretch"
             )
         else:
             st.info("No major opportunities found. All high-CTR ad groups are capturing good impression share.")
@@ -1990,7 +1991,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             </div>
             """, unsafe_allow_html=True)
 
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, width="stretch", hide_index=True)
         
             st.caption("💡 **Lost to Low Bids** = % of auctions you're losing | **Top 3 Position** = % of time you appear in positions 1-3 | **Target: 60-80%**")
 
@@ -2000,7 +2001,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 csv,
                 "increase_bids.csv",
                 "text/csv",
-                use_container_width=True
+                width="stretch"
             )
         else:
             st.success("✅ No ad groups losing significant auctions to rank.")
@@ -2052,7 +2053,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             </div>
             """, unsafe_allow_html=True)
 
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, width="stretch", hide_index=True)
         
             st.caption("💡 **Perfect Balance:** Top 3 Position 60-80% + Position 1 only 20-40% = You're in the cost-efficient sweet spot!")
         else:
@@ -2113,7 +2114,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             </div>
             """, unsafe_allow_html=True)
 
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, width="stretch", hide_index=True)
         
             st.caption("💡 **Overpaying:** Position 1 is expensive! Target: Show position 1 only 20-40% of the time, not 50%+")
 
@@ -2123,7 +2124,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 csv,
                 "decrease_bids.csv",
                 "text/csv",
-                use_container_width=True
+                width="stretch"
             )
         else:
             st.success("✅ Position 1 strategy is working well - not overpaying!")
@@ -2184,7 +2185,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             </div>
             """, unsafe_allow_html=True)
 
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, width="stretch", hide_index=True)
         
             st.caption("💡 **Low CTR Warning:** CTR <1.5% usually means your ad or keywords don't match what people are searching for. Fix the ad first!")
 
@@ -2194,7 +2195,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 csv,
                 "review_quality.csv",
                 "text/csv",
-                use_container_width=True
+                width="stretch"
             )
         else:
             st.success("✅ No major quality issues detected.")
@@ -2256,7 +2257,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             </div>
             """, unsafe_allow_html=True)
 
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, width="stretch", hide_index=True)
         
             # Show total wasted spend
             total_waste = df_no_conv['Cost'].sum()
@@ -2268,7 +2269,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 csv,
                 "no_conversions.csv",
                 "text/csv",
-                use_container_width=True
+                width="stretch"
             )
         else:
             if 'Campaign Conversions' in ads_df_filtered.columns:
@@ -2294,7 +2295,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             # Only include columns that exist
             available_cols = [col for col in display_cols if col in df_cleanup.columns]
 
-            st.dataframe(df_cleanup[available_cols], use_container_width=True, hide_index=True)
+            st.dataframe(df_cleanup[available_cols], width="stretch", hide_index=True)
 
             csv = df_cleanup.to_csv(index=False)
             st.download_button(
@@ -2302,7 +2303,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 csv,
                 "zero_impressions_cleanup.csv",
                 "text/csv",
-                use_container_width=True
+                width="stretch"
             )
         else:
             st.success("✅ No zero-impression ad groups to clean up.")
@@ -2365,13 +2366,13 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
         # Display single consolidated table
         if all_debug_data:
             consolidated_df = pd.DataFrame(all_debug_data, columns=["Metric", "Value", "Status"])
-            st.dataframe(consolidated_df, hide_index=True, use_container_width=True)
+            st.dataframe(consolidated_df, hide_index=True, width="stretch")
     
         # Product Matching Details Table (if available)
         if 'product_matching_debug' in st.session_state and st.session_state.product_matching_debug:
             st.markdown("**Product Matching Details:**")
             matching_detail_df = pd.DataFrame(st.session_state.product_matching_debug)
-            st.dataframe(matching_detail_df, hide_index=True, use_container_width=True)
+            st.dataframe(matching_detail_df, hide_index=True, width="stretch")
     
         # Sample Campaign IDs
         if 'tab1_sample_campaigns' in debug and debug['tab1_sample_campaigns']:
@@ -2406,11 +2407,11 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 data=debug_text,
                 file_name="tab1_debug_report.txt",
                 mime="text/plain",
-                use_container_width=True
+                width="stretch"
             )
     
         with col2:
-            if st.button("📋 Copy to Clipboard", key="copy_tab1_debug", use_container_width=True):
+            if st.button("📋 Copy to Clipboard", key="copy_tab1_debug", width="stretch"):
                 st.code(debug_text, language=None)
 
 
