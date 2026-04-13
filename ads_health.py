@@ -215,6 +215,62 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                     'full_campaign_id': campaign_id
                 }
     
+    # ── Build a simple campaign_number → conversions lookup ──
+    # Tab 1 campaign IDs: "MLBDF001-001RE2" → extract number "001"
+    # Tab 2 campaign names: "Legacy - 001 - SF Brand - Desktop" → extract number "001"
+    # Match on just the campaign number + office.
+    number_conv_map = {}  # {(campaign_num, office): total_conversions} or {campaign_num: total}
+    if 'Campaign' in campaign_stats_df.columns:
+        for _, row in campaign_stats_df.iterrows():
+            cid = str(row['Campaign']).strip() if pd.notna(row.get('Campaign')) else ''
+            convs = float(row.get('Total Conversions', 0) or 0)
+            # Extract campaign number from the stats Campaign ID
+            cid_upper = cid.upper()
+            num_match = re.search(r'(?:MLSG|MLSB|MLG|MLB|[GB])[DM]F?(\d{3,4})', cid_upper)
+            if not num_match:
+                num_match = re.search(r'F(\d{3,4})', cid_upper)
+            if not num_match:
+                num_match = re.search(r'(\d{3,4})', cid_upper)
+            if num_match:
+                num = num_match.group(1)
+                if has_office:
+                    office = row.get('Office', 'Legacy')
+                    key = (num, office)
+                else:
+                    key = num
+                number_conv_map[key] = number_conv_map.get(key, 0) + convs
+
+    def _match_by_campaign_number(row):
+        """Match Tab 2 ad group to Tab 1 stats by campaign number."""
+        campaign_name = str(row.get('Campaign', '')).strip() if pd.notna(row.get('Campaign')) else None
+        if not campaign_name:
+            return None
+        # Extract campaign number from Tab 2 campaign name
+        # "Legacy - 001 - SF Brand - Desktop" → "001"
+        clean = re.sub(r'^(Legacy|MOA)\s*-\s*', '', campaign_name, flags=re.IGNORECASE).strip()
+        num_match = re.match(r'^(\d{3,4})', clean)
+        if not num_match:
+            # Try "Fire 172" or similar
+            num_match = re.search(r'\b(\d{3})\b', clean)
+        if not num_match:
+            return None
+        num = num_match.group(1)
+        office = detect_office(campaign_name)
+        if has_office:
+            result = number_conv_map.get((num, office))
+            if result is not None:
+                return result
+            # Fallback: try without office
+            for k, v in number_conv_map.items():
+                if isinstance(k, tuple) and k[0] == num:
+                    return v
+        else:
+            return number_conv_map.get(num)
+        return None
+
+    # Run campaign number matching first (most reliable)
+    ads_df['Campaign Conversions'] = ads_df.apply(_match_by_campaign_number, axis=1)
+
     # Strategy 1: Match using Campaign Name from ad group report
     # Campaign names like "Legacy - Fire 172 - SF Renters Insurance - Desktop"
     # Match to stats Campaign IDs like "MLGDF172-001HVT1" by extracting "F172" code
@@ -351,7 +407,9 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         
         return matched_conversion
     
-    ads_df['Campaign Conversions'] = ads_df.apply(get_conversions_by_campaign_name, axis=1)
+    _via_campaign_name = ads_df.apply(get_conversions_by_campaign_name, axis=1)
+    mask = ads_df['Campaign Conversions'].isna()
+    ads_df.loc[mask, 'Campaign Conversions'] = _via_campaign_name[mask]
 
     # Continue with additional strategies for rows that didn't match
     # First: Process URL report if available (for debug info)
