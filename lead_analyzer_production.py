@@ -563,6 +563,15 @@ with main_tab1:
         up_legacy = st.file_uploader("Upload Legacy file (CSV or Excel)", type=["csv", "xlsx", "xls"], key="upload_legacy")
     with c2:
         up_moa = st.file_uploader("Upload MOA file (CSV or Excel)", type=["csv", "xlsx", "xls"], key="upload_moa")
+
+    # Historical comparison — optional prior period files
+    with st.expander("Historical Comparison (Optional)", expanded=False):
+        st.caption("Upload prior period reports to see CPL and lead volume trends. Files must follow the naming pattern: `campaign_report_YYYY-MM-DD_to_YYYY-MM-DD.csv`")
+        hist_c1, hist_c2 = st.columns(2)
+        with hist_c1:
+            hist_legacy = st.file_uploader("Prior Legacy file(s)", type=["csv", "xlsx", "xls"], key="hist_legacy", accept_multiple_files=True)
+        with hist_c2:
+            hist_moa = st.file_uploader("Prior MOA file(s)", type=["csv", "xlsx", "xls"], key="hist_moa", accept_multiple_files=True)
     
     # Show file status
     if up_legacy or up_moa:
@@ -2809,179 +2818,418 @@ with main_tab1:
 
         # ---- Budget Optimizer Tab ----
         with tab_optimizer:
-            # Use platform CPL from combined platform overview (exclude TOTAL, Unknown, and Listings)
+            st.markdown("### Budget Optimizer")
+            st.caption("Multi-signal optimization using CPL, conversion rate, product mix, device performance, and agency efficiency.")
+
+            # ── Gather platform data ──
             plat_eff = results["platform_overview"].copy()
             plat_eff = plat_eff[~plat_eff["platform"].isin(["TOTAL", "Unknown", "Listings"])].copy()
-        
-            # If device column exists, aggregate by platform only for the optimizer
+
+            agg_cols = {"spend": "sum", "leads": "sum", "quote_starts": "sum", "phone_clicks": "sum", "sms_clicks": "sum"}
+            if "page_views" in plat_eff.columns:
+                agg_cols["page_views"] = "sum"
             if "device" in plat_eff.columns:
-                plat_eff = plat_eff.groupby("platform", as_index=False).agg({
-                    "spend": "sum",
-                    "leads": "sum",
-                    "quote_starts": "sum",
-                    "phone_clicks": "sum",
-                    "sms_clicks": "sum"
-                })
-                # Recalculate CPL after aggregation
+                plat_eff = plat_eff.groupby("platform", as_index=False).agg(agg_cols)
                 plat_eff["cpl_platform"] = plat_eff.apply(
-                    lambda r: r["spend"] / r["leads"] if r["leads"] > 0 else np.nan,
-                    axis=1
+                    lambda r: r["spend"] / r["leads"] if r["leads"] > 0 else np.nan, axis=1
                 )
-        
-            # Minimum lead threshold — platforms with too few leads have unreliable CPL
-            MIN_LEADS_FOR_OPTIMIZER = 10
-            plat_eff["leads"] = pd.to_numeric(plat_eff["leads"], errors="coerce").fillna(0)
-            low_lead_platforms = plat_eff[plat_eff["leads"] < MIN_LEADS_FOR_OPTIMIZER]
-            if not low_lead_platforms.empty:
-                names = ", ".join(low_lead_platforms["platform"].tolist())
-                st.warning(f"Platforms with fewer than {MIN_LEADS_FOR_OPTIMIZER} leads excluded from optimization (unreliable CPL): **{names}**")
-                plat_eff = plat_eff[plat_eff["leads"] >= MIN_LEADS_FOR_OPTIMIZER].copy()
+
+            for c in ["leads", "spend", "quote_starts", "phone_clicks", "sms_clicks", "page_views", "cpl_platform"]:
+                if c in plat_eff.columns:
+                    plat_eff[c] = pd.to_numeric(plat_eff[c], errors="coerce").fillna(0)
+
+            # ── Minimum lead threshold ──
+            MIN_LEADS = 10
+            low = plat_eff[plat_eff["leads"] < MIN_LEADS]
+            if not low.empty:
+                st.warning(f"Excluded (< {MIN_LEADS} leads): **{', '.join(low['platform'].tolist())}**")
+                plat_eff = plat_eff[plat_eff["leads"] >= MIN_LEADS].copy()
 
             if plat_eff.empty:
-                st.info("No platform data available to compute suggestions (all platforms below minimum lead threshold).")
+                st.info("No eligible platforms. All are below the minimum lead threshold.")
             else:
-                # Compute CPL per platform as spend/leads (already available), guard against zeros
-                eff = plat_eff[["platform", "spend", "cpl_platform", "leads"]].copy()
-            
-                # Convert CPL to numeric once (moved outside conditional to avoid duplication)
-                eff["cpl_platform"] = pd.to_numeric(eff["cpl_platform"], errors="coerce")
-            
-                # Default total budget = current summed spend if present, else 0
-                default_budget = float(pd.to_numeric(eff["spend"], errors="coerce").fillna(0).sum())
-                total_budget = st.number_input("Total budget to allocate ($)", value=default_budget, min_value=0.0, step=100.0, format="%.2f")
-                st.caption("Allocation is proportional to efficiency (1 / Platform CPL). Platforms with no CPL (no leads) get 0 by default.")
-                conservative_mode = st.checkbox(
-                    f"Conservative mode (dampen shifts when CPL ≤ ${CONSERVATIVE_CPL_THRESHOLD})", 
-                    value=True, 
-                    help="Adds inertia: dampens low-CPL moves and blends with current spend share."
-                )
-            
-                # Minimum floors per platform
-                cols = st.columns(len(eff))
-                min_floors = {}
-                for i, (_, row) in enumerate(eff.iterrows()):
-                    with cols[i]:
-                        min_floors[row["platform"]] = st.number_input(
-                            f"Min ${row['platform']}", 
-                            value=0.0, 
-                            min_value=0.0, 
-                            step=50.0, 
-                            format="%.2f", 
-                            key=f"opt_floor_{row['platform']}"
-                        )
-            
-                # Initialize csv_bytes to avoid undefined variable error
+                eff = plat_eff.copy()
+
+                # ── Product mix data (for value weighting) ──
+                prod_plat = results.get("by_product_platform")
+                product_mix = {}
+                if prod_plat is not None and not prod_plat.empty:
+                    pp = prod_plat.copy()
+                    if "device" in pp.columns:
+                        pp = pp.groupby(["platform", "product"], as_index=False)["lead_opportunities"].sum()
+                    for platform in eff["platform"].unique():
+                        pdata = pp[pp["platform"] == platform]
+                        total = pdata["lead_opportunities"].sum()
+                        if total > 0:
+                            product_mix[platform] = dict(zip(
+                                pdata["product"],
+                                pdata["lead_opportunities"] / total
+                            ))
+
+                # ── Device performance data ──
+                dev_plat = results.get("device_platform")
+                device_mix = {}
+                if dev_plat is not None and not dev_plat.empty:
+                    dp = dev_plat.copy()
+                    if "leads" not in dp.columns and "lead_opportunities" in dp.columns:
+                        dp["leads"] = dp["lead_opportunities"]
+                    for platform in eff["platform"].unique():
+                        ddata = dp[dp["platform"] == platform]
+                        total = ddata["leads"].sum() if "leads" in ddata.columns else 0
+                        if total > 0:
+                            device_mix[platform] = dict(zip(
+                                ddata["device"],
+                                ddata["leads"] / total
+                            ))
+
+                # ── Agency-level split ──
+                agency_cpl = {}
+                plat_agency = results.get("platform_agency")
+                if plat_agency is not None and not plat_agency.empty:
+                    pa = plat_agency.copy()
+                    pa = pa[~pa["agency"].isin(["TOTAL", ""])].copy()
+                    if "device" in pa.columns:
+                        pa = pa.groupby(["platform", "agency"], as_index=False).agg({"leads": "sum", "spend": "sum"})
+                    for _, row in pa.iterrows():
+                        if row["leads"] > 0 and row["spend"] > 0:
+                            agency_cpl.setdefault(row["platform"], {})[row["agency"]] = row["spend"] / row["leads"]
+
+                # ── Controls ──
+                st.markdown("---")
+                ctrl_c1, ctrl_c2 = st.columns(2)
+                with ctrl_c1:
+                    default_budget = float(eff["spend"].sum())
+                    total_budget = st.number_input("Total budget ($)", value=default_budget, min_value=0.0, step=100.0, format="%.2f", key="opt_budget")
+                with ctrl_c2:
+                    conservative_mode = st.checkbox("Conservative mode", value=True, key="opt_conservative",
+                        help="Blends efficiency score with current spend share to limit drastic shifts.")
+
+                # ── Product value weights ──
+                all_products = set()
+                for pm in product_mix.values():
+                    all_products.update(pm.keys())
+                all_products = sorted(all_products)
+
+                product_values = {}
+                if all_products:
+                    with st.expander("Product Value Weights", expanded=False):
+                        st.caption("Assign relative value to each product type. Higher = more budget directed toward platforms producing it.")
+                        pv_cols = st.columns(min(len(all_products), 6))
+                        for i, prod in enumerate(all_products):
+                            with pv_cols[i % len(pv_cols)]:
+                                product_values[prod] = st.number_input(
+                                    prod, value=1.0, min_value=0.0, max_value=10.0, step=0.5,
+                                    key=f"opt_pv_{prod}", format="%.1f"
+                                )
+
+                # ── Minimum floors ──
+                with st.expander("Minimum Spend Floors", expanded=False):
+                    floor_cols = st.columns(len(eff))
+                    min_floors = {}
+                    for i, (_, row) in enumerate(eff.iterrows()):
+                        with floor_cols[i]:
+                            min_floors[row["platform"]] = st.number_input(
+                                f"Min {row['platform']}", value=0.0, min_value=0.0, step=50.0,
+                                format="%.2f", key=f"opt_floor_{row['platform']}"
+                            )
+
                 csv_bytes = b""
-            
-                # Minimize overall CPL: allocate the remainder to platform(s) with the lowest positive CPL
-                total_floor = float(sum(min_floors.values()))
-            
+                total_floor = sum(min_floors.values())
+
                 if total_floor > total_budget:
-                    st.error("Sum of minimums exceeds total budget. Lower the minimums or increase the total budget.")
+                    st.error("Sum of minimums exceeds total budget.")
                 else:
                     remaining = max(0.0, total_budget - total_floor)
-                
-                    if conservative_mode:
-                        # Conservative mode: blend efficiency with current spend
-                        base_w = eff["cpl_platform"].apply(
-                            lambda x: 0.0 if (pd.isna(x) or x <= 0) else 1.0 / float(x)
-                        )
-                        damp = eff["cpl_platform"].apply(
-                            lambda x: CONSERVATIVE_DAMPING_FACTOR if (pd.notna(x) and x <= CONSERVATIVE_CPL_THRESHOLD) else 1.0
-                        )
-                        base_w = base_w * damp
-                    
-                        total_sp = pd.to_numeric(eff["spend"], errors="coerce").fillna(0).sum()
-                        if total_sp > 0:
-                            s_share = pd.to_numeric(eff["spend"], errors="coerce").fillna(0) / total_sp
-                        else:
-                            s_share = pd.Series([1.0 / len(eff)] * len(eff), index=eff.index)
-                    
-                        final_w = CONSERVATIVE_EFFICIENCY_WEIGHT * base_w + CONSERVATIVE_SPEND_WEIGHT * s_share
-                        wsum = float(final_w.sum())
-                    
-                        if wsum > 0:
-                            eff["alloc_var"] = (final_w / wsum) * remaining
-                        else:
-                            eff["alloc_var"] = remaining / max(1, len(eff))
+
+                    # ══════════════════════════════════════════════
+                    # MULTI-SIGNAL SCORING
+                    # ══════════════════════════════════════════════
+
+                    scores = pd.DataFrame({"platform": eff["platform"]})
+
+                    # Signal 1: CPL efficiency (1/CPL) — core signal
+                    scores["cpl_score"] = eff["cpl_platform"].apply(
+                        lambda x: 1.0 / x if x > 0 else 0.0
+                    ).values
+
+                    # Signal 2: Product mix value — weighted average of product values
+                    def calc_product_value_score(platform):
+                        mix = product_mix.get(platform, {})
+                        if not mix or not product_values:
+                            return 1.0  # neutral
+                        return sum(share * product_values.get(prod, 1.0) for prod, share in mix.items())
+                    scores["product_score"] = scores["platform"].apply(calc_product_value_score)
+
+                    # Signal 3: Conversion rate (leads / page_views)
+                    if "page_views" in eff.columns:
+                        scores["conv_rate"] = (eff["leads"] / eff["page_views"].replace(0, np.nan)).fillna(0).values
                     else:
-                        # Aggressive mode: allocate all to lowest CPL platform(s)
-                        valid = eff["cpl_platform"].where(eff["cpl_platform"] > 0)
-                        if valid.notna().any():
-                            min_cpl = valid.min()
-                            winners = eff["cpl_platform"].eq(min_cpl)
-                            n_win = int(winners.sum()) or 1
-                            eff["alloc_var"] = 0.0
-                            eff.loc[winners, "alloc_var"] = remaining / n_win
+                        scores["conv_rate"] = 1.0
+
+                    # Signal 4: Quote starts reliability (QS / total leads)
+                    qs_ratio = (eff["quote_starts"] / eff["leads"].replace(0, np.nan)).fillna(0).values
+                    scores["qs_reliability"] = qs_ratio  # higher = more reliable tracking
+
+                    # Signal 5: Device diversity (entropy-based)
+                    def calc_device_score(platform):
+                        mix = device_mix.get(platform, {})
+                        if not mix:
+                            return 1.0
+                        # Platforms that perform well on mobile are often more scalable
+                        return 1.0 + mix.get("Mobile", 0) * 0.2  # slight mobile bonus
+                    scores["device_score"] = scores["platform"].apply(calc_device_score)
+
+                    # Signal 6: Agency efficiency gap (flag platforms where one agency is much worse)
+                    def calc_agency_score(platform):
+                        cpls = agency_cpl.get(platform, {})
+                        if len(cpls) < 2:
+                            return 1.0  # no comparison possible
+                        vals = list(cpls.values())
+                        gap_ratio = max(vals) / min(vals) if min(vals) > 0 else 1.0
+                        # Penalize platforms with large agency CPL gaps (> 2x difference)
+                        return 1.0 / max(1.0, gap_ratio - 1.0)
+                    scores["agency_score"] = scores["platform"].apply(calc_agency_score)
+
+                    # ── Normalize each signal to 0-1 range ──
+                    for col in ["cpl_score", "product_score", "conv_rate", "qs_reliability", "device_score", "agency_score"]:
+                        mx = scores[col].max()
+                        if mx > 0:
+                            scores[col + "_norm"] = scores[col] / mx
                         else:
-                            eff["alloc_var"] = remaining / max(1, len(eff))
-                
-                    eff["allocation"] = eff.apply(
-                        lambda r: float(min_floors.get(r["platform"], 0.0)) + float(r["alloc_var"]), 
-                        axis=1
+                            scores[col + "_norm"] = 1.0
+
+                    # ── Weighted composite score ──
+                    WEIGHTS = {
+                        "cpl_score_norm": 0.35,
+                        "product_score_norm": 0.20,
+                        "conv_rate_norm": 0.15,
+                        "qs_reliability_norm": 0.10,
+                        "device_score_norm": 0.10,
+                        "agency_score_norm": 0.10,
+                    }
+                    scores["composite"] = sum(
+                        scores[col] * weight for col, weight in WEIGHTS.items()
                     )
-                
-                    # Round Suggested Spend to nearest increment
+
+                    # ── Conservative mode: blend with current spend share ──
+                    if conservative_mode:
+                        total_sp = eff["spend"].sum()
+                        if total_sp > 0:
+                            s_share = eff["spend"].values / total_sp
+                        else:
+                            s_share = np.ones(len(eff)) / len(eff)
+                        scores["composite"] = (
+                            CONSERVATIVE_EFFICIENCY_WEIGHT * scores["composite"] +
+                            CONSERVATIVE_SPEND_WEIGHT * s_share
+                        )
+
+                    # ── Allocate budget proportional to composite score ──
+                    comp_sum = scores["composite"].sum()
+                    if comp_sum > 0:
+                        eff["alloc_var"] = (scores["composite"] / comp_sum) * remaining
+                    else:
+                        eff["alloc_var"] = remaining / max(1, len(eff))
+
+                    eff["allocation"] = eff.apply(
+                        lambda r: float(min_floors.get(r["platform"], 0.0)) + float(r["alloc_var"]), axis=1
+                    )
                     eff["allocation"] = (ALLOCATION_ROUNDING_INCREMENT * np.round(
                         eff["allocation"] / ALLOCATION_ROUNDING_INCREMENT
                     )).astype(int)
-                
-                    # Predicted leads = allocation / CPL
                     eff["predicted_leads"] = eff.apply(
-                        lambda r: (r["allocation"] / r["cpl_platform"]) 
-                        if (pd.notna(r["cpl_platform"]) and r["cpl_platform"] > 0) 
-                        else 0.0, 
-                        axis=1
+                        lambda r: r["allocation"] / r["cpl_platform"] if r["cpl_platform"] > 0 else 0.0, axis=1
                     )
-                
-                    # Formatting for display
+
+                    # ── Display: Allocation Table ──
+                    st.markdown("#### Suggested Allocation")
                     out = eff[["platform", "allocation", "predicted_leads", "cpl_platform"]].copy()
-                    out.rename(columns={
-                        "platform": "Platform",
-                        "allocation": "Suggested Spend",
-                        "predicted_leads": "Predicted Leads",
-                        "cpl_platform": "Platform CPL"
-                    }, inplace=True)
-                
+                    out.rename(columns={"platform": "Platform", "allocation": "Suggested Spend",
+                                        "predicted_leads": "Predicted Leads", "cpl_platform": "Platform CPL"}, inplace=True)
                     out["Suggested Spend"] = out["Suggested Spend"].apply(lambda x: f"${x:,.2f}")
-                    out["Platform CPL"] = out["Platform CPL"].apply(
-                        lambda x: f"${x:,.2f}" if pd.notna(x) and x > 0 else "—"
-                    )
+                    out["Platform CPL"] = out["Platform CPL"].apply(lambda x: f"${x:,.2f}" if x > 0 else "—")
                     out["Predicted Leads"] = out["Predicted Leads"].apply(lambda x: f"{x:,.1f}")
-                
+
                     total_alloc = float(eff["allocation"].sum())
                     total_pred = float(eff["predicted_leads"].sum())
                     total_cpl_val = (total_alloc / total_pred) if total_pred > 0 else None
-                    total_cpl_str = (f"${total_cpl_val:,.2f}" if total_cpl_val is not None else "—")
-                
                     total_row = pd.DataFrame([{
                         "Platform": "TOTAL",
                         "Suggested Spend": f"${total_alloc:,.2f}",
                         "Predicted Leads": f"{total_pred:,.1f}",
-                        "Platform CPL": total_cpl_str
+                        "Platform CPL": f"${total_cpl_val:,.2f}" if total_cpl_val else "—"
                     }])
-                
                     out = pd.concat([out, total_row], ignore_index=True)
                     display_table_with_total(out, "Platform", "TOTAL")
-                
-                    # Prepare CSV export
+
+                    # ── Display: Signal Breakdown ──
+                    with st.expander("Signal Breakdown by Platform", expanded=False):
+                        sig_display = scores[["platform", "cpl_score", "product_score", "conv_rate",
+                                              "qs_reliability", "device_score", "agency_score", "composite"]].copy()
+                        sig_display.columns = ["Platform", "CPL Efficiency", "Product Value", "Conv. Rate",
+                                               "QS Reliability", "Device Score", "Agency Score", "Composite"]
+                        for col in sig_display.columns[1:]:
+                            sig_display[col] = sig_display[col].apply(lambda x: f"{x:.3f}")
+                        st.dataframe(sig_display, use_container_width=True, hide_index=True)
+
+                        st.caption("**Signal weights:** CPL Efficiency 35% | Product Value 20% | Conv. Rate 15% | QS Reliability 10% | Device 10% | Agency 10%")
+
+                    # ── Display: Agency CPL Comparison ──
+                    if agency_cpl:
+                        with st.expander("Agency CPL by Platform", expanded=False):
+                            rows = []
+                            for plat, agencies in agency_cpl.items():
+                                for ag, cpl in agencies.items():
+                                    rows.append({"Platform": plat, "Agency": ag, "CPL": f"${cpl:.2f}"})
+                            if rows:
+                                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+                    # ── Display: Product Mix ──
+                    if product_mix:
+                        with st.expander("Product Mix by Platform", expanded=False):
+                            rows = []
+                            for plat, mix in product_mix.items():
+                                for prod, share in sorted(mix.items(), key=lambda x: -x[1]):
+                                    rows.append({"Platform": plat, "Product": prod, "Share": f"{share*100:.1f}%"})
+                            if rows:
+                                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+                    # ── Display: Conversion Rates ──
+                    if "page_views" in eff.columns:
+                        with st.expander("Conversion Rates by Platform", expanded=False):
+                            cr = eff[["platform", "page_views", "leads"]].copy()
+                            cr["conv_rate"] = (cr["leads"] / cr["page_views"].replace(0, np.nan)).fillna(0)
+                            cr.columns = ["Platform", "Page Views", "Leads", "Conv. Rate"]
+                            cr["Page Views"] = cr["Page Views"].apply(lambda x: f"{x:,.0f}")
+                            cr["Leads"] = cr["Leads"].apply(lambda x: f"{x:,.0f}")
+                            cr["Conv. Rate"] = cr["Conv. Rate"].apply(lambda x: f"{x*100:.2f}%")
+                            st.dataframe(cr, use_container_width=True, hide_index=True)
+
+                    # ── CSV Export ──
                     out_raw = eff[["platform", "allocation", "predicted_leads", "cpl_platform"]].copy()
-                    out_raw.rename(columns={
-                        "platform": "Platform",
-                        "allocation": "Suggested_Spend",
-                        "predicted_leads": "Predicted_Leads",
-                        "cpl_platform": "Platform_CPL"
-                    }, inplace=True)
+                    out_raw.rename(columns={"platform": "Platform", "allocation": "Suggested_Spend",
+                                            "predicted_leads": "Predicted_Leads", "cpl_platform": "Platform_CPL"}, inplace=True)
                     csv_bytes = out_raw.to_csv(index=False).encode("utf-8")
-        
-            # Download button outside the else block
-            st.download_button(
-                "⬇️ Download Suggested Allocation (CSV)", 
-                data=csv_bytes, 
-                file_name="demo_budget_optimizer.csv", 
-                mime="text/csv", 
-                use_container_width=True
-            )
+
+                st.download_button(
+                    "Download Suggested Allocation (CSV)",
+                    data=csv_bytes,
+                    file_name="budget_optimizer.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+
+            # ── Historical Trend Analysis ──
+            if hist_legacy or hist_moa:
+                st.markdown("---")
+                st.markdown("#### Historical Trend")
+
+                # Build period data: current + each historical file
+                periods = []
+
+                # Current period
+                current_start, current_end = None, None
+                for f in [up_legacy, up_moa]:
+                    if f:
+                        s, e = extract_date_range_from_filename(f.name)
+                        if s:
+                            current_start = s
+                            current_end = e
+                            break
+                current_label = f"{current_start} to {current_end}" if current_start else "Current"
+
+                current_plat = results["platform_overview"].copy()
+                current_plat = current_plat[~current_plat["platform"].isin(["TOTAL", "Unknown", "Listings"])]
+                for c in ["leads", "spend", "quote_starts", "page_views"]:
+                    if c in current_plat.columns:
+                        current_plat[c] = pd.to_numeric(current_plat[c], errors="coerce").fillna(0)
+                if "device" in current_plat.columns:
+                    current_plat = current_plat.groupby("platform", as_index=False).agg({
+                        c: "sum" for c in ["leads", "spend", "quote_starts"] + (["page_views"] if "page_views" in current_plat.columns else [])
+                    })
+                current_plat["cpl"] = (current_plat["spend"] / current_plat["leads"].replace(0, np.nan)).fillna(0)
+                current_plat["period"] = current_label
+                periods.append(current_plat)
+
+                # Historical periods
+                all_hist_files = []
+                for f in (hist_legacy or []):
+                    df_h = load_uploaded(f)
+                    if df_h is not None:
+                        df_h = df_h.copy()
+                        df_h["agency"] = "Legacy"
+                        all_hist_files.append((f.name, df_h))
+                for f in (hist_moa or []):
+                    df_h = load_uploaded(f)
+                    if df_h is not None:
+                        df_h = df_h.copy()
+                        df_h["agency"] = "MOA"
+                        all_hist_files.append((f.name, df_h))
+
+                # Group by period (same date range = same period)
+                period_groups = {}
+                for fname, df_h in all_hist_files:
+                    s, e = extract_date_range_from_filename(fname)
+                    label = f"{s} to {e}" if s else fname
+                    period_groups.setdefault(label, []).append(df_h)
+
+                for label, dfs_list in period_groups.items():
+                    df_period = pd.concat(dfs_list, ignore_index=True)
+                    try:
+                        hist_results = analyze(
+                            df_period, spends, spend_column=spend_col.strip() or None,
+                            hide_unknown=hide_unknown, add_device_column=False,
+                            exclude_listings_from_totals=exclude_listings_from_totals,
+                            include_qs=include_quote_starts, include_phone=include_phone_clicks,
+                            include_sms=include_sms_clicks
+                        )
+                        hp = hist_results["platform_overview"].copy()
+                        hp = hp[~hp["platform"].isin(["TOTAL", "Unknown", "Listings"])]
+                        for c in ["leads", "spend", "quote_starts", "page_views"]:
+                            if c in hp.columns:
+                                hp[c] = pd.to_numeric(hp[c], errors="coerce").fillna(0)
+                        hp["cpl"] = (hp["spend"] / hp["leads"].replace(0, np.nan)).fillna(0)
+                        hp["period"] = label
+                        periods.append(hp)
+                    except Exception:
+                        st.warning(f"Could not analyze historical period: {label}")
+
+                if len(periods) > 1:
+                    trend_df = pd.concat(periods, ignore_index=True)
+                    trend_df = trend_df.sort_values(["platform", "period"])
+
+                    # Show trend table
+                    trend_display = trend_df[["period", "platform", "leads", "spend", "cpl"]].copy()
+                    trend_display["leads"] = trend_display["leads"].apply(lambda x: f"{x:,.0f}")
+                    trend_display["spend"] = trend_display["spend"].apply(lambda x: f"${x:,.2f}")
+                    trend_display["cpl"] = trend_display["cpl"].apply(lambda x: f"${x:,.2f}" if x > 0 else "—")
+                    trend_display.columns = ["Period", "Platform", "Leads", "Spend", "CPL"]
+                    st.dataframe(trend_display, use_container_width=True, hide_index=True)
+
+                    # CPL trend chart
+                    if PLOTLY_AVAILABLE:
+                        chart_data = trend_df[trend_df["cpl"] > 0].copy()
+                        if not chart_data.empty:
+                            fig = px.line(
+                                chart_data, x="period", y="cpl", color="platform",
+                                title="CPL Trend by Platform",
+                                labels={"period": "Period", "cpl": "CPL ($)", "platform": "Platform"},
+                                markers=True,
+                                color_discrete_sequence=MELON_COLORS['primary']
+                            )
+                            fig.update_layout(height=400)
+                            st.plotly_chart(fig, use_container_width=True)
+
+                        fig2 = px.bar(
+                            trend_df, x="period", y="leads", color="platform",
+                            title="Lead Volume Trend by Platform",
+                            labels={"period": "Period", "leads": "Leads", "platform": "Platform"},
+                            barmode="group",
+                            color_discrete_sequence=MELON_COLORS['primary']
+                        )
+                        fig2.update_layout(height=400)
+                        st.plotly_chart(fig2, use_container_width=True)
+                else:
+                    st.info("Upload prior period files above to see trend comparison.")
     
 
         # ---- Export Tab ----

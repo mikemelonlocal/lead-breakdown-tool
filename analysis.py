@@ -39,6 +39,7 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
     col_qs = get_col(df, ["quote_starts", "quote start", "qs", "quotes", "quote starts"])
     col_phone = get_col(df, ["phone_clicks", "phone clicks", "phone", "calls"])
     col_sms = get_col(df, ["sms_clicks", "sms clicks", "sms", "text clicks"])
+    col_pv = get_col(df, ["page_views", "page views", "pageviews", "views", "sessions"])
     col_traffic = detect_traffic_source_col(df)
 
     # Create default columns if missing
@@ -53,10 +54,14 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
     if col_sms is None:
         df["_sms"] = 0.0
         col_sms = "_sms"
-    
+    if col_pv is None:
+        df["_pv"] = 0.0
+        col_pv = "_pv"
+
     df[col_qs] = to_num(df[col_qs])
     df[col_phone] = to_num(df[col_phone])
     df[col_sms] = to_num(df[col_sms])
+    df[col_pv] = to_num(df[col_pv])
 
     if col_campaign is None:
         df["_cid"] = ""
@@ -224,7 +229,8 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
         quote_starts=(col_qs, "sum"),
         phone_clicks=(col_phone, "sum"),
         sms_clicks=(col_sms, "sum"),
-        leads=("lead_opportunities", "sum")
+        leads=("lead_opportunities", "sum"),
+        page_views=(col_pv, "sum")
     )
     
     # Calculate spend
@@ -315,6 +321,7 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
         "sms_clicks": plat_for_totals["sms_clicks"].sum(),
         "leads": plat_for_totals["leads"].sum(),
         "spend": plat_for_totals["spend"].sum(),
+        "page_views": plat_for_totals["page_views"].sum() if "page_views" in plat_for_totals.columns else 0,
     }
     if add_device_column:
         totals_plat["device"] = ""  # Empty for TOTAL row
@@ -512,9 +519,10 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
         quote_starts=(col_qs, "sum"),
         phone_clicks=(col_phone, "sum"),
         sms_clicks=(col_sms, "sum"),
-        leads=("lead_opportunities", "sum")
+        leads=("lead_opportunities", "sum"),
+        page_views=(col_pv, "sum")
     )
-    
+
     # Calculate spend first before filtering
     if add_device_column:
         # Distribute spend proportionally by leads within each platform-agency combination
