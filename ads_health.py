@@ -272,6 +272,11 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
     # Use float64 dtype to avoid LossySetitemError with PyArrow-backed columns
     ads_df['Campaign Conversions'] = ads_df.apply(_match_by_campaign_number, axis=1).astype('float64')
 
+    # Debug: show what the number matching produced
+    _matched = ads_df['Campaign Conversions'].notna().sum()
+    _total_conv = ads_df['Campaign Conversions'].sum()
+    st.caption(f"🔢 Number matching: {_matched}/{len(ads_df)} matched, total={_total_conv:,.0f} | Map keys: {list(number_conv_map.keys())[:10]}")
+
     # Strategy 1: Match using Campaign Name from ad group report
     # Campaign names like "Legacy - Fire 172 - SF Renters Insurance - Desktop"
     # Match to stats Campaign IDs like "MLGDF172-001HVT1" by extracting "F172" code
