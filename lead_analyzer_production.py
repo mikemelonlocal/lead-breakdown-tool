@@ -7939,3 +7939,127 @@ with main_tab2:
                 
                 # Show debug details in expander
                 with st.expander("🔧 Platform Combination Details", expanded=False):
+                    for platform_name, ads_df in ads_data_by_platform:
+                        st.caption(f"  → Added {len(ads_df)} ad groups from **{platform_name}**")
+                        st.caption(f"     Columns: {', '.join(ads_df.columns[:10].tolist())}...")
+                    
+                    st.caption(f"\n✅ Combined dataframe: {len(all_ads_df):,} total ad groups")
+                    
+                    # Show platform breakdown
+                    if 'Platform' in all_ads_df.columns:
+                        platform_counts = all_ads_df['Platform'].value_counts()
+                        for platform, count in platform_counts.items():
+                            st.caption(f"  • {platform}: {count:,} ad groups")
+                    
+                    # Show column sample from each platform
+                    st.caption(f"\n🔍 Column check:")
+                    for platform_name, ads_df in ads_data_by_platform:
+                        has_account = 'Account' in ads_df.columns
+                        has_impr = 'Impr.' in ads_df.columns
+                        first_col = ads_df.columns[0] if len(ads_df.columns) > 0 else 'N/A'
+                        st.caption(f"  {platform_name}: Has 'Account'={has_account}, Has 'Impr.'={has_impr}, First col='{first_col}'")
+                
+                # Apply CSM filter if selected
+                if selected_csm != 'All CSMs' and shared_budget_df is not None and 'CSM' in shared_budget_df.columns:
+                    # Get list of accounts for this CSM
+                    csm_accounts = shared_budget_df[shared_budget_df['CSM'] == selected_csm]['Agent'].dropna().unique().tolist()
+                    
+                    # Filter dataframe to only those accounts
+                    before_csm_filter = len(all_ads_df)
+                    all_ads_df = all_ads_df[all_ads_df['Account'].isin(csm_accounts)].copy()
+                    after_csm_filter = len(all_ads_df)
+                    
+                    st.info(f"🎯 **CSM Filter**: {selected_csm} → {len(csm_accounts)} accounts, {after_csm_filter:,} ad groups")
+
+                
+                # Ensure all required columns exist (add with NaN if missing)
+                required_columns = [
+                    'Account', 'Ad group', 'Campaign', 'Platform',
+                    'Impr.', 'Clicks', 'Cost', 'Avg. CPC', 'CTR',
+                    'Search impr. share', 'Search top IS', 'Search abs. top IS', 'Search lost IS (rank)',
+                    'Ad group status', 'Default max. CPC', 'Current Bid'
+                ]
+                
+                for col in required_columns:
+                    if col not in all_ads_df.columns:
+                        all_ads_df[col] = pd.NA
+                        st.warning(f"⚠️ Column '{col}' missing - added with blank values")
+                
+                # Debug: Show platform breakdown
+                if 'Platform' in all_ads_df.columns:
+                    platform_breakdown = all_ads_df['Platform'].value_counts()
+                    st.success(f"✅ Combined dataframe: {len(all_ads_df):,} total ad groups")
+                    for platform, count in platform_breakdown.items():
+                        st.caption(f"  • {platform}: {count:,} ad groups")
+                
+                # Process as single combined analysis (NO TABS - all data in one view)
+                process_ads_platform(
+                    "All Platforms Combined", 
+                    all_ads_df, 
+                    custom_thresholds, 
+                    selected_account, 
+                    filter_to_stats_account,
+                    shared_budget_df  # Pass the budget data
+                )
+                
+
+
+
+# ---- Consolidated Debug Section ----
+if 'debug_info' in st.session_state and st.session_state.debug_info:
+        # ========== TAB 2 DEBUG & STATUS TABLE ==========
+        st.markdown("---")
+        st.markdown("### 🔍 Debug & Status Report")
+        
+        # Build comprehensive Tab 2 debug data
+        tab2_debug_data = []
+        
+        # Campaign stats from Tab 1
+        if 'tab2_campaign_stats_available' in st.session_state:
+            count = st.session_state.tab2_campaign_stats_available
+            status = "✅" if count > 0 else "⚠️"
+            tab2_debug_data.append(["Campaign Stats from Tab 1", f"{count} campaigns", status])
+        
+        # Mapping loaded
+        if 'tab2_mapping_loaded' in st.session_state:
+            count = st.session_state.tab2_mapping_loaded
+            status = "✅" if count > 0 else "⚠️"
+            tab2_debug_data.append(["Product/UTM Mapping", f"{count:,} mappings", status])
+        
+        if tab2_debug_data:
+            tab2_df = pd.DataFrame(tab2_debug_data, columns=["Metric", "Value", "Status"])
+            st.dataframe(tab2_df, hide_index=True, use_container_width=True)
+        
+        # Build text export
+        tab2_debug_text = "=== TAB 2 DEBUG & STATUS REPORT ===\n\n"
+        if tab2_debug_data:
+            for row in tab2_debug_data:
+                tab2_debug_text += f"{row[0]}: {row[1]} {row[2]}\n"
+        
+        # Download and copy buttons
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.download_button(
+                label="📥 Download Tab 2 Debug Report",
+                data=tab2_debug_text,
+                file_name="tab2_debug_report.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+        
+        with col2:
+            if st.button("📋 Copy to Clipboard", key="copy_tab2_debug", use_container_width=True):
+                st.code(tab2_debug_text, language=None)
+
+# ---- Footer ----
+st.markdown("<hr/>", unsafe_allow_html=True)
+st.markdown(
+    """
+    <div style='color:#47B74F;text-align:center;font-size:14px;padding:20px;'>
+        <strong>🍈 Melon Local</strong> Lead Analyzer<br/>
+        <span style='color:#114e38;font-size:12px;'>Fresh insights for smarter marketing decisions</span>
+    </div>
+    """, unsafe_allow_html=True
+)
