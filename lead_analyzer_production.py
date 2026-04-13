@@ -2612,15 +2612,18 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
     df["platform"] = df.apply(lambda r: classify_platform(r[col_campaign], r[col_traffic]), axis=1)
     df["domain"] = df[col_domain].astype(str)
     
-    # Use mapped Product if available (from mapping enrichment), otherwise use heuristic classification
+    # Classify product: landing page first, then campaign number fallback.
+    # classify_product checks landing page path keywords first, and only
+    # falls back to campaign number when the page is generic (e.g. /quote).
+    # If classify_product returns "Other" (no signal), use the mapping
+    # enrichment value (if available) as a last resort.
+    df["product"] = df.apply(
+        lambda r: classify_product(r[col_campaign], r[col_landing], r["platform"]), axis=1
+    )
     if 'Product' in df.columns:
-        # Mapping enrichment already ran - use those values, fill missing with heuristic
-        df["product"] = df["Product"].fillna(
-            df.apply(lambda r: classify_product(r[col_campaign], r[col_landing], r["platform"]), axis=1)
-        )
-    else:
-        # No mapping - use heuristic classification
-        df["product"] = df.apply(lambda r: classify_product(r[col_campaign], r[col_landing], r["platform"]), axis=1)
+        # Where classify_product couldn't determine product, use mapping
+        mask = df["product"] == "Other"
+        df.loc[mask, "product"] = df.loc[mask, "Product"].fillna("Other")
     
     # Classify device based on campaign ID patterns
     df["device"] = df.apply(lambda r: classify_device(r[col_campaign], r["platform"]), axis=1)
@@ -2639,6 +2642,87 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
         df["lead_opportunities"] += df[col_phone]
     if include_sms:
         df["lead_opportunities"] += df[col_sms]
+
+    # ---------- Landing Page vs UTM Product Mismatch Detection ----------
+    product_mismatch = None
+    if col_campaign and col_landing:
+        def _lp_product(landing_page):
+            """Classify product from landing page path only."""
+            s_lp = (str(landing_page) or "").lower()
+            path_part = s_lp.split('/', 3)[-1] if '/' in s_lp else ''
+            if "renters" in path_part: return "Renters"
+            if "condo" in path_part: return "Condo"
+            if "homeowners" in path_part or "home-insurance" in path_part: return "Home"
+            if "auto" in path_part or "car-insurance" in path_part: return "Auto"
+            return None  # Ambiguous / generic page
+
+        def _utm_product(campaign_id, platform):
+            """Classify product from campaign number / UTM only."""
+            raw = (str(campaign_id) or "").strip()
+            h = re.match(r'^[0-9A-Fa-f]{32}(.+)$', raw)
+            if h: raw = h.group(1)
+            s_id = raw.upper()
+            if platform == "Melon Max":
+                if "QSA" in s_id: return "Auto"
+                if "QSH" in s_id: return "Home"
+            num_match = re.search(r'(?:MLSG|MLSB|MLG|MLB|[GB])[DM]F?(\d{3,4})', s_id)
+            if not num_match: num_match = re.search(r'F(\d{3,4})', s_id)
+            if num_match:
+                return _CAMPAIGN_NUM_PRODUCT_MAP.get(num_match.group(1))
+            return None
+
+        df["_lp_product"] = df[col_landing].apply(_lp_product)
+        df["_utm_product"] = df.apply(lambda r: _utm_product(r[col_campaign], r["platform"]), axis=1)
+
+        # Mismatch = both are known (not None) and they disagree
+        mismatch_mask = (
+            df["_lp_product"].notna() &
+            df["_utm_product"].notna() &
+            (df["_lp_product"] != df["_utm_product"])
+        )
+
+        if mismatch_mask.any():
+            # Clean landing page path for display
+            df["_lp_path"] = df[col_landing].apply(
+                lambda x: re.sub(r'^https?://[^/]*', '', str(x).strip()).rstrip('/') or '/'
+            )
+
+            group_cols_mm = ["platform", "_lp_path", "_lp_product", "_utm_product"]
+            if "agency" in df.columns:
+                group_cols_mm = ["agency"] + group_cols_mm
+
+            product_mismatch = df[mismatch_mask].groupby(group_cols_mm, as_index=False).agg(
+                quote_starts=(col_qs, "sum"),
+                phone_clicks=(col_phone, "sum"),
+                sms_clicks=(col_sms, "sum"),
+                leads=("lead_opportunities", "sum")
+            ).sort_values("leads", ascending=False).reset_index(drop=True)
+
+            product_mismatch = product_mismatch.rename(columns={
+                "_lp_path": "landing_page",
+                "_lp_product": "lp_product",
+                "_utm_product": "utm_product"
+            })
+
+            # Add TOTAL row
+            totals_mm = {
+                "platform": "",
+                "landing_page": "",
+                "lp_product": "",
+                "utm_product": "TOTAL",
+                "quote_starts": product_mismatch["quote_starts"].sum(),
+                "phone_clicks": product_mismatch["phone_clicks"].sum(),
+                "sms_clicks": product_mismatch["sms_clicks"].sum(),
+                "leads": product_mismatch["leads"].sum()
+            }
+            if "agency" in product_mismatch.columns:
+                totals_mm["agency"] = ""
+            product_mismatch = pd.concat(
+                [product_mismatch, pd.DataFrame([totals_mm])], ignore_index=True
+            )
+
+        # Clean up temp columns
+        df.drop(columns=["_lp_product", "_utm_product", "_lp_path"], errors="ignore", inplace=True)
 
     # Optional spend column
     spend_col = None
@@ -3205,6 +3289,7 @@ def analyze(df, spends_input, spend_column=None, hide_unknown=False, add_device_
         "product_agency": prod_agency,
         "utm_overview": utm_overview,
         "platform_lp_utm": platform_lp_utm,
+        "product_mismatch": product_mismatch,
         "device_overview": device_overview,
         "device_platform": device_platform
     }
@@ -4102,6 +4187,17 @@ with main_tab1:
                     else:
                         st.info("No Campaign ID or Landing Page column found — table unavailable.")
 
+                # Landing Page vs UTM Product Mismatch
+                with st.expander(f"{agency_name}: Landing Page vs UTM Product Mismatch", expanded=False):
+                    mm = single.get("product_mismatch")
+                    if mm is not None and not mm.empty:
+                        st.warning(f"⚠️ **{len(mm) - 1} row(s)** where the landing page product differs from the UTM/campaign number product. The landing page is used as the primary classification.")
+                        # Drop agency column if present (redundant in per-agency view)
+                        mm_display = mm.drop(columns=["agency"], errors="ignore")
+                        display_table_with_total(mm_display, "utm_product", "TOTAL")
+                    else:
+                        st.success("No mismatches found — landing page and UTM products agree on all leads.")
+
                 # By Product
                 with st.expander(f"{agency_name}: By Product (All Platforms)", expanded=False):
                     # Tracking disclaimer
@@ -4800,6 +4896,15 @@ with main_tab1:
                 display_table_with_total(lpu_combined, "utm", "TOTAL", filters=lpu_filters if lpu_filters else None)
             else:
                 st.info("No Campaign ID or Landing Page column found — table unavailable.")
+
+        # 2d) Combined Landing Page vs UTM Product Mismatch
+        with st.expander("Combined — Landing Page vs UTM Product Mismatch", expanded=False):
+            mm_combined = results.get("product_mismatch")
+            if mm_combined is not None and not mm_combined.empty:
+                st.warning(f"⚠️ **{len(mm_combined) - 1} row(s)** where the landing page product differs from the UTM/campaign number product. The landing page is used as the primary classification.")
+                display_table_with_total(mm_combined, "utm_product", "TOTAL")
+            else:
+                st.success("No mismatches found — landing page and UTM products agree on all leads.")
 
         # 3) Product × Platform totals (no agency split)
         with st.expander("Combined — Product × Platform (Totals + % Share)", expanded=False):
@@ -7834,127 +7939,3 @@ with main_tab2:
                 
                 # Show debug details in expander
                 with st.expander("🔧 Platform Combination Details", expanded=False):
-                    for platform_name, ads_df in ads_data_by_platform:
-                        st.caption(f"  → Added {len(ads_df)} ad groups from **{platform_name}**")
-                        st.caption(f"     Columns: {', '.join(ads_df.columns[:10].tolist())}...")
-                    
-                    st.caption(f"\n✅ Combined dataframe: {len(all_ads_df):,} total ad groups")
-                    
-                    # Show platform breakdown
-                    if 'Platform' in all_ads_df.columns:
-                        platform_counts = all_ads_df['Platform'].value_counts()
-                        for platform, count in platform_counts.items():
-                            st.caption(f"  • {platform}: {count:,} ad groups")
-                    
-                    # Show column sample from each platform
-                    st.caption(f"\n🔍 Column check:")
-                    for platform_name, ads_df in ads_data_by_platform:
-                        has_account = 'Account' in ads_df.columns
-                        has_impr = 'Impr.' in ads_df.columns
-                        first_col = ads_df.columns[0] if len(ads_df.columns) > 0 else 'N/A'
-                        st.caption(f"  {platform_name}: Has 'Account'={has_account}, Has 'Impr.'={has_impr}, First col='{first_col}'")
-                
-                # Apply CSM filter if selected
-                if selected_csm != 'All CSMs' and shared_budget_df is not None and 'CSM' in shared_budget_df.columns:
-                    # Get list of accounts for this CSM
-                    csm_accounts = shared_budget_df[shared_budget_df['CSM'] == selected_csm]['Agent'].dropna().unique().tolist()
-                    
-                    # Filter dataframe to only those accounts
-                    before_csm_filter = len(all_ads_df)
-                    all_ads_df = all_ads_df[all_ads_df['Account'].isin(csm_accounts)].copy()
-                    after_csm_filter = len(all_ads_df)
-                    
-                    st.info(f"🎯 **CSM Filter**: {selected_csm} → {len(csm_accounts)} accounts, {after_csm_filter:,} ad groups")
-
-                
-                # Ensure all required columns exist (add with NaN if missing)
-                required_columns = [
-                    'Account', 'Ad group', 'Campaign', 'Platform',
-                    'Impr.', 'Clicks', 'Cost', 'Avg. CPC', 'CTR',
-                    'Search impr. share', 'Search top IS', 'Search abs. top IS', 'Search lost IS (rank)',
-                    'Ad group status', 'Default max. CPC', 'Current Bid'
-                ]
-                
-                for col in required_columns:
-                    if col not in all_ads_df.columns:
-                        all_ads_df[col] = pd.NA
-                        st.warning(f"⚠️ Column '{col}' missing - added with blank values")
-                
-                # Debug: Show platform breakdown
-                if 'Platform' in all_ads_df.columns:
-                    platform_breakdown = all_ads_df['Platform'].value_counts()
-                    st.success(f"✅ Combined dataframe: {len(all_ads_df):,} total ad groups")
-                    for platform, count in platform_breakdown.items():
-                        st.caption(f"  • {platform}: {count:,} ad groups")
-                
-                # Process as single combined analysis (NO TABS - all data in one view)
-                process_ads_platform(
-                    "All Platforms Combined", 
-                    all_ads_df, 
-                    custom_thresholds, 
-                    selected_account, 
-                    filter_to_stats_account,
-                    shared_budget_df  # Pass the budget data
-                )
-                
-
-
-
-# ---- Consolidated Debug Section ----
-if 'debug_info' in st.session_state and st.session_state.debug_info:
-        # ========== TAB 2 DEBUG & STATUS TABLE ==========
-        st.markdown("---")
-        st.markdown("### 🔍 Debug & Status Report")
-        
-        # Build comprehensive Tab 2 debug data
-        tab2_debug_data = []
-        
-        # Campaign stats from Tab 1
-        if 'tab2_campaign_stats_available' in st.session_state:
-            count = st.session_state.tab2_campaign_stats_available
-            status = "✅" if count > 0 else "⚠️"
-            tab2_debug_data.append(["Campaign Stats from Tab 1", f"{count} campaigns", status])
-        
-        # Mapping loaded
-        if 'tab2_mapping_loaded' in st.session_state:
-            count = st.session_state.tab2_mapping_loaded
-            status = "✅" if count > 0 else "⚠️"
-            tab2_debug_data.append(["Product/UTM Mapping", f"{count:,} mappings", status])
-        
-        if tab2_debug_data:
-            tab2_df = pd.DataFrame(tab2_debug_data, columns=["Metric", "Value", "Status"])
-            st.dataframe(tab2_df, hide_index=True, use_container_width=True)
-        
-        # Build text export
-        tab2_debug_text = "=== TAB 2 DEBUG & STATUS REPORT ===\n\n"
-        if tab2_debug_data:
-            for row in tab2_debug_data:
-                tab2_debug_text += f"{row[0]}: {row[1]} {row[2]}\n"
-        
-        # Download and copy buttons
-        st.markdown("---")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.download_button(
-                label="📥 Download Tab 2 Debug Report",
-                data=tab2_debug_text,
-                file_name="tab2_debug_report.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
-        
-        with col2:
-            if st.button("📋 Copy to Clipboard", key="copy_tab2_debug", use_container_width=True):
-                st.code(tab2_debug_text, language=None)
-
-# ---- Footer ----
-st.markdown("<hr/>", unsafe_allow_html=True)
-st.markdown(
-    """
-    <div style='color:#47B74F;text-align:center;font-size:14px;padding:20px;'>
-        <strong>🍈 Melon Local</strong> Lead Analyzer<br/>
-        <span style='color:#114e38;font-size:12px;'>Fresh insights for smarter marketing decisions</span>
-    </div>
-    """, unsafe_allow_html=True
-)
