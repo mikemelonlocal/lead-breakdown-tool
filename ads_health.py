@@ -352,8 +352,8 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         return matched_conversion
     
     ads_df['Campaign Conversions'] = ads_df.apply(get_conversions_by_campaign_name, axis=1)
-    return ads_df
-    
+
+    # Continue with additional strategies for rows that didn't match
     # First: Process URL report if available (for debug info)
     if url_report_df is not None and not url_report_df.empty:
         # Store debug info in session state
@@ -447,16 +447,17 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                 
                 return None
             
-            ads_df['Campaign Conversions'] = ads_df.apply(get_conversions_via_campaign_id, axis=1)
-            
+            _via_id = ads_df.apply(get_conversions_via_campaign_id, axis=1)
+            # Only fill where Campaign Conversions is still missing
+            mask = ads_df['Campaign Conversions'].isna()
+            ads_df.loc[mask, 'Campaign Conversions'] = _via_id[mask]
+
             # Store debug info
             st.session_state.debug_info['url_campaign_id_matching'] = {
                 'url_campaign_id_col': url_campaign_id_col,
                 'mappings_created': len(ad_group_to_campaign_id),
                 'sample_mappings': list(ad_group_to_campaign_id.items())[:5]
             }
-            
-            return ads_df
         
         # FALLBACK: Look for Final URL column and extract tracking IDs (less reliable)
         final_url_col = None
@@ -600,8 +601,9 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                 
                 return matched_conversion
             
-            ads_df['Campaign Conversions'] = ads_df.apply(get_conversions_via_url_report, axis=1)
-            return ads_df
+            _via_url = ads_df.apply(get_conversions_via_url_report, axis=1)
+            mask = ads_df['Campaign Conversions'].isna()
+            ads_df.loc[mask, 'Campaign Conversions'] = _via_url[mask]
     
     # Strategy 2: Direct Campaign ID matching (if ads_df has Campaign ID column)
     ads_campaign_id_col = None
@@ -641,8 +643,9 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
             
             return None
         
-        ads_df['Campaign Conversions'] = ads_df.apply(get_conversions_by_direct_id, axis=1)
-        return ads_df
+        _via_direct = ads_df.apply(get_conversions_by_direct_id, axis=1)
+        mask = ads_df['Campaign Conversions'].isna()
+        ads_df.loc[mask, 'Campaign Conversions'] = _via_direct[mask]
     
     # Strategy 3: Name-based matching (fallback)
     def get_conversions_by_name(campaign_name):
@@ -690,7 +693,9 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         return None
     
     if 'Campaign' in ads_df.columns:
-        ads_df['Campaign Conversions'] = ads_df['Campaign'].apply(get_conversions_by_name)
+        _via_name = ads_df['Campaign'].apply(get_conversions_by_name)
+        mask = ads_df['Campaign Conversions'].isna()
+        ads_df.loc[mask, 'Campaign Conversions'] = _via_name[mask]
     
     return ads_df
 
