@@ -408,7 +408,7 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         
         return matched_conversion
     
-    _via_campaign_name = ads_df.apply(get_conversions_by_campaign_name, axis=1)
+    _via_campaign_name = ads_df.apply(get_conversions_by_campaign_name, axis=1).astype('float64')
     mask = ads_df['Campaign Conversions'].isna()
     ads_df.loc[mask, 'Campaign Conversions'] = _via_campaign_name[mask]
 
@@ -506,8 +506,7 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                 
                 return None
             
-            _via_id = ads_df.apply(get_conversions_via_campaign_id, axis=1)
-            # Only fill where Campaign Conversions is still missing
+            _via_id = ads_df.apply(get_conversions_via_campaign_id, axis=1).astype('float64')
             mask = ads_df['Campaign Conversions'].isna()
             ads_df.loc[mask, 'Campaign Conversions'] = _via_id[mask]
 
@@ -660,7 +659,7 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                 
                 return matched_conversion
             
-            _via_url = ads_df.apply(get_conversions_via_url_report, axis=1)
+            _via_url = ads_df.apply(get_conversions_via_url_report, axis=1).astype('float64')
             mask = ads_df['Campaign Conversions'].isna()
             ads_df.loc[mask, 'Campaign Conversions'] = _via_url[mask]
     
@@ -702,7 +701,7 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
             
             return None
         
-        _via_direct = ads_df.apply(get_conversions_by_direct_id, axis=1)
+        _via_direct = ads_df.apply(get_conversions_by_direct_id, axis=1).astype('float64')
         mask = ads_df['Campaign Conversions'].isna()
         ads_df.loc[mask, 'Campaign Conversions'] = _via_direct[mask]
     
@@ -773,7 +772,7 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         return None
     
     if 'Campaign' in ads_df.columns:
-        _via_name = ads_df['Campaign'].apply(get_conversions_by_name)
+        _via_name = ads_df['Campaign'].apply(get_conversions_by_name).astype('float64')
         mask = ads_df['Campaign Conversions'].isna()
         ads_df.loc[mask, 'Campaign Conversions'] = _via_name[mask]
     
