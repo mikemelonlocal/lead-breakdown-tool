@@ -1848,11 +1848,51 @@ def classify_platform(campaign_id: str, traffic_source: str) -> str:
     return "Unknown"
 
 
-def classify_product(campaign_id: str, landing_page: str, platform: str) -> str:
-    """Classify insurance product type based on campaign ID and landing page.
+def _build_campaign_number_product_map():
+    """Build a campaign-number-to-product lookup from the mapping CSV.
 
-    Product names are aligned with the complete_utm_mapping.csv:
-    Auto, Home, Renters, Condo.
+    Reads complete_utm_mapping.csv once and extracts the consensus product
+    for each 3-4 digit campaign number found in UTM codes.  Falls back to
+    a minimal hardcoded map if the CSV is unavailable.
+    """
+    try:
+        mapping_path = pathlib.Path(__file__).parent / 'complete_utm_mapping.csv'
+        if not mapping_path.exists():
+            mapping_path = pathlib.Path('complete_utm_mapping.csv')
+        if not mapping_path.exists():
+            return {}
+
+        mdf = pd.read_csv(mapping_path, usecols=['UTM', 'Product'])
+        mdf['_utm'] = mdf['UTM'].fillna('').astype(str).str.upper()
+
+        # Extract 3-4 digit campaign number from UTM codes like GD172, GM001, etc.
+        mdf['_num'] = mdf['_utm'].str.extract(r'[A-Z]*[DM]?F?(\d{3,4})', expand=False)
+        mdf = mdf.dropna(subset=['_num', 'Product'])
+
+        # For each number, take the most common product (consensus)
+        return (
+            mdf.groupby('_num')['Product']
+            .agg(lambda s: s.mode().iloc[0] if len(s.mode()) > 0 else None)
+            .dropna()
+            .to_dict()
+        )
+    except Exception:
+        return {}
+
+# Module-level cache — built once on import
+_CAMPAIGN_NUM_PRODUCT_MAP = _build_campaign_number_product_map()
+
+
+def classify_product(campaign_id: str, landing_page: str, platform: str) -> str:
+    """Classify insurance product type based on landing page and campaign ID.
+
+    Priority order:
+    1. Melon Max prefix (QSA → Auto, QSH → Home)
+    2. Landing page URL path — the most reliable signal for what the user
+       actually saw. Checks the path portion only (domain is stripped so
+       "insurancequotesouth.com" doesn't false-match on "quote").
+    3. Campaign number from mapping CSV — used as fallback when the landing
+       page is generic (e.g. a bare /quote page with no product keyword).
     """
     raw = (str(campaign_id) or "").strip()
 
@@ -1864,45 +1904,16 @@ def classify_product(campaign_id: str, landing_page: str, platform: str) -> str:
 
     s_id = raw.upper()
 
-    # Melon Max: product encoded in campaign ID prefix
+    # ── 1. Melon Max: product encoded in campaign ID prefix ──
     if platform == "Melon Max":
         if "QSA" in s_id:
             return "Auto"
         if "QSH" in s_id:
             return "Home"
 
-    # Known campaign number -> product mappings
-    PRODUCT_BY_NUMBER = {
-        '001': 'Auto', '003': 'Auto', '004': 'Auto', '005': 'Auto',
-        '0055': 'Auto',
-        '119': 'Auto', '120': 'Auto',
-        '170': 'Home', '171': 'Home',
-        '172': 'Renters', '173': 'Renters',
-        '205': 'Condo',
-        '271': 'Condo', '273': 'Condo',
-    }
-
-    # Extract campaign number anchored to known platform prefixes
-    # Patterns: MLGDF172, MLBM001, GD172, BD001, F172, etc.
-    num_match = re.search(
-        r'(?:MLSG|MLSB|MLG|MLB|[GB])[DM]F?(\d{3,4})', s_id
-    )
-    if not num_match:
-        # Fallback: look for F+digits or standalone 3-4 digit number
-        # after the start of the cleaned ID (no hash)
-        num_match = re.search(r'F(\d{3,4})', s_id)
-    if not num_match:
-        # Last resort: first 3-4 digit number in the cleaned campaign ID
-        num_match = re.search(r'(\d{3,4})', s_id)
-
-    if num_match:
-        campaign_num = num_match.group(1)
-        if campaign_num in PRODUCT_BY_NUMBER:
-            return PRODUCT_BY_NUMBER[campaign_num]
-
-    # Landing page fallback — check the URL path, not the domain
+    # ── 2. Landing page path keywords (primary signal) ──
     s_lp = (str(landing_page) or "").lower()
-    # Strip the domain portion so "insurancequotesouth.com" doesn't false-match
+    # Strip domain so "insurancequotesouth.com" doesn't false-match
     path_part = s_lp.split('/', 3)[-1] if '/' in s_lp else ''
 
     if "renters" in path_part:
@@ -1913,6 +1924,21 @@ def classify_product(campaign_id: str, landing_page: str, platform: str) -> str:
         return "Home"
     if "auto" in path_part or "car-insurance" in path_part:
         return "Auto"
+
+    # ── 3. Campaign number fallback (for generic/quote-only pages) ──
+    num_match = re.search(
+        r'(?:MLSG|MLSB|MLG|MLB|[GB])[DM]F?(\d{3,4})', s_id
+    )
+    if not num_match:
+        num_match = re.search(r'F(\d{3,4})', s_id)
+    if not num_match:
+        num_match = re.search(r'(\d{3,4})', s_id)
+
+    if num_match:
+        campaign_num = num_match.group(1)
+        product = _CAMPAIGN_NUM_PRODUCT_MAP.get(campaign_num)
+        if product:
+            return product
 
     return "Other"
 
