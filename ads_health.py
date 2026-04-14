@@ -275,7 +275,14 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
     # Debug: show what the number matching produced
     _matched = ads_df['Campaign Conversions'].notna().sum()
     _total_conv = ads_df['Campaign Conversions'].sum()
-    st.caption(f"🔢 Number matching: {_matched}/{len(ads_df)} matched, total={_total_conv:,.0f} | Map keys: {list(number_conv_map.keys())[:10]}")
+    # Show map values (not just keys) for common campaign numbers
+    _map_sample = {str(k): v for k, v in sorted(number_conv_map.items(), key=lambda x: -x[1])[:10]}
+    st.caption(f"🔢 Number matching: {_matched}/{len(ads_df)} matched, total={_total_conv:,.0f}")
+    st.caption(f"🗺️ Map (top 10 by value): {_map_sample}")
+    # Show distribution of matched values
+    _matched_values = ads_df['Campaign Conversions'].dropna()
+    if len(_matched_values) > 0:
+        st.caption(f"📈 Matched values — min: {_matched_values.min():.0f}, max: {_matched_values.max():.0f}, mean: {_matched_values.mean():.1f}, unique values: {sorted(_matched_values.unique())[:20]}")
 
     # Strategy 1: Match using Campaign Name from ad group report
     # Campaign names like "Legacy - Fire 172 - SF Renters Insurance - Desktop"
