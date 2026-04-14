@@ -232,15 +232,18 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         return s
 
     # Build {(cmpid_upper, domain): conversions} from Tab 1 stats
+    # Skip entries without a domain — we can't safely attribute them to an account
     cmpid_domain_conv_map = {}
     stats_has_domain = 'Domain' in campaign_stats_df.columns
-    if 'Campaign' in campaign_stats_df.columns:
+    if 'Campaign' in campaign_stats_df.columns and stats_has_domain:
         for _, row in campaign_stats_df.iterrows():
             cid = str(row.get('Campaign', '')).strip().upper()
             if not cid or cid == 'NAN':
                 continue
+            dom = _normalize_domain(row.get('Domain', ''))
+            if not dom:  # Skip entries with no domain — they'd match anything
+                continue
             convs = float(row.get('Total Conversions', 0) or 0)
-            dom = _normalize_domain(row.get('Domain', '')) if stats_has_domain else ''
             key = (cid, dom)
             cmpid_domain_conv_map[key] = cmpid_domain_conv_map.get(key, 0) + convs
 
@@ -270,7 +273,7 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                     adgroup_cmpid_map[key] = (cmpid, dom)
 
     def _match_by_cmpid(row):
-        """Match on exact (cmpid, domain) pair."""
+        """Match on exact (cmpid, domain) pair. Both must be non-empty."""
         camp = str(row.get('Campaign', '')).strip() if pd.notna(row.get('Campaign')) else ''
         adg = str(row.get('Ad group', '')).strip() if pd.notna(row.get('Ad group')) else ''
         if not camp or not adg:
@@ -279,6 +282,8 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         if not entry:
             return None
         cmpid, dom = entry
+        if not cmpid or not dom:
+            return None  # Need both to safely match
         # Exact match first
         if (cmpid, dom) in cmpid_domain_conv_map:
             return cmpid_domain_conv_map[(cmpid, dom)]
@@ -290,7 +295,6 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
             if stats_cid.startswith(cmpid) or cmpid.startswith(stats_cid):
                 return convs
         # No match in this domain — do NOT fall back to other domains
-        # (same cmpid in a different account is a different ad group)
         return None
 
     ads_df['Campaign Conversions'] = ads_df.apply(_match_by_cmpid, axis=1).astype('float64')
@@ -298,13 +302,18 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
     # Debug summary
     _matched = ads_df['Campaign Conversions'].notna().sum()
     _total_conv = ads_df['Campaign Conversions'].sum()
-    _stats_domains = {d for _, d in cmpid_domain_conv_map.keys() if d}
+    _stats_domains = sorted({d for _, d in cmpid_domain_conv_map.keys() if d})
+    _url_domains = sorted({d for _, d in adgroup_cmpid_map.values() if d})
     st.caption(
         f"🎯 cmpid+domain matching: {_matched}/{len(ads_df)} matched, "
         f"total={_total_conv:,.0f} | URL report mappings: {len(adgroup_cmpid_map)}, "
-        f"Tab 1 stats: {len(cmpid_domain_conv_map)} (cmpid, domain) pairs across "
-        f"{len(_stats_domains)} domains"
+        f"Tab 1 stats: {len(cmpid_domain_conv_map)} (cmpid, domain) pairs"
     )
+    with st.expander("🔍 Domain Inspection", expanded=False):
+        st.caption(f"**Tab 1 stats domains ({len(_stats_domains)}):** {_stats_domains}")
+        st.caption(f"**URL report domains ({len(_url_domains)}):** {_url_domains}")
+        _overlap = set(_stats_domains) & set(_url_domains)
+        st.caption(f"**Overlap ({len(_overlap)}):** {sorted(_overlap)}")
 
     # ── SKIP fallback strategies when URL report is available ──
     # The fallback strategies (campaign-name matching, fuzzy name matching)
