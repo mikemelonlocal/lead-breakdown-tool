@@ -215,20 +215,36 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                     'full_campaign_id': campaign_id
                 }
     
-    # ── STRATEGY 0: Exact cmpid matching via URL report (most precise) ──
+    # ── STRATEGY 0: Exact (cmpid, domain) matching via URL report ──
     # URL report contains (Campaign, Ad group) → Ad final URL with cmpid=MLGDF172-001R
-    # Tab 1 stats has Campaign IDs like MLGDF172-001R with per-campaign-ID conversions
-    # Match each Tab 2 (Campaign, Ad group) → its cmpid → Tab 1 stats value
-    cmpid_conv_map = {}  # {cmpid_upper: total_conversions across all domains}
+    # Tab 1 stats has (Campaign ID, Domain) with per-ID-per-domain conversions
+    # Same cmpid codes are reused across multiple accounts; only the domain
+    # distinguishes Ryan Stacey's MLBD001-001R from Patrick Stone's MLBD001-001R.
+
+    def _normalize_domain(d):
+        """Normalize domain: strip protocol, www, trailing slashes, lowercase."""
+        if not d or pd.isna(d):
+            return ''
+        s = str(d).strip().lower()
+        s = re.sub(r'^https?://', '', s)
+        s = re.sub(r'^www\.', '', s)
+        s = s.split('/')[0]
+        return s
+
+    # Build {(cmpid_upper, domain): conversions} from Tab 1 stats
+    cmpid_domain_conv_map = {}
+    stats_has_domain = 'Domain' in campaign_stats_df.columns
     if 'Campaign' in campaign_stats_df.columns:
         for _, row in campaign_stats_df.iterrows():
             cid = str(row.get('Campaign', '')).strip().upper()
             if not cid or cid == 'NAN':
                 continue
             convs = float(row.get('Total Conversions', 0) or 0)
-            cmpid_conv_map[cid] = cmpid_conv_map.get(cid, 0) + convs
+            dom = _normalize_domain(row.get('Domain', '')) if stats_has_domain else ''
+            key = (cid, dom)
+            cmpid_domain_conv_map[key] = cmpid_domain_conv_map.get(key, 0) + convs
 
-    # Build (Campaign, Ad group) → cmpid lookup from URL report
+    # Build (Campaign, Ad group) → (cmpid, domain) from URL report
     adgroup_cmpid_map = {}
     if url_report_df is not None and not url_report_df.empty:
         url_col = None
@@ -241,42 +257,54 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                 url = str(row.get(url_col, '')) if pd.notna(row.get(url_col)) else ''
                 if not url or url == 'nan':
                     continue
-                m = re.search(r'cmpid=([A-Z0-9\-]+)', url, re.IGNORECASE)
-                if not m:
+                cmpid_m = re.search(r'cmpid=([A-Z0-9\-]+)', url, re.IGNORECASE)
+                dom_m = re.search(r'https?://(?:www\.)?([^/?]+)', url)
+                if not cmpid_m:
                     continue
-                cmpid = m.group(1).upper()
+                cmpid = cmpid_m.group(1).upper()
+                dom = dom_m.group(1).lower() if dom_m else ''
                 camp = str(row.get('Campaign', '')).strip()
                 adg = str(row.get('Ad group', '')).strip()
                 key = (camp, adg)
-                # Keep the first cmpid for each (Campaign, Ad group) pair
                 if key not in adgroup_cmpid_map:
-                    adgroup_cmpid_map[key] = cmpid
+                    adgroup_cmpid_map[key] = (cmpid, dom)
 
     def _match_by_cmpid(row):
-        """Match Tab 2 ad group to Tab 1 stats by exact cmpid from URL report."""
+        """Match on exact (cmpid, domain) pair."""
         camp = str(row.get('Campaign', '')).strip() if pd.notna(row.get('Campaign')) else ''
         adg = str(row.get('Ad group', '')).strip() if pd.notna(row.get('Ad group')) else ''
         if not camp or not adg:
             return None
-        cmpid = adgroup_cmpid_map.get((camp, adg))
-        if not cmpid:
+        entry = adgroup_cmpid_map.get((camp, adg))
+        if not entry:
             return None
-        # Direct lookup
-        if cmpid in cmpid_conv_map:
-            return cmpid_conv_map[cmpid]
-        # Fuzzy: Tab 1 cmpid may have extra suffix (e.g., URL cmpid=MLGDF172-001R, Tab 1 has MLGDF172-001RE2)
-        for stats_cid, convs in cmpid_conv_map.items():
+        cmpid, dom = entry
+        # Exact match first
+        if (cmpid, dom) in cmpid_domain_conv_map:
+            return cmpid_domain_conv_map[(cmpid, dom)]
+        # Fuzzy cmpid match within the same domain
+        # (Tab 1 may have MLGDF172-001RE2 while URL has MLGDF172-001R)
+        for (stats_cid, stats_dom), convs in cmpid_domain_conv_map.items():
+            if stats_dom != dom:
+                continue
             if stats_cid.startswith(cmpid) or cmpid.startswith(stats_cid):
                 return convs
+        # No match in this domain — do NOT fall back to other domains
+        # (same cmpid in a different account is a different ad group)
         return None
 
-    # Run cmpid matching first (most precise — per-ad-group)
     ads_df['Campaign Conversions'] = ads_df.apply(_match_by_cmpid, axis=1).astype('float64')
 
     # Debug summary
     _matched = ads_df['Campaign Conversions'].notna().sum()
     _total_conv = ads_df['Campaign Conversions'].sum()
-    st.caption(f"🎯 cmpid matching: {_matched}/{len(ads_df)} matched, total={_total_conv:,.0f} (URL report: {len(adgroup_cmpid_map)} mappings, Tab 1 stats: {len(cmpid_conv_map)} campaign IDs)")
+    _stats_domains = {d for _, d in cmpid_domain_conv_map.keys() if d}
+    st.caption(
+        f"🎯 cmpid+domain matching: {_matched}/{len(ads_df)} matched, "
+        f"total={_total_conv:,.0f} | URL report mappings: {len(adgroup_cmpid_map)}, "
+        f"Tab 1 stats: {len(cmpid_domain_conv_map)} (cmpid, domain) pairs across "
+        f"{len(_stats_domains)} domains"
+    )
 
     # Strategy 1: Match using Campaign Name from ad group report
     # Campaign names like "Legacy - Fire 172 - SF Renters Insurance - Desktop"
