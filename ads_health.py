@@ -306,6 +306,13 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         f"{len(_stats_domains)} domains"
     )
 
+    # ── SKIP fallback strategies when URL report is available ──
+    # The fallback strategies (campaign-name matching, fuzzy name matching)
+    # don't reliably check domain, which causes cross-account leakage.
+    # When URL report is present, Strategy 0 (cmpid+domain) is authoritative.
+    if url_report_df is not None and not url_report_df.empty and adgroup_cmpid_map:
+        return ads_df
+
     # Strategy 1: Match using Campaign Name from ad group report
     # Campaign names like "Legacy - Fire 172 - SF Renters Insurance - Desktop"
     # Match to stats Campaign IDs like "MLGDF172-001HVT1" by extracting "F172" code
