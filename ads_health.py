@@ -215,74 +215,68 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                     'full_campaign_id': campaign_id
                 }
     
-    # ── Build a simple campaign_number → conversions lookup ──
-    # Tab 1 campaign IDs: "MLBDF001-001RE2" → extract number "001"
-    # Tab 2 campaign names: "Legacy - 001 - SF Brand - Desktop" → extract number "001"
-    # Match on just the campaign number + office.
-    number_conv_map = {}  # {(campaign_num, office): total_conversions} or {campaign_num: total}
+    # ── STRATEGY 0: Exact cmpid matching via URL report (most precise) ──
+    # URL report contains (Campaign, Ad group) → Ad final URL with cmpid=MLGDF172-001R
+    # Tab 1 stats has Campaign IDs like MLGDF172-001R with per-campaign-ID conversions
+    # Match each Tab 2 (Campaign, Ad group) → its cmpid → Tab 1 stats value
+    cmpid_conv_map = {}  # {cmpid_upper: total_conversions across all domains}
     if 'Campaign' in campaign_stats_df.columns:
         for _, row in campaign_stats_df.iterrows():
-            cid = str(row['Campaign']).strip() if pd.notna(row.get('Campaign')) else ''
+            cid = str(row.get('Campaign', '')).strip().upper()
+            if not cid or cid == 'NAN':
+                continue
             convs = float(row.get('Total Conversions', 0) or 0)
-            # Extract campaign number from the stats Campaign ID
-            cid_upper = cid.upper()
-            num_match = re.search(r'(?:MLSG|MLSB|MLG|MLB|[GB])[DM]F?(\d{3,4})', cid_upper)
-            if not num_match:
-                num_match = re.search(r'F(\d{3,4})', cid_upper)
-            if not num_match:
-                num_match = re.search(r'(\d{3,4})', cid_upper)
-            if num_match:
-                num = num_match.group(1)
-                if has_office:
-                    office = row.get('Office', 'Legacy')
-                    key = (num, office)
-                else:
-                    key = num
-                number_conv_map[key] = number_conv_map.get(key, 0) + convs
+            cmpid_conv_map[cid] = cmpid_conv_map.get(cid, 0) + convs
 
-    def _match_by_campaign_number(row):
-        """Match Tab 2 ad group to Tab 1 stats by campaign number."""
-        campaign_name = str(row.get('Campaign', '')).strip() if pd.notna(row.get('Campaign')) else None
-        if not campaign_name:
+    # Build (Campaign, Ad group) → cmpid lookup from URL report
+    adgroup_cmpid_map = {}
+    if url_report_df is not None and not url_report_df.empty:
+        url_col = None
+        for col in url_report_df.columns:
+            if 'final url' in str(col).lower() and 'suffix' not in str(col).lower():
+                url_col = col
+                break
+        if url_col and 'Campaign' in url_report_df.columns and 'Ad group' in url_report_df.columns:
+            for _, row in url_report_df.iterrows():
+                url = str(row.get(url_col, '')) if pd.notna(row.get(url_col)) else ''
+                if not url or url == 'nan':
+                    continue
+                m = re.search(r'cmpid=([A-Z0-9\-]+)', url, re.IGNORECASE)
+                if not m:
+                    continue
+                cmpid = m.group(1).upper()
+                camp = str(row.get('Campaign', '')).strip()
+                adg = str(row.get('Ad group', '')).strip()
+                key = (camp, adg)
+                # Keep the first cmpid for each (Campaign, Ad group) pair
+                if key not in adgroup_cmpid_map:
+                    adgroup_cmpid_map[key] = cmpid
+
+    def _match_by_cmpid(row):
+        """Match Tab 2 ad group to Tab 1 stats by exact cmpid from URL report."""
+        camp = str(row.get('Campaign', '')).strip() if pd.notna(row.get('Campaign')) else ''
+        adg = str(row.get('Ad group', '')).strip() if pd.notna(row.get('Ad group')) else ''
+        if not camp or not adg:
             return None
-        # Extract campaign number from Tab 2 campaign name
-        # "Legacy - 001 - SF Brand - Desktop" → "001"
-        clean = re.sub(r'^(Legacy|MOA)\s*-\s*', '', campaign_name, flags=re.IGNORECASE).strip()
-        num_match = re.match(r'^(\d{3,4})', clean)
-        if not num_match:
-            # Try "Fire 172" or similar
-            num_match = re.search(r'\b(\d{3})\b', clean)
-        if not num_match:
+        cmpid = adgroup_cmpid_map.get((camp, adg))
+        if not cmpid:
             return None
-        num = num_match.group(1)
-        office = detect_office(campaign_name)
-        if has_office:
-            result = number_conv_map.get((num, office))
-            if result is not None:
-                return result
-            # Fallback: try without office
-            for k, v in number_conv_map.items():
-                if isinstance(k, tuple) and k[0] == num:
-                    return v
-        else:
-            return number_conv_map.get(num)
+        # Direct lookup
+        if cmpid in cmpid_conv_map:
+            return cmpid_conv_map[cmpid]
+        # Fuzzy: Tab 1 cmpid may have extra suffix (e.g., URL cmpid=MLGDF172-001R, Tab 1 has MLGDF172-001RE2)
+        for stats_cid, convs in cmpid_conv_map.items():
+            if stats_cid.startswith(cmpid) or cmpid.startswith(stats_cid):
+                return convs
         return None
 
-    # Run campaign number matching first (most reliable)
-    # Use float64 dtype to avoid LossySetitemError with PyArrow-backed columns
-    ads_df['Campaign Conversions'] = ads_df.apply(_match_by_campaign_number, axis=1).astype('float64')
+    # Run cmpid matching first (most precise — per-ad-group)
+    ads_df['Campaign Conversions'] = ads_df.apply(_match_by_cmpid, axis=1).astype('float64')
 
-    # Debug: show what the number matching produced
+    # Debug summary
     _matched = ads_df['Campaign Conversions'].notna().sum()
     _total_conv = ads_df['Campaign Conversions'].sum()
-    # Show map values (not just keys) for common campaign numbers
-    _map_sample = {str(k): v for k, v in sorted(number_conv_map.items(), key=lambda x: -x[1])[:10]}
-    st.caption(f"🔢 Number matching: {_matched}/{len(ads_df)} matched, total={_total_conv:,.0f}")
-    st.caption(f"🗺️ Map (top 10 by value): {_map_sample}")
-    # Show distribution of matched values
-    _matched_values = ads_df['Campaign Conversions'].dropna()
-    if len(_matched_values) > 0:
-        st.caption(f"📈 Matched values — min: {_matched_values.min():.0f}, max: {_matched_values.max():.0f}, mean: {_matched_values.mean():.1f}, unique values: {sorted(_matched_values.unique())[:20]}")
+    st.caption(f"🎯 cmpid matching: {_matched}/{len(ads_df)} matched, total={_total_conv:,.0f} (URL report: {len(adgroup_cmpid_map)} mappings, Tab 1 stats: {len(cmpid_conv_map)} campaign IDs)")
 
     # Strategy 1: Match using Campaign Name from ad group report
     # Campaign names like "Legacy - Fire 172 - SF Renters Insurance - Desktop"
