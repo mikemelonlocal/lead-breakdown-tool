@@ -295,49 +295,66 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                     adgroup_cmpid_map[key] = (cmpid, dom)
 
     def _base_cmpid(cid):
-        """Strip trailing suffix variants (E1, E2, RE1, RE2) to get base cmpid.
+        """Strip trailing variant suffix (R, RE1, RE2, E1, E2) to get base cmpid.
 
         Examples:
           MLGDF172-001R → MLGDF172-001
           MLGDF172-001RE2 → MLGDF172-001
-          MLGDM → MLGDM  (no change — too short to have a variant suffix)
+          MLGDM → MLGDM  (no dash, no strip)
         """
-        # Only strip suffixes when the cmpid has a dash (indicating a structured ID)
         if '-' not in cid:
             return cid
-        # Strip common trailing variant markers: R, RE1, RE2, E1, E2, etc.
         return re.sub(r'(?:RE\d+|E\d+|R)$', '', cid)
+
+    # Pre-compute the base-cmpid lookup for fast matching
+    # {(base_cmpid, domain): conversions} — sums over variant suffixes
+    base_cmpid_domain_map = {}
+    for (stats_cid, stats_dom), convs in cmpid_domain_conv_map.items():
+        base = _base_cmpid(stats_cid)
+        key = (base, stats_dom)
+        base_cmpid_domain_map[key] = base_cmpid_domain_map.get(key, 0) + convs
+
+    # Also a cmpid-only index (ignoring domain) for diagnostic/fallback purposes
+    cmpid_only_domains = {}  # {cmpid: set of domains} — where this cmpid appears in Tab 1
+    for (stats_cid, stats_dom) in cmpid_domain_conv_map.keys():
+        cmpid_only_domains.setdefault(stats_cid, set()).add(stats_dom)
+        cmpid_only_domains.setdefault(_base_cmpid(stats_cid), set()).add(stats_dom)
+
+    match_failure_reasons = {"no_key": 0, "empty_cmpid_or_dom": 0, "domain_mismatch": 0, "cmpid_not_in_stats": 0}
 
     def _match_by_cmpid(row):
         """Match on exact (cmpid, domain) pair. Both must be non-empty."""
         camp = str(row.get('Campaign', '')).strip() if pd.notna(row.get('Campaign')) else ''
         adg = str(row.get('Ad group', '')).strip() if pd.notna(row.get('Ad group')) else ''
         if not camp or not adg:
+            match_failure_reasons["no_key"] += 1
             return None
         entry = adgroup_cmpid_map.get((camp, adg))
         if not entry:
+            match_failure_reasons["no_key"] += 1
             return None
         cmpid, dom = entry
         if not cmpid or not dom:
-            return None  # Need both to safely match
-        # Exact match first
+            match_failure_reasons["empty_cmpid_or_dom"] += 1
+            return None
+        # Exact (cmpid, domain) match
         if (cmpid, dom) in cmpid_domain_conv_map:
             return cmpid_domain_conv_map[(cmpid, dom)]
-        # Base-cmpid match within the same domain
-        # (Tab 1 may have MLGDF172-001RE2 while URL has MLGDF172-001R —
-        #  both reduce to MLGDF172-001)
+        # Base-cmpid (cmpid, domain) match
         base = _base_cmpid(cmpid)
-        if base != cmpid:  # Only do base match if stripping changed something
-            for (stats_cid, stats_dom), convs in cmpid_domain_conv_map.items():
-                if stats_dom != dom:
-                    continue
-                if _base_cmpid(stats_cid) == base:
-                    return convs
+        if (base, dom) in base_cmpid_domain_map:
+            return base_cmpid_domain_map[(base, dom)]
+        # Diagnose failure: does the cmpid exist in stats but on different domain(s)?
+        stats_domains_for_this_cmpid = cmpid_only_domains.get(cmpid, set()) | cmpid_only_domains.get(base, set())
+        if stats_domains_for_this_cmpid:
+            match_failure_reasons["domain_mismatch"] += 1
+        else:
+            match_failure_reasons["cmpid_not_in_stats"] += 1
         return None
 
     ads_df['Campaign Conversions'] = ads_df.apply(_match_by_cmpid, axis=1).astype('float64')
 
-    # Debug summary — consolidated to the log table at the bottom
+    # Consolidated log output
     _matched = ads_df['Campaign Conversions'].notna().sum()
     _total_conv = ads_df['Campaign Conversions'].sum()
     _stats_domains = sorted({d for _, d in cmpid_domain_conv_map.keys() if d})
@@ -345,6 +362,7 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
     _overlap = sorted(set(_stats_domains) & set(_url_domains))
     _log("info", f"Matched {_matched}/{len(ads_df)} ad groups, total campaign leads = {_total_conv:,.0f}", "Campaign Leads Matching")
     _log("info", f"URL report mappings: {len(adgroup_cmpid_map)} | Tab 1 stats: {len(cmpid_domain_conv_map)} (cmpid, domain) pairs", "Campaign Leads Matching")
+    _log("info", f"Unmatched reasons — no (Campaign, Ad group) in URL report: {match_failure_reasons['no_key']}; empty cmpid/domain: {match_failure_reasons['empty_cmpid_or_dom']}; domain mismatch: {match_failure_reasons['domain_mismatch']}; cmpid not in stats: {match_failure_reasons['cmpid_not_in_stats']}", "Campaign Leads Matching")
     _log("info", f"Tab 1 stats domains ({len(_stats_domains)}): {_stats_domains}", "Domain Inspection")
     _log("info", f"URL report domains ({len(_url_domains)}): {_url_domains}", "Domain Inspection")
     _log("info", f"Overlapping domains ({len(_overlap)}): {_overlap}", "Domain Inspection")
