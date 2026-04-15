@@ -24,6 +24,28 @@ try:
 except ImportError:
     PLOTLY_AVAILABLE = False
 
+def _log(level, msg, section=""):
+    """Collect status/debug messages into session state for a consolidated table."""
+    if "ads_health_log" not in st.session_state:
+        st.session_state.ads_health_log = []
+    st.session_state.ads_health_log.append({
+        "Section": section or "General",
+        "Level": level,
+        "Message": str(msg),
+    })
+
+
+def render_ads_health_log():
+    """Render the consolidated log table at the bottom of Tab 2."""
+    logs = st.session_state.get("ads_health_log", [])
+    if not logs:
+        return
+    st.markdown("---")
+    st.markdown("### 📋 Processing Log")
+    log_df = pd.DataFrame(logs)
+    st.dataframe(log_df, width="stretch", hide_index=True)
+
+
 try:
     import openpyxl
     EXCEL_OK = True
@@ -315,21 +337,17 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
 
     ads_df['Campaign Conversions'] = ads_df.apply(_match_by_cmpid, axis=1).astype('float64')
 
-    # Debug summary
+    # Debug summary — consolidated to the log table at the bottom
     _matched = ads_df['Campaign Conversions'].notna().sum()
     _total_conv = ads_df['Campaign Conversions'].sum()
     _stats_domains = sorted({d for _, d in cmpid_domain_conv_map.keys() if d})
     _url_domains = sorted({d for _, d in adgroup_cmpid_map.values() if d})
-    st.caption(
-        f"🎯 cmpid+domain matching: {_matched}/{len(ads_df)} matched, "
-        f"total={_total_conv:,.0f} | URL report mappings: {len(adgroup_cmpid_map)}, "
-        f"Tab 1 stats: {len(cmpid_domain_conv_map)} (cmpid, domain) pairs"
-    )
-    with st.expander("🔍 Domain Inspection", expanded=False):
-        st.caption(f"**Tab 1 stats domains ({len(_stats_domains)}):** {_stats_domains}")
-        st.caption(f"**URL report domains ({len(_url_domains)}):** {_url_domains}")
-        _overlap = set(_stats_domains) & set(_url_domains)
-        st.caption(f"**Overlap ({len(_overlap)}):** {sorted(_overlap)}")
+    _overlap = sorted(set(_stats_domains) & set(_url_domains))
+    _log("info", f"Matched {_matched}/{len(ads_df)} ad groups, total campaign leads = {_total_conv:,.0f}", "Campaign Leads Matching")
+    _log("info", f"URL report mappings: {len(adgroup_cmpid_map)} | Tab 1 stats: {len(cmpid_domain_conv_map)} (cmpid, domain) pairs", "Campaign Leads Matching")
+    _log("info", f"Tab 1 stats domains ({len(_stats_domains)}): {_stats_domains}", "Domain Inspection")
+    _log("info", f"URL report domains ({len(_url_domains)}): {_url_domains}", "Domain Inspection")
+    _log("info", f"Overlapping domains ({len(_overlap)}): {_overlap}", "Domain Inspection")
 
     # ── SKIP fallback strategies when URL report is available ──
     # The fallback strategies (campaign-name matching, fuzzy name matching)
@@ -1325,7 +1343,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
         # Budget was already loaded before combining platforms
         budget_df = shared_budget_df
         st.markdown("---")
-        st.success(f"✅ Using budget data loaded above ({len(budget_df)} accounts)")
+        _log("success", f"Using budget data loaded above ({len(budget_df)} accounts)", "Budget Report")
     else:
         # Budget Report Upload (Optional) - in an expander for visibility
         st.markdown("---")
@@ -1386,7 +1404,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                                    'Monthly Cap', 'Daily Cap', 'Spend']
                         )
                         has_headers = False
-                        st.warning("⚠️ No headers detected. Assuming columns: [Budget Id, Agent, Status, Description, Platform, Monthly Cap, Daily Cap, Spend]")
+                        _log("warning", "No headers detected in budget file. Assuming columns: [Budget Id, Agent, Status, Description, Platform, Monthly Cap, Daily Cap, Spend]", "Budget Report")
             
                     # Auto-detect Agent and Status columns (case-insensitive)
                 agent_col = None
@@ -1429,10 +1447,9 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                     ]
                 
                     if len(budget_df) > 0:
-                        st.success(f"✅ Loaded budget data for {len(budget_df)} account(s)")
-                    
+                        _log("success", f"Loaded budget data for {len(budget_df)} account(s)", "Budget Report")
                         if has_headers and (agent_col != 'Agent' or status_col != 'Status'):
-                            st.info(f"📋 Detected columns: '{agent_col}' → Agent, '{status_col}' → Status")
+                            _log("info", f"Detected columns: '{agent_col}' → Agent, '{status_col}' → Status", "Budget Report")
                     
                         # Show budget status summary
                         status_counts = budget_df['Status'].value_counts()
@@ -1473,9 +1490,9 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
         if 'Budget Status' in ads_df.columns:
             matched = ads_df['Budget Status'].notna().sum()
             total = len(ads_df['Account'].unique())
-            st.info(f"✅ Matched budget status for {matched} of {total} accounts")
+            _log("info", f"Matched budget status for {matched} of {total} accounts", "Budget Report")
         else:
-            st.warning("⚠️ Budget data loaded but 'Budget Status' column not found")
+            _log("warning", "Budget data loaded but 'Budget Status' column not found", "Budget Report")
 
     # URL Report Upload (Optional) - for precise campaign ID matching
     st.markdown("---")
@@ -1529,19 +1546,19 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 # Excel format
                 google_df = pd.read_excel(google_url_file, skiprows=2)
                 url_report_dfs.append(google_df)
-                st.success(f"✅ Loaded Google URL report: {len(google_df):,} rows")
+                _log("success", f"Loaded Google URL report: {len(google_df):,} rows", "URL Report")
             else:
                 # CSV format - try UTF-16 first (common Google Ads export format)
                 try:
                     google_df = pd.read_csv(google_url_file, encoding='utf-16', sep='\t', skiprows=2)
                     url_report_dfs.append(google_df)
-                    st.success(f"✅ Loaded Google URL report: {len(google_df):,} rows")
+                    _log("success", f"Loaded Google URL report: {len(google_df):,} rows", "URL Report")
                 except Exception:
                     google_url_file.seek(0)
                     try:
                         google_df = pd.read_csv(google_url_file, encoding='utf-8')
                         url_report_dfs.append(google_df)
-                        st.success(f"✅ Loaded Google URL report: {len(google_df):,} rows")
+                        _log("success", f"Loaded Google URL report: {len(google_df):,} rows", "URL Report")
                     except Exception as e:
                         st.error(f"❌ Error loading Google URL report: {str(e)}")
         except Exception as e:
@@ -1578,7 +1595,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                 ms_df['Ad group ID'] = ms_df['Ad group ID'].astype(str).str.replace('[', '').str.replace(']', '').str.strip()
         
             url_report_dfs.append(ms_df)
-            st.success(f"✅ Loaded Microsoft URL report: {len(ms_df):,} rows")
+            _log("success", f"Loaded Microsoft URL report: {len(ms_df):,} rows", "URL Report")
         except Exception as e:
             st.error(f"❌ Error loading Microsoft URL report: {str(e)}")
             import traceback
@@ -1588,7 +1605,7 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
     url_report_df = None
     if url_report_dfs:
         url_report_df = pd.concat(url_report_dfs, ignore_index=True)
-        st.info(f"📊 Combined URL reports: {len(url_report_df):,} total rows from {len(url_report_dfs)} file(s)")
+        _log("info", f"Combined URL reports: {len(url_report_df):,} total rows from {len(url_report_dfs)} file(s)", "URL Report")
 
     # Enrich with campaign conversion data from Tab 1 (if available)
     if 'campaign_stats' in st.session_state:
@@ -1623,23 +1640,21 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
         
             # Show enrichment summary
             enriched_count = ads_df['Product'].notna().sum() if 'Product' in ads_df.columns else 0
-            st.info(f"📊 Enriched {enriched_count}/{len(ads_df)} ad groups with Product/UTM data from mapping")
+            _log("info", f"Enriched {enriched_count}/{len(ads_df)} ad groups with Product/UTM data from mapping", "Enrichment")
     
         # Show matching summary only if the column was added
         if 'Campaign Conversions' in ads_df.columns:
             matched_campaigns = ads_df['Campaign Conversions'].notna().sum()
             total_ad_groups = len(ads_df)
 
-            # Always show a brief matching summary
             matched_total = ads_df['Campaign Conversions'].sum()
-            st.caption(f"📊 Campaign Leads: matched {matched_campaigns}/{total_ad_groups} ad groups, total leads = {matched_total:,.0f}")
-            # Show sample values for debugging
+            _log("info", f"Campaign Leads: matched {matched_campaigns}/{total_ad_groups} ad groups, total leads = {matched_total:,.0f}", "Campaign Leads")
             sample = ads_df[ads_df['Campaign Conversions'].notna()][['Campaign', 'Campaign Conversions']].drop_duplicates('Campaign').head(5)
             if not sample.empty:
-                st.caption("Sample: " + ", ".join(
+                _log("info", "Sample: " + ", ".join(
                     f"{row['Campaign']} → {row['Campaign Conversions']:,.0f}"
                     for _, row in sample.iterrows()
-                ))
+                ), "Campaign Leads")
         
             # Debug: Show matching details by office
             if show_debug:
@@ -1669,20 +1684,15 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
                     st.write("No office-based matching (Office column missing)")
         
             if url_report_df is not None:
-                # Check if URL report has Campaign ID column
                 has_campaign_id = any('campaign' in str(col).lower() and 'id' in str(col).lower() for col in url_report_df.columns)
-                if has_campaign_id:
-                    st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using Campaign IDs")
-                else:
-                    st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups from URL report")
+                method = "Campaign IDs" if has_campaign_id else "URL report"
+                _log("success", f"Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using {method}", "Matching Summary")
             else:
-                # Check if ads report has Campaign ID column
                 has_campaign_id_in_ads = any('campaign' in str(col).lower() and 'id' in str(col).lower() for col in ads_df.columns)
-                if has_campaign_id_in_ads:
-                    st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using Campaign IDs (direct match)")
-                else:
-                    st.success(f"✅ Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using campaign names")
-                    st.info("💡 Upload URL reports above for more precise matching by Campaign ID")
+                method = "Campaign IDs (direct match)" if has_campaign_id_in_ads else "campaign names"
+                _log("success", f"Matched conversion data for {matched_campaigns} of {total_ad_groups} ad groups using {method}", "Matching Summary")
+                if not has_campaign_id_in_ads:
+                    _log("info", "Tip: Upload URL reports for more precise matching by Campaign ID", "Matching Summary")
 
 
     # Apply account filter (passed from parent)
@@ -1760,9 +1770,9 @@ def process_ads_platform(platform_name, ads_df, custom_thresholds, selected_acco
             if matched_account and matched_account in ads_df_filtered['Account'].values:
                 ads_df_filtered = ads_df_filtered[ads_df_filtered['Account'] == matched_account].copy()
                 file_name = st.session_state.get('stats_file_uploaded', 'stats report')
-                st.info(f"📊 Showing data for: **{matched_account}** (from {file_name}) — {len(ads_df_filtered):,} ad groups")
+                _log("info", f"Showing data for: {matched_account} (from {file_name}) — {len(ads_df_filtered):,} ad groups", "Account Filter")
             elif matched_account:
-                st.warning(f"⚠️ Account '{matched_account}' not found in ad group data")
+                _log("warning", f"Account '{matched_account}' not found in ad group data", "Account Filter")
 
     # Run analysis on filtered data
     with st.spinner('Analyzing account health...'):

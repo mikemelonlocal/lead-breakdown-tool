@@ -57,7 +57,7 @@ from components import display_table_with_total
 from ads_health import (
     load_ads_export, analyze_ads_account, process_ads_platform,
     enrich_ads_with_campaign_stats, match_budget_to_accounts,
-    format_ads_metric, validate_numeric
+    format_ads_metric, validate_numeric, render_ads_health_log
 )
 
 st.set_page_config(
@@ -3519,7 +3519,10 @@ with main_tab1:
 # ========== TAB 2: ADS ACCOUNT HEALTH ==========
 with main_tab2:
         st.markdown("### Ads Account Health Checker")
-        
+
+        # Reset the per-run log so it reflects only this execution
+        st.session_state.ads_health_log = []
+
         # Store Tab 2 status for debug table
         if 'campaign_stats' in st.session_state:
             st.session_state.tab2_campaign_stats_available = len(st.session_state.campaign_stats)
@@ -3887,6 +3890,9 @@ with main_tab2:
                     shared_budget_df,
                     show_debug=show_debug_tab2
                 )
+
+                # Consolidated log table at the bottom of Tab 2
+                render_ads_health_log()
                 
 
 
