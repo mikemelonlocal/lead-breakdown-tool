@@ -272,6 +272,20 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                 if key not in adgroup_cmpid_map:
                     adgroup_cmpid_map[key] = (cmpid, dom)
 
+    def _base_cmpid(cid):
+        """Strip trailing suffix variants (E1, E2, RE1, RE2) to get base cmpid.
+
+        Examples:
+          MLGDF172-001R → MLGDF172-001
+          MLGDF172-001RE2 → MLGDF172-001
+          MLGDM → MLGDM  (no change — too short to have a variant suffix)
+        """
+        # Only strip suffixes when the cmpid has a dash (indicating a structured ID)
+        if '-' not in cid:
+            return cid
+        # Strip common trailing variant markers: R, RE1, RE2, E1, E2, etc.
+        return re.sub(r'(?:RE\d+|E\d+|R)$', '', cid)
+
     def _match_by_cmpid(row):
         """Match on exact (cmpid, domain) pair. Both must be non-empty."""
         camp = str(row.get('Campaign', '')).strip() if pd.notna(row.get('Campaign')) else ''
@@ -287,14 +301,16 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
         # Exact match first
         if (cmpid, dom) in cmpid_domain_conv_map:
             return cmpid_domain_conv_map[(cmpid, dom)]
-        # Fuzzy cmpid match within the same domain
-        # (Tab 1 may have MLGDF172-001RE2 while URL has MLGDF172-001R)
-        for (stats_cid, stats_dom), convs in cmpid_domain_conv_map.items():
-            if stats_dom != dom:
-                continue
-            if stats_cid.startswith(cmpid) or cmpid.startswith(stats_cid):
-                return convs
-        # No match in this domain — do NOT fall back to other domains
+        # Base-cmpid match within the same domain
+        # (Tab 1 may have MLGDF172-001RE2 while URL has MLGDF172-001R —
+        #  both reduce to MLGDF172-001)
+        base = _base_cmpid(cmpid)
+        if base != cmpid:  # Only do base match if stripping changed something
+            for (stats_cid, stats_dom), convs in cmpid_domain_conv_map.items():
+                if stats_dom != dom:
+                    continue
+                if _base_cmpid(stats_cid) == base:
+                    return convs
         return None
 
     ads_df['Campaign Conversions'] = ads_df.apply(_match_by_cmpid, axis=1).astype('float64')
