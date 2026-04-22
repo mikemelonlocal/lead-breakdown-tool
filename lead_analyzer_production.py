@@ -692,7 +692,12 @@ with main_tab1:
         st.info("Upload at least one file (Legacy or MOA) to begin.")
     else:
         df_in = pd.concat(dfs, ignore_index=True)
-        
+
+        # Visible confirmation of rows per agency (helps diagnose missing-MOA issues)
+        if "agency" in df_in.columns:
+            _agency_rows = df_in["agency"].value_counts().to_dict()
+            st.caption(f"📥 Rows loaded by agency: {_agency_rows}")
+
         # Enrich with Product/UTM from mapping if available
         if 'tab1_mapping' in st.session_state and st.session_state.tab1_mapping is not None:
             mapping_df = st.session_state.tab1_mapping
