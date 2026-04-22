@@ -257,6 +257,8 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
     # Skip entries without a domain — we can't safely attribute them to an account
     cmpid_domain_conv_map = {}
     stats_has_domain = 'Domain' in campaign_stats_df.columns
+    stats_office_counts = {}  # Track how many rows per Office (Legacy/MOA)
+    stats_office_conv = {}    # Total conversions per Office
     if 'Campaign' in campaign_stats_df.columns and stats_has_domain:
         for _, row in campaign_stats_df.iterrows():
             cid = str(row.get('Campaign', '')).strip().upper()
@@ -266,11 +268,17 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
             if not dom:  # Skip entries with no domain — they'd match anything
                 continue
             convs = float(row.get('Total Conversions', 0) or 0)
+            office = str(row.get('Office', 'Unknown')) if 'Office' in campaign_stats_df.columns else 'Unknown'
+            stats_office_counts[office] = stats_office_counts.get(office, 0) + 1
+            stats_office_conv[office] = stats_office_conv.get(office, 0) + convs
             key = (cid, dom)
             cmpid_domain_conv_map[key] = cmpid_domain_conv_map.get(key, 0) + convs
 
+    _log("info", f"Tab 1 stats by Office — rows: {stats_office_counts}, conversions: {stats_office_conv}", "Tab 1 Stats Breakdown")
+
     # Build (Campaign, Ad group) → (cmpid, domain) from URL report
     adgroup_cmpid_map = {}
+    url_office_counts = {"Legacy": 0, "MOA": 0, "Other": 0}
     if url_report_df is not None and not url_report_df.empty:
         url_col = None
         for col in url_report_df.columns:
@@ -293,6 +301,15 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
                 key = (camp, adg)
                 if key not in adgroup_cmpid_map:
                     adgroup_cmpid_map[key] = (cmpid, dom)
+                    # Track Legacy vs MOA by campaign name prefix
+                    camp_upper = camp.upper()
+                    if 'MOA' in camp_upper:
+                        url_office_counts["MOA"] += 1
+                    elif 'LEGACY' in camp_upper:
+                        url_office_counts["Legacy"] += 1
+                    else:
+                        url_office_counts["Other"] += 1
+    _log("info", f"URL report entries by Office (inferred from campaign name): {url_office_counts}", "URL Report Breakdown")
 
     def _base_cmpid(cid):
         """Strip trailing variant suffix (R, RE1, RE2, E1, E2) to get base cmpid.
@@ -363,6 +380,18 @@ def enrich_ads_with_campaign_stats(ads_df, campaign_stats_df, url_report_df=None
     _log("info", f"Matched {_matched}/{len(ads_df)} ad groups, total campaign leads = {_total_conv:,.0f}", "Campaign Leads Matching")
     _log("info", f"URL report mappings: {len(adgroup_cmpid_map)} | Tab 1 stats: {len(cmpid_domain_conv_map)} (cmpid, domain) pairs", "Campaign Leads Matching")
     _log("info", f"Unmatched reasons — no (Campaign, Ad group) in URL report: {match_failure_reasons['no_key']}; empty cmpid/domain: {match_failure_reasons['empty_cmpid_or_dom']}; domain mismatch: {match_failure_reasons['domain_mismatch']}; cmpid not in stats: {match_failure_reasons['cmpid_not_in_stats']}", "Campaign Leads Matching")
+
+    # Breakdown of matched rows by inferred Office (Legacy vs MOA) from campaign name
+    if 'Campaign' in ads_df.columns:
+        matched_df = ads_df[ads_df['Campaign Conversions'].notna()].copy()
+        matched_df['_office_guess'] = matched_df['Campaign'].astype(str).str.upper().apply(
+            lambda c: 'MOA' if 'MOA' in c else ('Legacy' if 'LEGACY' in c else 'Other')
+        )
+        matched_by_office = matched_df.groupby('_office_guess').agg(
+            rows=('Campaign Conversions', 'size'),
+            leads=('Campaign Conversions', 'sum')
+        ).to_dict(orient='index')
+        _log("info", f"Matched ad groups by Office: {matched_by_office}", "Campaign Leads Matching")
     _log("info", f"Tab 1 stats domains ({len(_stats_domains)}): {_stats_domains}", "Domain Inspection")
     _log("info", f"URL report domains ({len(_url_domains)}): {_url_domains}", "Domain Inspection")
     _log("info", f"Overlapping domains ({len(_overlap)}): {_overlap}", "Domain Inspection")
