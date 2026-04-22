@@ -693,10 +693,17 @@ with main_tab1:
     else:
         df_in = pd.concat(dfs, ignore_index=True)
 
-        # Visible confirmation of rows per agency (helps diagnose missing-MOA issues)
+        # Visible confirmation of rows per agency + total conversions per agency
         if "agency" in df_in.columns:
             _agency_rows = df_in["agency"].value_counts().to_dict()
-            st.caption(f"📥 Rows loaded by agency: {_agency_rows}")
+            _conv_cols = [c for c in ["Quotes Starts", "Quote Starts", "Phone Clicks", "SMS Clicks"] if c in df_in.columns]
+            _agency_conv = {}
+            if _conv_cols:
+                for _ag in df_in["agency"].unique():
+                    _sub = df_in[df_in["agency"] == _ag]
+                    _total = sum(pd.to_numeric(_sub[c], errors="coerce").fillna(0).sum() for c in _conv_cols)
+                    _agency_conv[_ag] = int(_total)
+            st.caption(f"📥 Rows by agency: {_agency_rows} | Conversions by agency: {_agency_conv}")
 
         # Enrich with Product/UTM from mapping if available
         if 'tab1_mapping' in st.session_state and st.session_state.tab1_mapping is not None:
