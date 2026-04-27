@@ -1314,7 +1314,10 @@ with main_tab1:
             with st.expander(f"{agency_name}: UTM Overview (Platform × UTM + TOTAL)", expanded=False):
                 # Use the original filtered dataframe before analyze() processing
                 # The sub_df might have modified columns from analyze()
-                utm_source_df = df_in[ag_mask].copy()
+                if agency_name == "Combined":
+                    utm_source_df = df_in.copy()
+                else:
+                    utm_source_df = df_in[df_in["agency"] == agency_name].copy()
                 
                 camp_col = get_col(utm_source_df, ["campaign_id", "campaign"])
                 
