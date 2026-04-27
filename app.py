@@ -1859,28 +1859,50 @@ with main_tab1:
         st.markdown("---")
 
         # ========== SUB-TABS ==========
+        # Show History tab only when historical files are uploaded
+        _has_history = bool(hist_legacy or hist_moa)
+        tab_history = None
+
         if has_legacy_file and has_moa_file:
-            tab_comp, tab_legacy, tab_moa, tab_optimizer, tab_export = st.tabs([
+            tab_labels = [
                 "🔄 Agency Comparison",
                 "🏢 Legacy Detail",
                 "🏢 MOA Detail",
                 "💡 Budget Optimizer",
-                "⬇️ Export"
-            ])
+            ]
+            if _has_history:
+                tab_labels.append("📈 History")
+            tab_labels.append("⬇️ Export")
+            _tabs = st.tabs(tab_labels)
+            tab_comp, tab_legacy, tab_moa, tab_optimizer = _tabs[0], _tabs[1], _tabs[2], _tabs[3]
+            if _has_history:
+                tab_history, tab_export = _tabs[4], _tabs[5]
+            else:
+                tab_export = _tabs[4]
         elif has_legacy_file:
-            tab_legacy, tab_optimizer, tab_export = st.tabs([
-                "🏢 Legacy Detail",
-                "💡 Budget Optimizer",
-                "⬇️ Export"
-            ])
+            tab_labels = ["🏢 Legacy Detail", "💡 Budget Optimizer"]
+            if _has_history:
+                tab_labels.append("📈 History")
+            tab_labels.append("⬇️ Export")
+            _tabs = st.tabs(tab_labels)
+            tab_legacy, tab_optimizer = _tabs[0], _tabs[1]
+            if _has_history:
+                tab_history, tab_export = _tabs[2], _tabs[3]
+            else:
+                tab_export = _tabs[2]
             tab_comp = None
             tab_moa = None
         else:
-            tab_moa, tab_optimizer, tab_export = st.tabs([
-                "🏢 MOA Detail",
-                "💡 Budget Optimizer",
-                "⬇️ Export"
-            ])
+            tab_labels = ["🏢 MOA Detail", "💡 Budget Optimizer"]
+            if _has_history:
+                tab_labels.append("📈 History")
+            tab_labels.append("⬇️ Export")
+            _tabs = st.tabs(tab_labels)
+            tab_moa, tab_optimizer = _tabs[0], _tabs[1]
+            if _has_history:
+                tab_history, tab_export = _tabs[2], _tabs[3]
+            else:
+                tab_export = _tabs[2]
             tab_comp = None
             tab_legacy = None
 
@@ -3130,15 +3152,18 @@ with main_tab1:
                     width="stretch"
                 )
 
-            # ── Historical Trend Analysis ──
-            if hist_legacy or hist_moa:
-                st.markdown("---")
-                st.markdown("#### Historical Trend")
+            # Historical Trend has been moved to its own "📈 History" sub-tab
 
-                # Build period data: current + each historical file
+
+        # ---- History Tab ----
+        if tab_history is not None:
+            with tab_history:
+                st.markdown("### Historical Trend Analysis")
+                st.caption("Compares the current period to the prior period(s) you uploaded under 'Historical Comparison'.")
+
                 periods = []
 
-                # Current period
+                # Current period label from filename
                 current_start, current_end = None, None
                 for f in [up_legacy, up_moa]:
                     if f:
@@ -3177,7 +3202,8 @@ with main_tab1:
                         df_h["agency"] = "MOA"
                         all_hist_files.append((f.name, df_h))
 
-                # Group by period (same date range = same period)
+                st.caption(f"Loaded {len(all_hist_files)} historical file(s).")
+
                 period_groups = {}
                 for fname, df_h in all_hist_files:
                     s, e = extract_date_range_from_filename(fname)
@@ -3202,14 +3228,13 @@ with main_tab1:
                         hp["cpl"] = (hp["spend"] / hp["leads"].replace(0, np.nan)).fillna(0)
                         hp["period"] = label
                         periods.append(hp)
-                    except Exception:
-                        st.warning(f"Could not analyze historical period: {label}")
+                    except Exception as e:
+                        st.warning(f"Could not analyze historical period '{label}': {e}")
 
                 if len(periods) > 1:
                     trend_df = pd.concat(periods, ignore_index=True)
                     trend_df = trend_df.sort_values(["platform", "period"])
 
-                    # Show trend table
                     trend_display = trend_df[["period", "platform", "leads", "spend", "cpl"]].copy()
                     trend_display["leads"] = trend_display["leads"].apply(lambda x: f"{x:,.0f}")
                     trend_display["spend"] = trend_display["spend"].apply(lambda x: f"${x:,.2f}")
@@ -3217,7 +3242,6 @@ with main_tab1:
                     trend_display.columns = ["Period", "Platform", "Leads", "Spend", "CPL"]
                     st.dataframe(trend_display, width="stretch", hide_index=True)
 
-                    # CPL trend chart
                     if PLOTLY_AVAILABLE:
                         chart_data = trend_df[trend_df["cpl"] > 0].copy()
                         if not chart_data.empty:
@@ -3241,8 +3265,8 @@ with main_tab1:
                         fig2.update_layout(height=400)
                         st.plotly_chart(fig2, width="stretch")
                 else:
-                    st.info("Upload prior period files above to see trend comparison.")
-    
+                    st.info("Could not load any historical period data. Make sure prior period files have valid CSV/Excel data with the same column structure.")
+
 
         # ---- Export Tab ----
         with tab_export:
