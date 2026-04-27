@@ -1103,14 +1103,24 @@ with main_tab1:
         has_moa_file = up_moa is not None
 
         def render_agency_detail(agency_name):
-            """Render the full detail view for a single agency inside a sub-tab."""
-            ag_mask = df_in["agency"] == agency_name
-            if not ag_mask.any():
-                st.info(f"No data uploaded for {agency_name}.")
-                return
-
-            sub_df = df_in[ag_mask].copy()
-            sub_spends = {agency_name: spends[agency_name]}
+            """Render the full detail view inside a sub-tab.
+            agency_name may be "Legacy", "MOA", or "Combined" (both agencies)."""
+            if agency_name == "Combined":
+                if df_in.empty:
+                    st.info("No data uploaded.")
+                    return
+                sub_df = df_in.copy()
+                # Sum spends from all uploaded agencies
+                sub_spends = {ag: spends[ag] for ag in spends if ag in df_in["agency"].unique()}
+                if not sub_spends:
+                    sub_spends = spends  # fallback
+            else:
+                ag_mask = df_in["agency"] == agency_name
+                if not ag_mask.any():
+                    st.info(f"No data uploaded for {agency_name}.")
+                    return
+                sub_df = df_in[ag_mask].copy()
+                sub_spends = {agency_name: spends[agency_name]}
             single = analyze(sub_df, sub_spends, spend_column=spend_col.strip() or None, hide_unknown=hide_unknown, add_device_column=add_device_column, exclude_listings_from_totals=exclude_listings_from_totals, include_qs=include_quote_starts, include_phone=include_phone_clicks, include_sms=include_sms_clicks)
                 
             # Platform Overview
@@ -1915,6 +1925,46 @@ with main_tab1:
             with m_cols[3]:
                 st.metric("MOA Top Product", m_prod)
 
+        # ── Per-office summary charts (when both agencies are uploaded) ──
+        if PLOTLY_AVAILABLE and has_legacy_file and has_moa_file:
+            l_leads, l_cpl, _, _ = _office_kpis("Legacy")
+            m_leads, m_cpl, _, _ = _office_kpis("MOA")
+            chart_cols = st.columns(2)
+
+            summary_df = pd.DataFrame({
+                "Office": ["Legacy", "MOA"],
+                "Leads": [l_leads, m_leads],
+                "CPL": [l_cpl, m_cpl],
+            })
+
+            with chart_cols[0]:
+                fig_leads = px.bar(
+                    summary_df, x="Office", y="Leads",
+                    title="Leads by Office",
+                    text="Leads",
+                    color="Office",
+                    color_discrete_map={"Legacy": "#114e38", "MOA": "#47B74F"}
+                )
+                fig_leads.update_traces(texttemplate="%{text:,}", textposition="outside")
+                fig_leads.update_layout(height=300, showlegend=False, margin=dict(l=20, r=20, t=40, b=20))
+                st.plotly_chart(fig_leads, width="stretch")
+
+            with chart_cols[1]:
+                # Only show CPL chart if at least one agency has CPL data
+                if l_cpl > 0 or m_cpl > 0:
+                    fig_cpl = px.bar(
+                        summary_df, x="Office", y="CPL",
+                        title="CPL by Office",
+                        text="CPL",
+                        color="Office",
+                        color_discrete_map={"Legacy": "#114e38", "MOA": "#47B74F"}
+                    )
+                    fig_cpl.update_traces(texttemplate="$%{text:.2f}", textposition="outside")
+                    fig_cpl.update_layout(height=300, showlegend=False, margin=dict(l=20, r=20, t=40, b=20))
+                    st.plotly_chart(fig_cpl, width="stretch")
+                else:
+                    st.info("Enter Budget Inputs in Configuration to see CPL comparison.")
+
         st.markdown("---")
 
         # ========== SUB-TABS ==========
@@ -1922,9 +1972,11 @@ with main_tab1:
         _has_history = bool(hist_legacy or hist_moa)
         tab_history = None
 
+        tab_combined = None
         if has_legacy_file and has_moa_file:
             tab_labels = [
                 "🔄 Agency Comparison",
+                "🌐 Combined Detail",
                 "🏢 Legacy Detail",
                 "🏢 MOA Detail",
                 "💡 Budget Optimizer",
@@ -1933,11 +1985,11 @@ with main_tab1:
                 tab_labels.append("📈 History")
             tab_labels.append("⬇️ Export")
             _tabs = st.tabs(tab_labels)
-            tab_comp, tab_legacy, tab_moa, tab_optimizer = _tabs[0], _tabs[1], _tabs[2], _tabs[3]
+            tab_comp, tab_combined, tab_legacy, tab_moa, tab_optimizer = _tabs[0], _tabs[1], _tabs[2], _tabs[3], _tabs[4]
             if _has_history:
-                tab_history, tab_export = _tabs[4], _tabs[5]
+                tab_history, tab_export = _tabs[5], _tabs[6]
             else:
-                tab_export = _tabs[4]
+                tab_export = _tabs[5]
         elif has_legacy_file:
             tab_labels = ["🏢 Legacy Detail", "💡 Budget Optimizer"]
             if _has_history:
@@ -1964,6 +2016,11 @@ with main_tab1:
                 tab_export = _tabs[2]
             tab_comp = None
             tab_legacy = None
+
+        # ---- Combined Detail Tab (only when both files uploaded) ----
+        if tab_combined is not None:
+            with tab_combined:
+                render_agency_detail("Combined")
 
         # ---- Agency Detail Tabs ----
         if has_legacy_file:
