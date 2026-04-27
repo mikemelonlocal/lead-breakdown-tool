@@ -1829,8 +1829,6 @@ with main_tab1:
                 st.markdown("### Performance Summary")
         else:
             st.markdown("### Performance Summary")
-        kpi_cols = st.columns(4)
-
         plat_overview_kpi = results["platform_overview"]
         total_row_kpi = plat_overview_kpi[plat_overview_kpi["platform"] == "TOTAL"]
 
@@ -1847,14 +1845,75 @@ with main_tab1:
         prod_for_top["leads"] = pd.to_numeric(prod_for_top["leads"], errors="coerce").fillna(0)
         top_product_name = prod_for_top.loc[prod_for_top["leads"].idxmax(), "product"] if not prod_for_top.empty and prod_for_top["leads"].sum() > 0 else "N/A"
 
-        with kpi_cols[0]:
+        # Per-office (Legacy / MOA) breakdown using platform_agency results
+        def _office_kpis(office):
+            """Return (leads, cpl, top_platform, top_product) for the given office."""
+            pa = results.get("platform_agency")
+            if pa is None or pa.empty or "agency" not in pa.columns:
+                return 0, 0.0, "N/A", "N/A"
+            sub = pa[pa["agency"] == office].copy()
+            if "device" in sub.columns:
+                sub = sub.groupby("platform", as_index=False).agg({"leads": "sum", "spend": "sum"})
+            for c in ["leads", "spend"]:
+                if c in sub.columns:
+                    sub[c] = pd.to_numeric(sub[c], errors="coerce").fillna(0)
+            o_leads = int(sub["leads"].sum()) if "leads" in sub.columns else 0
+            o_spend = float(sub["spend"].sum()) if "spend" in sub.columns else 0.0
+            o_cpl = o_spend / o_leads if o_leads > 0 else 0.0
+            o_plat_filtered = sub[~sub["platform"].isin(["TOTAL", "Unknown", "Listings"])].copy()
+            o_top_plat = o_plat_filtered.loc[o_plat_filtered["leads"].idxmax(), "platform"] if not o_plat_filtered.empty and o_plat_filtered["leads"].sum() > 0 else "N/A"
+
+            # Top product for this office
+            pa_prod = results.get("product_agency")
+            if pa_prod is not None and not pa_prod.empty and "agency" in pa_prod.columns:
+                psub = pa_prod[pa_prod["agency"] == office].copy()
+                if "device" in psub.columns:
+                    psub = psub.groupby("product", as_index=False)["leads"].sum()
+                psub["leads"] = pd.to_numeric(psub["leads"], errors="coerce").fillna(0)
+                psub = psub[psub["product"] != "TOTAL"]
+                o_top_prod = psub.loc[psub["leads"].idxmax(), "product"] if not psub.empty and psub["leads"].sum() > 0 else "N/A"
+            else:
+                o_top_prod = "N/A"
+            return o_leads, o_cpl, o_top_plat, o_top_prod
+
+        # Combined KPIs
+        st.markdown("**Combined**")
+        combined_cols = st.columns(4)
+        with combined_cols[0]:
             st.metric("Total Leads", f"{total_leads_kpi:,}")
-        with kpi_cols[1]:
+        with combined_cols[1]:
             st.metric("Overall CPL", f"${overall_cpl_kpi:.2f}" if overall_cpl_kpi > 0 else "N/A")
-        with kpi_cols[2]:
+        with combined_cols[2]:
             st.metric("Top Platform", top_platform_name)
-        with kpi_cols[3]:
+        with combined_cols[3]:
             st.metric("Top Product", top_product_name)
+
+        # Per-office KPIs
+        if has_legacy_file:
+            st.markdown("**🏢 Legacy**")
+            l_leads, l_cpl, l_plat, l_prod = _office_kpis("Legacy")
+            l_cols = st.columns(4)
+            with l_cols[0]:
+                st.metric("Legacy Leads", f"{l_leads:,}")
+            with l_cols[1]:
+                st.metric("Legacy CPL", f"${l_cpl:.2f}" if l_cpl > 0 else "N/A")
+            with l_cols[2]:
+                st.metric("Legacy Top Platform", l_plat)
+            with l_cols[3]:
+                st.metric("Legacy Top Product", l_prod)
+
+        if has_moa_file:
+            st.markdown("**🏢 MOA**")
+            m_leads, m_cpl, m_plat, m_prod = _office_kpis("MOA")
+            m_cols = st.columns(4)
+            with m_cols[0]:
+                st.metric("MOA Leads", f"{m_leads:,}")
+            with m_cols[1]:
+                st.metric("MOA CPL", f"${m_cpl:.2f}" if m_cpl > 0 else "N/A")
+            with m_cols[2]:
+                st.metric("MOA Top Platform", m_plat)
+            with m_cols[3]:
+                st.metric("MOA Top Product", m_prod)
 
         st.markdown("---")
 
